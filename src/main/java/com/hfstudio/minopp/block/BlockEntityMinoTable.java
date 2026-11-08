@@ -629,11 +629,10 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
-        NBTTagCompound tag = ServerConfig.gameplay.allowPeeking ? fullTag
-            : HandMask.maskTableTag(
-                fullTag,
-                player.getGameProfile()
-                    .getId());
+        java.util.UUID viewer = player.getGameProfile()
+            .getId();
+        boolean reveal = ServerConfig.gameplay.allowPeeking || game != null && game.isPeeking(viewer);
+        NBTTagCompound tag = reveal ? fullTag : HandMask.maskTableTag(fullTag, viewer);
         player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }
 

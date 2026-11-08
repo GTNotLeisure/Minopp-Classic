@@ -179,11 +179,21 @@ public class GameSimulationTest {
 
     @Test
     public void newPacks() {
-        for (String pack : new String[] { CardPack.BLASTER, CardPack.MODERN, CardPack.WHIRLWIND }) {
+        for (String pack : new String[] { CardPack.BLASTER, CardPack.MODERN, CardPack.WHIRLWIND, CardPack.JUNGLE,
+            CardPack.DANCE, CardPack.RASCAL, CardPack.MYTH }) {
             TableConfig c = new TableConfig();
             c.setPackEnabled(pack, true);
             runMany(pack, c, 5, 150);
         }
+    }
+
+    @Test
+    public void teamsPack() {
+        TableConfig c = new TableConfig();
+        c.setPackEnabled(CardPack.TEAMS, true);
+        runMany("teams", c, 4, 150);
+        c.set(GameRules.TEAM_COUNT, 3);
+        runMany("teams of two x3", c, 6, 100);
     }
 
     @Test

@@ -25,6 +25,11 @@ public final class CardPack {
     public static final String BLASTER = "blaster";
     public static final String MODERN = "modern";
     public static final String WHIRLWIND = "whirlwind";
+    public static final String JUNGLE = "jungle";
+    public static final String DANCE = "dance";
+    public static final String RASCAL = "rascal";
+    public static final String MYTH = "myth";
+    public static final String TEAMS = "teams";
 
     /**
      * One line of a deck composition.
@@ -247,6 +252,29 @@ public final class CardPack {
         .entry("bonus_turn", 1)
         .entry("wild_swap_hands", 2)
         .entry("wild_hand_shuffle", 1)
+        .build();
+    public static final CardPack PACK_JUNGLE = new Builder(JUNGLE).entry("wild_hand_shuffle", 2)
+        .entry("wild_rebound", 2)
+        .entry("wild_smoke", 2)
+        .entry("wild_echo", 2)
+        .build();
+    public static final CardPack PACK_DANCE = new Builder(DANCE).entry("wild_crossfade", 2)
+        .entry("wild_dance_floor", 2)
+        .entry("wild_even_out", 2)
+        .entry("wild_surprise", 2)
+        .build();
+    public static final CardPack PACK_RASCAL = new Builder(RASCAL).entry("wild_card_storm", 2)
+        .entry("wild_booby_trap", 2)
+        .entry("wild_hurry_up", 2)
+        .entry("wild_shield", 2)
+        .build();
+    public static final CardPack PACK_MYTH = new Builder(MYTH).entry("wild_trickster", 3)
+        .entry("wild_surge", 3)
+        .build();
+    public static final CardPack PACK_TEAMS = new Builder(TEAMS).entry("wild_team_play", 8)
+        .entry("wild_team_draw4", 4)
+        .rule(GameRules.TEAM_MODE, 1)
+        .rule(GameRules.TEAM_RELAY, 1)
         .build();
     public static final CardPack PACK_WHIRLWIND = new Builder(WHIRLWIND).entry("wild_cyclone", 2)
         .entry("wild_thief", 2)

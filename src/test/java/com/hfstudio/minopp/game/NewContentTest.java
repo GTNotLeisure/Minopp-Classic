@@ -24,8 +24,12 @@ public class NewContentTest {
     }
 
     private CardGame setup(String... enabledRules) {
+        return setupN(3, enabledRules);
+    }
+
+    private CardGame setupN(int n, String... enabledRules) {
         List<CardPlayer> players = new ArrayList<>();
-        for (int i = 0; i < 3; i++) players.add(new CardPlayer(UUID.randomUUID(), "P" + i));
+        for (int i = 0; i < n; i++) players.add(new CardPlayer(UUID.randomUUID(), "P" + i));
         CardGame game = new CardGame(players);
         TableConfig config = new TableConfig();
         config.set(GameRules.JUMP_IN, 0);
@@ -187,5 +191,133 @@ public class NewContentTest {
         loser.hand.add(card("skip", CardColor.BLUE, -1));
         loser.hand.add(card("wild", CardColor.WILD, -1));
         assertEquals(77, game.handPoints(List.of(loser)));
+    }
+
+    private Card play(CardGame game, int who, String type, PlayContext.PlayChoices choices) {
+        Card c = card(type, type.startsWith("wild") ? CardColor.WILD : CardColor.RED, -1);
+        p(game, who).hand.add(c);
+        assertFalse(game.playCard(p(game, who), c.uid, choices).isFail, type);
+        return c;
+    }
+
+    private static PlayContext.PlayChoices red(CardPlayer... targets) {
+        PlayContext.PlayChoices c = PlayContext.PlayChoices.of(CardColor.RED);
+        for (CardPlayer t : targets) c.targets.add(t.uuid);
+        return c;
+    }
+
+    @Test
+    public void shieldBlocksAPenalty() {
+        CardGame game = setup();
+        game.topCard = card("draw2", CardColor.RED, -1);
+        game.pendingDraw = 6;
+        game.lastDrawValue = 2;
+        play(game, 0, "wild_shield", red());
+        assertEquals(0, game.pendingDraw);
+        assertEquals(2, p(game, 1).hand.size());
+    }
+
+    @Test
+    public void echoCopiesTheCardBelow() {
+        CardGame game = setup();
+        game.topCard = card("skip", CardColor.RED, -1);
+        play(game, 0, "wild_echo", red());
+        assertEquals(2, game.currentPlayerIndex, "the copied Skip skipped P1");
+    }
+
+    @Test
+    public void crossfadeSwapsAcrossTheTable() {
+        CardGame game = setupN(4);
+        Card marker = num(CardColor.GREEN, 1);
+        p(game, 0).hand.add(marker);
+        play(game, 0, "wild_crossfade", red());
+        assertTrue(p(game, 2).hand.contains(marker));
+    }
+
+    @Test
+    public void evenOutLevelsHands() {
+        CardGame game = setup();
+        p(game, 1).hand.add(num(CardColor.BLUE, 1));
+        p(game, 1).hand.add(num(CardColor.BLUE, 2));
+        play(game, 0, "wild_even_out", red());
+        for (CardPlayer pl : game.players) assertEquals(2, pl.hand.size());
+    }
+
+    @Test
+    public void boobyTrapAddsThreeToTheNextDraw() {
+        CardGame game = setup();
+        play(game, 0, "wild_booby_trap", red());
+        game.playNoCard(p(game, 1));
+        assertEquals(2 + 1 + 3, p(game, 1).hand.size());
+        assertFalse(game.trapArmed);
+    }
+
+    @Test
+    public void tricksterNetsTwoCards() {
+        CardGame game = setup();
+        play(game, 0, "wild_trickster", red(p(game, 2)));
+        assertEquals(4, p(game, 2).hand.size());
+    }
+
+    @Test
+    public void surgeDiscardsTheTwoMostValuableCards() {
+        CardGame game = setup();
+        CardPlayer me = p(game, 0);
+        Card wild = card("wild", CardColor.WILD, -1), skip = card("skip", CardColor.BLUE, -1);
+        me.hand.add(wild);
+        me.hand.add(skip);
+        play(game, 0, "wild_surge", red());
+        assertFalse(me.hand.contains(wild));
+        assertFalse(me.hand.contains(skip));
+        assertEquals(2, me.hand.size());
+    }
+
+    private CardGame teamGame(String... rules) {
+        CardGame game = setupN(4, rules);
+        TableConfig c = (TableConfig) game.detachedConfig;
+        c.set(GameRules.TEAM_MODE, 1);
+        for (int i = 0; i < 4; i++) p(game, i).team = i % 2;
+        return game;
+    }
+
+    @Test
+    public void teamPlayHandsTheTurnToTheTeammate() {
+        CardGame game = teamGame();
+        play(game, 0, "wild_team_play", red());
+        assertEquals(2, game.currentPlayerIndex);
+    }
+
+    @Test
+    public void teamDrawHitsOnlyOpponents() {
+        CardGame game = teamGame();
+        play(game, 0, "wild_team_draw4", red());
+        assertEquals(4, p(game, 1).hand.size());
+        assertEquals(4, p(game, 3).hand.size());
+        assertEquals(2, p(game, 2).hand.size());
+        assertEquals(2, game.currentPlayerIndex, "the next opponent lost the turn");
+    }
+
+    @Test
+    public void relayTakesHalfOfThePartnersCards() {
+        CardGame game = teamGame(GameRules.TEAM_RELAY);
+        CardPlayer me = p(game, 0), partner = p(game, 2);
+        me.hand.clear();
+        Card last = num(CardColor.RED, 4);
+        me.hand.add(last);
+        partner.hand.add(num(CardColor.GREEN, 1));
+        partner.hand.add(num(CardColor.GREEN, 2));
+        ActionReport r = game.playCard(me, last.uid, none());
+        assertFalse(r.shouldDestroyGame, "the game goes on");
+        assertEquals(2, me.hand.size());
+        assertEquals(2, partner.hand.size());
+    }
+
+    @Test
+    public void fiftyFiftyHitsOneOfTheTwoChosen() {
+        CardGame game = setupN(4);
+        play(game, 0, "wild_fifty_fifty", red(p(game, 1), p(game, 3)));
+        int a = p(game, 1).hand.size(), b = p(game, 3).hand.size();
+        assertTrue(a == 6 && b == 2 || a == 2 && b == 6);
+        assertEquals(2, p(game, 2).hand.size());
     }
 }

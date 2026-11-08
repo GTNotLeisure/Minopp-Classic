@@ -355,9 +355,10 @@ public final class CardTypes {
     public static final CardType WILD_FIFTY_FIFTY = register(
         CardType.builder("wild_fifty_fifty", CardPack.ANNIVERSARY)
             .wild()
+            .choice(Choice.COLOR_AND_TWO_TARGETS)
             .label("50")
             .sort(58)
-            .effect(ctx -> ctx.game.fiftyFifty(ctx.player, 4, ctx.report))
+            .effect(ctx -> ctx.game.fiftyFifty(ctx.player, ctx.target(0), ctx.target(1), 4, ctx.report))
             .build());
 
     public static final CardType WILD_PLUS6 = register(
@@ -465,6 +466,103 @@ public final class CardTypes {
                 CardPlayer target = ctx.target(0);
                 if (target != null) ctx.game.steal(ctx.player, target, ctx.report);
             })
+            .build());
+
+    public static final CardType WILD_SMOKE = register(
+        CardType.builder("wild_smoke", CardPack.JUNGLE)
+            .wild()
+            .label("~")
+            .sort(77)
+            .effect(ctx -> ctx.game.smoke(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_ECHO = register(
+        CardType.builder("wild_echo", CardPack.JUNGLE)
+            .wild()
+            .label("≈")
+            .sort(78)
+            .effect(ctx -> ctx.game.echo(ctx))
+            .build());
+    public static final CardType WILD_CROSSFADE = register(
+        CardType.builder("wild_crossfade", CardPack.DANCE)
+            .wild()
+            .label("⇋")
+            .sort(79)
+            .effect(ctx -> ctx.game.crossfade(ctx.report))
+            .build());
+    public static final CardType WILD_EVEN_OUT = register(
+        CardType.builder("wild_even_out", CardPack.DANCE)
+            .wild()
+            .label("=")
+            .sort(80)
+            .effect(ctx -> ctx.game.evenOut(ctx.report))
+            .build());
+    public static final CardType WILD_SURPRISE = register(
+        CardType.builder("wild_surprise", CardPack.DANCE)
+            .wild()
+            .label("?!")
+            .sort(81)
+            .effect(ctx -> ctx.game.surprise(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_CARD_STORM = register(
+        CardType.builder("wild_card_storm", CardPack.RASCAL)
+            .wild()
+            .label("≋")
+            .sort(82)
+            .effect(ctx -> ctx.game.cardStorm(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_BOOBY_TRAP = register(
+        CardType.builder("wild_booby_trap", CardPack.RASCAL)
+            .wild()
+            .label("!")
+            .sort(83)
+            .effect(ctx -> ctx.game.armTrap(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_HURRY_UP = register(
+        CardType.builder("wild_hurry_up", CardPack.RASCAL)
+            .wild()
+            .label("⏱")
+            .sort(84)
+            .effect(ctx -> ctx.game.hurryUp(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_SHIELD = register(
+        CardType.builder("wild_shield", CardPack.RASCAL)
+            .wild()
+            .answersDraw()
+            .label("◇")
+            .sort(85)
+            .effect(ctx -> ctx.game.shield(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_TRICKSTER = register(
+        CardType.builder("wild_trickster", CardPack.MYTH)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("T")
+            .sort(86)
+            .effect(ctx -> {
+                CardPlayer target = ctx.target(0);
+                if (target != null) ctx.game.trickster(ctx.player, target, ctx.report);
+            })
+            .build());
+    public static final CardType WILD_SURGE = register(
+        CardType.builder("wild_surge", CardPack.MYTH)
+            .wild()
+            .label("ϟ")
+            .sort(87)
+            .effect(ctx -> ctx.game.surge(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_TEAM_PLAY = register(
+        CardType.builder("wild_team_play", CardPack.TEAMS)
+            .wild()
+            .label("TP")
+            .sort(88)
+            .effect(ctx -> ctx.game.teamPlay(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_TEAM_DRAW4 = register(
+        CardType.builder("wild_team_draw4", CardPack.TEAMS)
+            .wild()
+            .label("T+4")
+            .sort(89)
+            .effect(ctx -> ctx.game.teamDraw(ctx.player, 2, ctx.report))
             .build());
 
     public static void init() {}

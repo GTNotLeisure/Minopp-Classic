@@ -44,7 +44,28 @@ public final class GameSounds {
         if (type.isDraw() && !flex) {
             report.sound(mc("random.bowhit"), 120, 0.7f, 1.15f);
         }
-        if (id.equals("blaster")) {
+        if (id.equals("wild_smoke")) {
+            report.sound(mc("random.fizz"), 80, 0.6f, 0.8f);
+        } else if (id.equals("wild_echo")) {
+            report.sound(mc("random.orb"), 80, 0.5f, 1.2f);
+            report.sound(mc("random.orb"), 260, 0.4f, 1.2f);
+        } else if (id.equals("wild_crossfade") || id.equals("wild_even_out") || id.equals("wild_card_storm")) {
+            report.sound(HAND_CHANGE, 150, 1f, 1f);
+        } else if (id.equals("wild_surprise")) {
+            for (int i = 0; i < 3; i++) report.sound(mc("note.pling"), 80 + i * 110, 0.6f, 1f + i * 0.25f);
+        } else if (id.equals("wild_booby_trap")) {
+            report.sound(mc("random.fuse"), 100, 0.6f, 1.0f);
+        } else if (id.equals("wild_hurry_up")) {
+            for (int i = 0; i < 4; i++) report.sound(mc("note.hat"), 80 + i * 150, 0.8f, 1.6f);
+        } else if (id.equals("wild_shield")) {
+            report.sound(mc("random.anvil_land"), 100, 0.3f, 1.6f);
+        } else if (id.equals("wild_trickster")) {
+            report.sound(mc("mob.endermen.portal"), 100, 0.6f, 1.2f);
+        } else if (id.equals("wild_surge") || id.equals("wild_team_play")) {
+            report.sound(mc("random.levelup"), 100, 0.4f, 1.4f);
+        } else if (id.equals("wild_team_draw4")) {
+            report.sound(mc("random.bowhit"), 120, 0.8f, 1.0f);
+        } else if (id.equals("blaster")) {
             report.sound(mc("fireworks.blast"), 100, 0.9f, 0.8f);
         } else if (id.equals("wild_blast_all")) {
             report.sound(mc("fireworks.largeBlast"), 100, 0.9f, 0.9f);

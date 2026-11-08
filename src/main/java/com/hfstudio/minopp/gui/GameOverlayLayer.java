@@ -267,7 +267,10 @@ public class GameOverlayLayer {
                         : (p.eliminated ? EnumChatFormatting.DARK_GRAY : EnumChatFormatting.GRAY))
                 .append(p.name.length() > 8 ? p.name.substring(0, 8) : p.name)
                 .append(':')
-                .append(p.eliminated ? "x" : p.hand.size());
+                .append(
+                    p.eliminated ? "x"
+                        : game.hiddenCounts.contains(p.uuid) && !p.equals(cardPlayer) ? "?"
+                            : String.valueOf(p.hand.size()));
             if (p.team >= 0) counts.append(com.hfstudio.minopp.game.Teams.format(p.team))
                 .append('[')
                 .append(p.team + 1)
