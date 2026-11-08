@@ -44,7 +44,23 @@ public final class GameSounds {
         if (type.isDraw() && !flex) {
             report.sound(mc("random.bowhit"), 120, 0.7f, 1.15f);
         }
-        if (id.contains("skip")) {
+        if (id.equals("blaster")) {
+            report.sound(mc("fireworks.blast"), 100, 0.9f, 0.8f);
+        } else if (id.equals("wild_blast_all")) {
+            report.sound(mc("fireworks.largeBlast"), 100, 0.9f, 0.9f);
+            report.sound(mc("fireworks.blast"), 300, 0.7f, 1.1f);
+        } else if (id.contains("trade") || id.contains("swap")) {
+            report.sound(HAND_CHANGE, 150, 1f, 1f);
+        } else if (id.equals("gift")) {
+            report.sound(mc("random.orb"), 100, 0.6f, 1.7f);
+        } else if (id.equals("bonus_turn")) {
+            report.sound(mc("random.levelup"), 100, 0.4f, 1.6f);
+        } else if (id.equals("wild_cyclone")) {
+            report.sound(mc("mob.enderdragon.wings"), 80, 0.5f, 1.3f);
+            report.sound(HAND_CHANGE, 300, 0.8f, 1.2f);
+        } else if (id.equals("wild_thief")) {
+            report.sound(mc("random.pop"), 120, 0.8f, 0.6f);
+        } else if (id.contains("skip")) {
             report.sound(mc("note.snare"), 100, 0.9f, 0.8f);
             if (id.equals("skip_everyone") || id.equals("aw_skip_two") || (flex && id.equals("flex_skip")))
                 report.sound(mc("note.snare"), 230, 0.9f, 0.8f);

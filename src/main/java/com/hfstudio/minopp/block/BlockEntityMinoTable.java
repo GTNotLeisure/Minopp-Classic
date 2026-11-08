@@ -2,6 +2,7 @@ package com.hfstudio.minopp.block;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -157,11 +158,33 @@ public class BlockEntityMinoTable extends TileEntity {
         compoundTag.setBoolean("gameEnd", gameEnd);
         if (lastPlayedByUuid != null) NbtUtil.putUUID(compoundTag, "lastPlayedBy", lastPlayedByUuid);
         compoundTag.setInteger("lastDiscardSize", lastDiscardSize);
+        NBTTagCompound scoresTag = new NBTTagCompound();
+        for (Map.Entry<UUID, Integer> e : scores.entrySet()) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger("points", e.getValue());
+            entry.setString("name", scoreNames.getOrDefault(e.getKey(), "?"));
+            scoresTag.setTag(
+                e.getKey()
+                    .toString(),
+                entry);
+        }
+        compoundTag.setTag("scores", scoresTag);
     }
 
     @Override
     public void readFromNBT(NBTTagCompound compoundTag) {
         super.readFromNBT(compoundTag);
+        scores.clear();
+        scoreNames.clear();
+        NBTTagCompound scoresTag = compoundTag.getCompoundTag("scores");
+        for (Object k : scoresTag.func_150296_c()) {
+            try {
+                UUID id = UUID.fromString((String) k);
+                NBTTagCompound entry = scoresTag.getCompoundTag((String) k);
+                scores.put(id, entry.getInteger("points"));
+                scoreNames.put(id, entry.getString("name"));
+            } catch (IllegalArgumentException ignored) {}
+        }
         NBTTagCompound playersTag = compoundTag.getCompoundTag("seats");
         for (int i = 0; i < MAX_SEATS; i++) {
             seats[i] = playersTag.hasKey("seat" + i) ? new CardPlayer(playersTag.getCompoundTag("seat" + i)) : null;
@@ -467,15 +490,53 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public void resetSeats(CardPlayer initiator) {
         sendSeatActionTakenToAll();
+        scores.clear();
+        scoreNames.clear();
         for (int i = 0; i < MAX_SEATS; i++) seats[i] = null;
         state = ActionReport.builder(initiator)
             .panic(Chat.translatable("game.minopp.play.seats_reset", initiator.name)).state;
         sync();
     }
 
+    public final Map<UUID, Integer> scores = new LinkedHashMap<>();
+    public final Map<UUID, String> scoreNames = new HashMap<>();
+
+    private void scoreRound(List<CardPlayer> winners, ActionReport result) {
+        int target = config.getInt(GameRules.SCORE_TARGET) * 100;
+        if (target <= 0 || game == null || winners == null || winners.isEmpty()) return;
+        List<CardPlayer> losers = new ArrayList<>(game.players);
+        losers.removeAll(winners);
+        int points = game.handPoints(losers);
+        CardPlayer best = null;
+        int bestScore = -1;
+        for (CardPlayer w : winners) {
+            int total = scores.merge(w.uuid, points, Integer::sum);
+            scoreNames.put(w.uuid, w.name);
+            sendMessageToAll(
+                new ActionMessage(
+                    ActionMessage.Type.MESSAGE_ALL,
+                    Chat.translatable("game.minopp.play.points", w.name, points, total, target)));
+            if (total > bestScore) {
+                bestScore = total;
+                best = w;
+            }
+        }
+        if (best != null && bestScore >= target) {
+            sendMessageToAll(
+                new ActionMessage(
+                    ActionMessage.Type.MESSAGE_ALL,
+                    Chat.translatable("game.minopp.play.match_won", best.name, bestScore)));
+            scores.clear();
+            scoreNames.clear();
+        }
+    }
+
     public void handleActionResult(ActionReport result, CardPlayer cardPlayer, EntityPlayerMP player) {
         if (result != null) {
-            if (result.shouldDestroyGame) destroyGame(cardPlayer);
+            if (result.shouldDestroyGame) {
+                scoreRound(result.winners, result);
+                destroyGame(cardPlayer);
+            }
             if (result.state != null) state = result.state;
             for (ActionMessage message : result.messages) {
                 switch (message.type()) {

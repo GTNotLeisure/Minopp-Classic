@@ -178,6 +178,29 @@ public class GameSimulationTest {
     }
 
     @Test
+    public void newPacks() {
+        for (String pack : new String[] { CardPack.BLASTER, CardPack.MODERN, CardPack.WHIRLWIND }) {
+            TableConfig c = new TableConfig();
+            c.setPackEnabled(pack, true);
+            runMany(pack, c, 5, 150);
+        }
+    }
+
+    @Test
+    public void newHouseRules() {
+        TableConfig c = new TableConfig();
+        for (String r : new String[] { GameRules.DEFLECT_DRAW, GameRules.MULTI_PLAY, GameRules.NUMBER_FINISH,
+            GameRules.STACK_DRAW4_ON_DRAW2 }) c.set(r, 1);
+        c.setPackEnabled(CardPack.BLASTER, true);
+        c.setPackEnabled(CardPack.WHIRLWIND, true);
+        runMany("new house rules", c, 6, 150);
+        c.resetToPreset(CardPack.NO_MERCY);
+        c.set(GameRules.DEFLECT_DRAW, 1);
+        c.set(GameRules.MULTI_PLAY, 1);
+        runMany("no mercy + deflect + doubles", c, 4, 100);
+    }
+
+    @Test
     public void mixedSingleCards() {
         TableConfig c = new TableConfig();
         c.setCount("no_mercy:discard_all", 2);

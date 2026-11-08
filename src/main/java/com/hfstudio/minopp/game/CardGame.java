@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ public class CardGame {
     public UUID pendingDrawSource;
     public PlayerActionPhase currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
     public int drawnCardUid = -1;
+    public int chainNumber = -1;
 
     public boolean isAntiClockwise;
     public boolean awaitingCutIn;
@@ -163,6 +165,13 @@ public class CardGame {
         if (currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN && card.uid != drawnCardUid) {
             return "game.minopp.play.only_drawn_card";
         }
+        if (currentPlayerPhase == PlayerActionPhase.CHAIN) {
+            return face.isNumber() && !face.isWild() && face.number == chainNumber && !useFlex ? null
+                : "game.minopp.play.chain_only";
+        }
+        if (rule(GameRules.NUMBER_FINISH) && player.hand.size() == 1 && !face.isNumber()) {
+            return "game.minopp.play.number_finish";
+        }
         if (useFlex) {
             if (!rule(GameRules.FLEX_POWER) || !player.powerOn || (!type.hasFlex() && face.flexColor == null)) {
                 return "game.minopp.play.no_flex";
@@ -173,6 +182,13 @@ public class CardGame {
         }
         if (pendingDraw > 0) {
             if (type.answersDraw) return null;
+            if (rule(GameRules.DEFLECT_DRAW) && !useFlex
+                && (type.matchKey.equals("skip") || type.matchKey.equals("reverse"))
+                && (face.color == currentColor || face.isWild()
+                    || face.symbolKey()
+                        .equals(topFace().symbolKey()))) {
+                return null;
+            }
             if (!type.isDraw() || useFlex) return "game.minopp.play.must_stack_or_draw";
             if (!rule(GameRules.STACKING)) return "game.minopp.play.must_stack_or_draw";
             boolean canStack;
@@ -373,7 +389,18 @@ public class CardGame {
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
 
-        if (!deferAdvance) advanceTurn(report);
+        if (!deferAdvance) {
+            if (!isCut && rule(GameRules.MULTI_PLAY)
+                && face.isNumber()
+                && !face.isWild()
+                && pendingDraw == 0
+                && hasNumber(cardPlayer, face.number)) {
+                currentPlayerPhase = PlayerActionPhase.CHAIN;
+                chainNumber = face.number;
+                return report.chain(face.number);
+            }
+            advanceTurn(report);
+        }
         return isCut ? report.cut() : report.played();
     }
 
@@ -415,8 +442,13 @@ public class CardGame {
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
 
+        if (currentPlayerPhase == PlayerActionPhase.CHAIN) {
+            report.sound(GameSounds.PASS, 0);
+            advanceTurn(report);
+            return report.state(Chat.translatable("game.minopp.play.chain_end", cardPlayer.name));
+        }
         if (currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN) {
-            report.sound(Mino.id("game.pass"), 0);
+            report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
             return report.playedNoCard(true);
         }
@@ -635,6 +667,7 @@ public class CardGame {
     public void advanceTurn(ActionReport report) {
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         drawnCardUid = -1;
+        chainNumber = -1;
         int previousIndex = currentPlayerIndex;
         if (forcedNext != null) {
             CardPlayer target = deAmputate(forcedNext);
@@ -738,6 +771,84 @@ public class CardGame {
 
     public void giveExtraTurn() {
         extraTurn = true;
+    }
+
+    private boolean hasNumber(CardPlayer player, int number) {
+        for (Card c : player.hand) {
+            CardFace f = face(c);
+            if (f.isNumber() && !f.isWild() && f.number == number) return true;
+        }
+        return false;
+    }
+
+    private static final int[] BLAST = { 0, 0, 0, 0, 1, 1, 2, 3, 4, 6 };
+    private static final int[] BLAST_ALL = { 0, 0, 0, 1, 1, 2, 3 };
+
+    public void blaster(CardPlayer player, ActionReport report) {
+        CardPlayer victim = nextPlayer();
+        int n = BLAST[random.nextInt(BLAST.length)];
+        drawCards(victim, n, report);
+        skipNext(1);
+        report.messageAll(Chat.translatable("game.minopp.play.blaster", victim.name, n));
+    }
+
+    public void blastAll(CardPlayer player, ActionReport report) {
+        for (CardPlayer p : activePlayers()) {
+            if (p.equals(player)) continue;
+            int n = BLAST_ALL[random.nextInt(BLAST_ALL.length)];
+            if (n > 0) drawCards(p, n, report);
+            report.messageAll(Chat.translatable("game.minopp.play.blaster", p.name, n));
+        }
+    }
+
+    public void gift(CardPlayer player, ActionReport report) {
+        if (player.hand.isEmpty()) return;
+        CardPlayer receiver = nextPlayer();
+        Card c = player.hand.remove(random.nextInt(player.hand.size()));
+        c.owner = receiver.uuid;
+        receiver.hand.add(c);
+        report.messageAll(Chat.translatable("game.minopp.play.gift", player.name, receiver.name));
+    }
+
+    public void cyclone(ActionReport report) {
+        List<CardPlayer> active = activePlayers();
+        int size = active.size();
+        if (size < 2) return;
+        Card[] passed = new Card[size];
+        for (int i = 0; i < size; i++) {
+            List<Card> hand = active.get(i).hand;
+            if (!hand.isEmpty()) passed[i] = hand.remove(random.nextInt(hand.size()));
+        }
+        for (int i = 0; i < size; i++) {
+            if (passed[i] == null) continue;
+            int to = isAntiClockwise ? (i - 1 + size) % size : (i + 1) % size;
+            passed[i].owner = active.get(to).uuid;
+            active.get(to).hand.add(passed[i]);
+        }
+        handMoveKind = 0;
+        handMoveCounter++;
+        report.messageAll(Chat.translatable("game.minopp.play.cyclone"));
+    }
+
+    public void steal(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target.equals(player) || target.hand.isEmpty()) return;
+        Card c = target.hand.remove(random.nextInt(target.hand.size()));
+        c.owner = player.uuid;
+        player.hand.add(c);
+        target.hasShoutedMino = false;
+        report.messageAll(Chat.translatable("game.minopp.play.thief", player.name, target.name));
+    }
+
+    /** Points a winner scores from the cards left in the other hands (official scoring). */
+    public int handPoints(Collection<CardPlayer> losers) {
+        int total = 0;
+        for (CardPlayer p : losers) {
+            for (Card c : p.hand) {
+                CardFace f = face(c);
+                total += f.isNumber() && !f.isWild() ? Math.max(0, f.number) : f.type().points;
+            }
+        }
+        return total;
     }
 
     public void addPendingDraw(int amount, CardPlayer source) {
@@ -1077,6 +1188,7 @@ public class CardGame {
     public enum PlayerActionPhase {
         DISCARD_HAND,
         DISCARD_DRAWN,
+        CHAIN,
     }
 
     private static List<Card> readCards(NBTTagList list) {
@@ -1098,8 +1210,13 @@ public class CardGame {
         pendingDrawSource = NbtUtil.hasUUID(tag, "pendingDrawSource") ? NbtUtil.getUUID(tag, "pendingDrawSource")
             : null;
         awaitingCutIn = tag.getBoolean("awaitingCutIn");
-        currentPlayerPhase = PlayerActionPhase.valueOf(tag.getString("currentPlayerPhase"));
+        try {
+            currentPlayerPhase = PlayerActionPhase.valueOf(tag.getString("currentPlayerPhase"));
+        } catch (IllegalArgumentException e) {
+            currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+        }
         drawnCardUid = tag.hasKey("drawnCard") ? tag.getInteger("drawnCard") : -1;
+        chainNumber = tag.hasKey("chainNumber") ? tag.getInteger("chainNumber") : -1;
         isAntiClockwise = tag.getBoolean("isAntiClockwise");
         deck = readCards(tag.getTagList("deck", 10));
         discardDeck = readCards(tag.getTagList("discardDeck", 10));
@@ -1139,6 +1256,7 @@ public class CardGame {
         tag.setBoolean("awaitingCutIn", awaitingCutIn);
         tag.setString("currentPlayerPhase", currentPlayerPhase.name());
         tag.setInteger("drawnCard", drawnCardUid);
+        tag.setInteger("chainNumber", chainNumber);
         tag.setBoolean("isAntiClockwise", isAntiClockwise);
         tag.setTag("deck", writeCards(deck));
         tag.setTag("discardDeck", writeCards(discardDeck));

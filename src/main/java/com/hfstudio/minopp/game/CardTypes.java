@@ -400,5 +400,72 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.attachBalloon(ctx.player, ctx.report))
             .build());
 
+    public static final CardType BLASTER = register(
+        CardType.builder("blaster", CardPack.BLASTER)
+            .label("✸")
+            .sort(20)
+            .effect(ctx -> ctx.game.blaster(ctx.player, ctx.report))
+            .build());
+    public static final CardType TRADE_HANDS = register(
+        CardType.builder("trade_hands", CardPack.BLASTER)
+            .choice(Choice.TARGET)
+            .label("⇄")
+            .sort(21)
+            .effect(ctx -> {
+                CardPlayer target = ctx.target(0);
+                if (target != null) ctx.game.swapHands(ctx.player, target, ctx.report);
+            })
+            .build());
+    public static final CardType WILD_BLAST_ALL = register(
+        CardType.builder("wild_blast_all", CardPack.BLASTER)
+            .wild()
+            .label("✸✸")
+            .sort(73)
+            .effect(ctx -> ctx.game.blastAll(ctx.player, ctx.report))
+            .build());
+
+    public static final CardType GIFT = register(
+        CardType.builder("gift", CardPack.MODERN)
+            .label("→1")
+            .sort(22)
+            .effect(ctx -> ctx.game.gift(ctx.player, ctx.report))
+            .build());
+    public static final CardType BONUS_TURN = register(
+        CardType.builder("bonus_turn", CardPack.MODERN)
+            .label("↺")
+            .sort(23)
+            .effect(ctx -> ctx.game.giveExtraTurn())
+            .build());
+    public static final CardType WILD_SWAP_HANDS = register(
+        CardType.builder("wild_swap_hands", CardPack.MODERN)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W⇄")
+            .sort(74)
+            .effect(ctx -> {
+                CardPlayer target = ctx.target(0);
+                if (target != null) ctx.game.swapHands(ctx.player, target, ctx.report);
+            })
+            .build());
+
+    public static final CardType WILD_CYCLONE = register(
+        CardType.builder("wild_cyclone", CardPack.WHIRLWIND)
+            .wild()
+            .label("@")
+            .sort(75)
+            .effect(ctx -> ctx.game.cyclone(ctx.report))
+            .build());
+    public static final CardType WILD_THIEF = register(
+        CardType.builder("wild_thief", CardPack.WHIRLWIND)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("$")
+            .sort(76)
+            .effect(ctx -> {
+                CardPlayer target = ctx.target(0);
+                if (target != null) ctx.game.steal(ctx.player, target, ctx.report);
+            })
+            .build());
+
     public static void init() {}
 }

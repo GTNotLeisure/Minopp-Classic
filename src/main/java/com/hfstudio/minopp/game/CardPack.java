@@ -22,6 +22,9 @@ public final class CardPack {
     public static final String LEGEND = "legend";
     public static final String ANNIVERSARY = "anniversary";
     public static final String WEEKEND = "weekend";
+    public static final String BLASTER = "blaster";
+    public static final String MODERN = "modern";
+    public static final String WHIRLWIND = "whirlwind";
 
     /**
      * One line of a deck composition.
@@ -234,6 +237,19 @@ public final class CardPack {
         .entry("wild_reverse_plus6", 4)
         .entry("double_discard_all", 1)
         .entry("wild_time_balloon", 2)
+        .build();
+    public static final CardPack PACK_BLASTER = new Builder(BLASTER).entry("blaster", 2)
+        .entry("trade_hands", 1)
+        .entry("discard_all", 1)
+        .entry("wild_blast_all", 4)
+        .build();
+    public static final CardPack PACK_MODERN = new Builder(MODERN).entry("gift", 1)
+        .entry("bonus_turn", 1)
+        .entry("wild_swap_hands", 2)
+        .entry("wild_hand_shuffle", 1)
+        .build();
+    public static final CardPack PACK_WHIRLWIND = new Builder(WHIRLWIND).entry("wild_cyclone", 2)
+        .entry("wild_thief", 2)
         .build();
 
     public static void init() {

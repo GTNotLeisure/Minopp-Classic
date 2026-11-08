@@ -54,6 +54,9 @@ public final class GameRules {
     public static final String TEAM_COUNT = integer("teamCount", Category.MODES, 2, 2, Teams.MAX_TEAMS);
     public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, false);
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
+    public static final String DEFLECT_DRAW = bool("deflectDraw", Category.HOUSE, false);
+    public static final String MULTI_PLAY = bool("multiPlay", Category.HOUSE, false);
+    public static final String NUMBER_FINISH = bool("numberFinish", Category.HOUSE, false);
 
     public static final String MERCY = bool("mercyRule", Category.NO_MERCY, false);
     public static final String MERCY_LIMIT = integer("mercyLimit", Category.NO_MERCY, 25, 10, 60);
@@ -68,6 +71,7 @@ public final class GameRules {
     public static final String JUMP_IN_SECONDS = integer("jumpInSeconds", Category.TABLE, 5, 1, 15);
     public static final String SHOUT_PENALTY = integer("shoutPenalty", Category.TABLE, 2, 0, 6);
     public static final String BALLOON_PENALTY = integer("balloonPenalty", Category.TABLE, 4, 1, 10);
+    public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 20);
 
     public static Rule get(String id) {
         return REGISTRY.get(id);

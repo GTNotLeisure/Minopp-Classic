@@ -150,6 +150,23 @@ public class SeatControlScreen extends GuiScreen {
         int cx = (areaX1 + areaX2) / 2, cy = (areaY1 + areaY2) / 2;
         int rx = (areaX2 - areaX1) / 2 - 34, ry = (areaY2 - areaY1) / 2 - 20;
         drawFelt(cx, cy, (int) (rx * 0.62), (int) (ry * 0.55));
+        int target = te.config.getInt(com.hfstudio.minopp.game.GameRules.SCORE_TARGET) * 100;
+        if (target > 0 && !te.scores.isEmpty()) {
+            StringBuilder line = new StringBuilder(tr("gui.minopp.seats.points", target));
+            for (java.util.Map.Entry<java.util.UUID, Integer> e : te.scores.entrySet()) {
+                line.append("  ")
+                    .append(EnumChatFormatting.WHITE)
+                    .append(te.scoreNames.getOrDefault(e.getKey(), "?"))
+                    .append(' ')
+                    .append(EnumChatFormatting.GOLD)
+                    .append(e.getValue());
+            }
+            fontRendererObj.drawStringWithShadow(
+                fontRendererObj.trimStringToWidth(line.toString(), areaX2 - areaX1 - 12),
+                areaX1 + 6,
+                areaY1 + 5,
+                0xFFFFE0A0);
+        }
 
         seatRects.clear();
         int seatCount = te.seatCount();

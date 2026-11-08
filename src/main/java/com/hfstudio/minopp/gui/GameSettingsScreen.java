@@ -122,7 +122,7 @@ public class GameSettingsScreen extends GuiScreen {
         for (int i = 0; i < 5; i++) {
             te.seats[i] = new com.hfstudio.minopp.game.CardPlayer(java.util.UUID.randomUUID(), "Player" + i);
         }
-        tab = Tab.PACKS;
+        tab = Tab.valueOf(System.getProperty("minopp.uiPreviewTab", "PACKS"));
         return new GameSettingsScreen(new BlockPos(0, 0, 0), null, te);
     }
 
@@ -387,7 +387,8 @@ public class GameSettingsScreen extends GuiScreen {
             mc.displayGuiScreen(parent);
             return;
         }
-        if (previewTable != null && System.currentTimeMillis() - previewSwitch > 6000) {
+        if (previewTable != null && System.getProperty("minopp.uiPreviewTab") == null
+            && System.currentTimeMillis() - previewSwitch > 6000) {
             previewSwitch = System.currentTimeMillis();
             tab = Tab.values()[(tab.ordinal() + 1) % Tab.values().length];
         }

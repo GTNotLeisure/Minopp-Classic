@@ -67,6 +67,7 @@ public class ActionReport {
         this.messages.addAll(other.messages);
         this.shouldDestroyGame |= other.shouldDestroyGame;
         this.effects.addAll(other.effects);
+        if (this.winners == null) this.winners = other.winners;
         return this;
     }
 
@@ -109,6 +110,10 @@ public class ActionReport {
         return state(Chat.translatable("game.minopp.play.played", initiator.name, topName()));
     }
 
+    public ActionReport chain(int number) {
+        return state(Chat.translatable("game.minopp.play.chain", initiator.name, number));
+    }
+
     public ActionReport cut() {
         return state(Chat.translatable("game.minopp.play.cut", initiator.name, topName()));
     }
@@ -137,8 +142,11 @@ public class ActionReport {
         return gameWon(initiator, List.of(initiator));
     }
 
+    public List<CardPlayer> winners;
+
     public ActionReport gameWon(CardPlayer winner, List<CardPlayer> winners) {
         shouldDestroyGame = true;
+        this.winners = winners;
         IChatComponent result;
         if (winners.size() > 1) {
             StringBuilder names = new StringBuilder();

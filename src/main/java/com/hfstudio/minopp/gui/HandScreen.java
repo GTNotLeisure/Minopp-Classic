@@ -87,7 +87,7 @@ public class HandScreen extends GuiScreen {
     private void updateButtons() {
         Context ctx = Context.resolve(mc);
         boolean myTurn = ctx != null && ctx.isMyTurn();
-        boolean drawn = ctx != null && ctx.game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_DRAWN;
+        boolean drawn = ctx != null && ctx.game.currentPlayerPhase != CardGame.PlayerActionPhase.DISCARD_HAND;
         drawButton.displayString = Chat.translatable(drawn ? "gui.minopp.hand.pass" : "gui.minopp.hand.draw")
             .getFormattedText();
         drawButton.enabled = myTurn;
