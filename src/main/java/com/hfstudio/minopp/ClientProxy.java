@@ -51,7 +51,9 @@ public class ClientProxy extends CommonProxy {
 
         ClientEvents events = new ClientEvents();
         MinecraftForge.EVENT_BUS.register(events);
-        FMLCommonHandler.instance().bus().register(events);
+        FMLCommonHandler.instance()
+            .bus()
+            .register(events);
     }
 
     public static class ClientEvents {
@@ -89,11 +91,14 @@ public class ClientProxy extends CommonProxy {
 
             CardPlayer playerWithoutHand = ItemHandCards.getCardPlayer(player);
             CardPlayer realPlayer = tableEntity.game.players.stream()
-                .filter(p -> p.equals(playerWithoutHand)).findFirst().orElse(null);
+                .filter(p -> p.equals(playerWithoutHand))
+                .findFirst()
+                .orElse(null);
             if (realPlayer == null) return;
 
             int handIndex = ItemDataUtils.getHandIndex(holding);
-            ItemDataUtils.setHandIndex(holding,
+            ItemDataUtils.setHandIndex(
+                holding,
                 Mth.clamp(handIndex - (int) Math.signum(event.dwheel), 0, realPlayer.hand.size() - 1));
 
             TurnDeadMan.pedal();

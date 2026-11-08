@@ -115,7 +115,9 @@ public class MinoCommand extends CommandBase {
 
     private static void withPlayerAndGame(EntityPlayerMP player, BiConsumer<CardGame, CardPlayer> action) {
         BlockPos gamePos = ItemHandCards.getHandCardGamePos(player);
-        if (gamePos == null) throw new CommandException(Chat.translatable("game.minopp.play.no_game").getUnformattedText());
+        if (gamePos == null) throw new CommandException(
+            Chat.translatable("game.minopp.play.no_game")
+                .getUnformattedText());
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null || tableEntity.game == null) throw new CommandException("game.minopp.play.no_game");
         CardPlayer cardPlayer = tableEntity.game.deAmputate(ItemHandCards.getCardPlayer(player));
@@ -128,7 +130,13 @@ public class MinoCommand extends CommandBase {
     @SuppressWarnings("rawtypes")
     public List addTabCompletionOptions(ICommandSender sender, String[] args) {
         if (args.length == 1) {
-            return getListOfStringsMatchingLastWord(args, "shout", "force_discard", "force_draw", "set_table_award", "set_table_demo");
+            return getListOfStringsMatchingLastWord(
+                args,
+                "shout",
+                "force_discard",
+                "force_draw",
+                "set_table_award",
+                "set_table_demo");
         }
         if (args.length == 2 && args[0].equals("set_table_demo")) {
             return getListOfStringsMatchingLastWord(args, "true", "false");
@@ -142,5 +150,6 @@ public class MinoCommand extends CommandBase {
     }
 
     @SuppressWarnings("unused")
-    private static final List<String> SUBCOMMANDS = Arrays.asList("shout", "force_discard", "force_draw", "set_table_award", "set_table_demo");
+    private static final List<String> SUBCOMMANDS = Arrays
+        .asList("shout", "force_discard", "force_draw", "set_table_award", "set_table_demo");
 }

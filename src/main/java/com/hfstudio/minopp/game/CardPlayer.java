@@ -21,8 +21,10 @@ public class CardPlayer {
     public boolean hasShoutedMino = false;
 
     public CardPlayer(EntityPlayer mcPlayer) {
-        this.uuid = mcPlayer.getGameProfile().getId();
-        this.name = mcPlayer.getGameProfile().getName();
+        this.uuid = mcPlayer.getGameProfile()
+            .getId();
+        this.name = mcPlayer.getGameProfile()
+            .getName();
     }
 
     public CardPlayer(UUID uuid, String name) {

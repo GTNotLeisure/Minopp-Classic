@@ -22,7 +22,9 @@ public class AutoPlayer {
     public static boolean isOnlinePlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return false;
         for (Object o : server.getConfigurationManager().playerEntityList) {
-            if (((EntityPlayerMP) o).getGameProfile().getId().equals(uuid)) return true;
+            if (((EntityPlayerMP) o).getGameProfile()
+                .getId()
+                .equals(uuid)) return true;
         }
         return false;
     }
@@ -33,7 +35,8 @@ public class AutoPlayer {
         boolean shoutsMino = !forgetsMino && realPlayer.hand.size() <= 2;
 
         // If the next player is a human player, we should not play Draw cards
-        CardPlayer nextPlayer = game.players.get((game.currentPlayerIndex + (game.isAntiClockwise ? -1 : 1) + game.players.size()) % game.players.size());
+        CardPlayer nextPlayer = game.players.get(
+            (game.currentPlayerIndex + (game.isAntiClockwise ? -1 : 1) + game.players.size()) % game.players.size());
         boolean canPlayDrawCard = !aiNoPlayerDraw || !isOnlinePlayer(server, nextPlayer.uuid);
 
         if (aiNoWin) {

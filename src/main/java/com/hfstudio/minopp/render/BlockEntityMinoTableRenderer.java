@@ -40,7 +40,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(x, y, z);
         GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glEnable(GL11.GL_RESCALE_NORMAL);
+        GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
         GL11.glColor4f(1, 1, 1, 1);
 
         // Draw deck pile (face-down cards stacked at core +0.5)
@@ -51,7 +51,10 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         Random deckRandom = new Random(1);
         for (int ci = 0; ci < Math.ceil(blockEntity.game.deck.size() / 5f); ci++) {
             GL11.glPushMatrix();
-            GL11.glTranslated(deckRandom.nextFloat() * 0.1 - 0.05, deckRandom.nextFloat() * 0.1 - 0.05, ci * (1f / 48f));
+            GL11.glTranslated(
+                deckRandom.nextFloat() * 0.1 - 0.05,
+                deckRandom.nextFloat() * 0.1 - 0.05,
+                ci * (1f / 48f));
             renderCardBack();
             GL11.glPopMatrix();
         }
@@ -126,9 +129,15 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
         // Top card label
         Card card = blockEntity.game.topCard;
-        String component = (card.suit == Card.Suit.WILD)
-            ? card.getDisplayName().appendSibling(Chat.translatable("game.minopp.card.suit." + card.getEquivSuit().name().toLowerCase())).getFormattedText()
-            : card.getDisplayName().getFormattedText();
+        String component = (card.suit == Card.Suit.WILD) ? card.getDisplayName()
+            .appendSibling(
+                Chat.translatable(
+                    "game.minopp.card.suit." + card.getEquivSuit()
+                        .name()
+                        .toLowerCase()))
+            .getFormattedText()
+            : card.getDisplayName()
+                .getFormattedText();
         renderLabel(component, 1.5, 0.94 + 0.17, 1.5, 0.009f);
 
         for (BlockEntityMinoTable.HandSwapAnimation anim : BlockEntityMinoTable.activeAnimations) {
@@ -154,7 +163,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         }
 
         GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_RESCALE_NORMAL);
+        GL11.glDisable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
         GL11.glPopMatrix();
     }
 
@@ -169,13 +178,22 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
     /** Renders the hand cards item sprite as a thin 3D card centered on the origin (like the 1.20 FIXED transform). */
     public static void renderCardBack() {
-        Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.locationItemsTexture);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(TextureMap.locationItemsTexture);
         IIcon icon = Mino.ITEM_HAND_CARDS.getIconFromDamage(0);
         if (icon == null) return;
         GL11.glPushMatrix();
         GL11.glTranslatef(-0.5f, -0.5f, 0.03125f);
-        ItemRenderer.renderItemIn2D(Tessellator.instance, icon.getMaxU(), icon.getMinV(), icon.getMinU(), icon.getMaxV(),
-            icon.getIconWidth(), icon.getIconHeight(), 0.0625F);
+        ItemRenderer.renderItemIn2D(
+            Tessellator.instance,
+            icon.getMaxU(),
+            icon.getMinV(),
+            icon.getMinU(),
+            icon.getMaxV(),
+            icon.getIconWidth(),
+            icon.getIconHeight(),
+            0.0625F);
         GL11.glPopMatrix();
     }
 

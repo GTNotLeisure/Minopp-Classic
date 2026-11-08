@@ -45,7 +45,7 @@ public class EntityAutoPlayer extends EntityLiving {
     public EntityAutoPlayer(World level) {
         super(level);
         setSize(0.6f, 1.8f);
-        enablePersistence();
+        func_110163_bv(); // enablePersistence
     }
 
     private long lastTickGameTime = 0;
@@ -97,9 +97,9 @@ public class EntityAutoPlayer extends EntityLiving {
                 clientSkinValidFor = getSkin();
                 clientSkinLocation = null;
                 if (!clientSkinValidFor.isEmpty()) {
-                    com.hfstudio.minopp.render.SkinResolver.resolve(clientSkinValidFor, loc -> {
-                        if (clientSkinValidFor.equals(getSkin())) clientSkinLocation = loc;
-                    });
+                    com.hfstudio.minopp.render.SkinResolver.resolve(
+                        clientSkinValidFor,
+                        loc -> { if (clientSkinValidFor.equals(getSkin())) clientSkinLocation = loc; });
                 }
             }
             return;
@@ -119,7 +119,8 @@ public class EntityAutoPlayer extends EntityLiving {
         if (tablePos == null) {
             // Search for a table and join it
             boolean tableFound = false;
-            int bx = MathHelper.floor_double(posX), by = MathHelper.floor_double(posY), bz = MathHelper.floor_double(posZ);
+            int bx = MathHelper.floor_double(posX), by = MathHelper.floor_double(posY),
+                bz = MathHelper.floor_double(posZ);
             for (int dx = -2; dx <= 2 && !tableFound; dx++) {
                 for (int dz = -2; dz <= 2 && !tableFound; dz++) {
                     for (int dy = -1; dy <= 1; dy++) {
@@ -130,7 +131,8 @@ public class EntityAutoPlayer extends EntityLiving {
                             BlockEntityMinoTable tableEntity = ItemHandCards.getTable(worldObj, corePos);
                             if (tableEntity != null) {
                                 if (tableEntity.game != null) continue;
-                                String playerName = hasCustomNameTag() ? getCustomNameTag() : "MinoBot #" + (100 + new Random().nextInt(900));
+                                String playerName = hasCustomNameTag() ? getCustomNameTag()
+                                    : "MinoBot #" + (100 + new Random().nextInt(900));
                                 cardPlayer = new CardPlayer(getUniqueID(), playerName);
                                 tableEntity.joinPlayerToTable(cardPlayer, new Vec3d(posX, posY, posZ));
                                 tablePos = corePos;
@@ -157,7 +159,8 @@ public class EntityAutoPlayer extends EntityLiving {
             if (tableEntity.game != null) {
                 heal(10);
                 CardGame game = tableEntity.game;
-                if (game.players.get(game.currentPlayerIndex).equals(cardPlayer)) {
+                if (game.players.get(game.currentPlayerIndex)
+                    .equals(cardPlayer)) {
                     if (autoPlayer.aiNoDelay > 0) {
                         isThinking = false;
                     } else {
@@ -190,11 +193,14 @@ public class EntityAutoPlayer extends EntityLiving {
                 } else if (worldObj.getTotalWorldTime() - gameEndTime <= 20 * 3) {
                     if (onGround) jump();
                 } else {
-                    if (autoPlayer.aiStartGame && tableEntity.getPlayersList().size() >= 2) {
+                    if (autoPlayer.aiStartGame && tableEntity.getPlayersList()
+                        .size() >= 2) {
                         tableEntity.startGame(cardPlayer);
                     }
                 }
-                if (tableEntity.getPlayersList().stream().noneMatch(p -> p.equals(cardPlayer))) {
+                if (tableEntity.getPlayersList()
+                    .stream()
+                    .noneMatch(p -> p.equals(cardPlayer))) {
                     // It is not on the table
                     cardPlayer = null;
                     setHandStack(null);

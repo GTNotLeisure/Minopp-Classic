@@ -84,8 +84,10 @@ public final class Mino {
         BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(CreativeTabs.tabDecorations);
         GameRegistry.registerBlock(BLOCK_MINO_TABLE, "mino_table");
         GameRegistry.registerTileEntity(BlockEntityMinoTable.class, "minopp:mino_table");
-        BlockPropertyRegistry.registerProperty(BLOCK_MINO_TABLE,
-            IntegerBlockProperty.meta("part").map(BlockMinoTable.PART_NAMES));
+        BlockPropertyRegistry.registerProperty(
+            BLOCK_MINO_TABLE,
+            IntegerBlockProperty.meta("part")
+                .map(BlockMinoTable.PART_NAMES));
 
         ITEM_HAND_CARDS = new ItemHandCards();
         GameRegistry.registerItem(ITEM_HAND_CARDS, "hand_cards");
@@ -100,14 +102,22 @@ public final class Mino {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(BLOCK_MINO_TABLE),
-            "_G_", " L ",
-            '_', new ItemStack(Blocks.stone_slab, 1, 0),
-            'G', new ItemStack(Blocks.wool, 1, 13),
-            'L', "logWood"));
+        GameRegistry.addRecipe(
+            new ShapedOreRecipe(
+                new ItemStack(BLOCK_MINO_TABLE),
+                "_G_",
+                " L ",
+                '_',
+                new ItemStack(Blocks.stone_slab, 1, 0),
+                'G',
+                new ItemStack(Blocks.wool, 1, 13),
+                'L',
+                "logWood"));
 
         MinecraftForge.EVENT_BUS.register(this);
-        FMLCommonHandler.instance().bus().register(TaskScheduler.Holder.INSTANCE);
+        FMLCommonHandler.instance()
+            .bus()
+            .register(TaskScheduler.Holder.INSTANCE);
         proxy.init(event);
     }
 
@@ -132,8 +142,10 @@ public final class Mino {
     }
 
     public static boolean onServerChatMessage(String rawText, EntityPlayerMP sender) {
-        String normalized = rawText.toLowerCase().replace(" ", "")
-            .replace("!", "").replace("！", "");
+        String normalized = rawText.toLowerCase()
+            .replace(" ", "")
+            .replace("!", "")
+            .replace("！", "");
         if (normalized.equals("mino") || normalized.equals("uno") || normalized.equals("minopp")) {
             BlockPos gamePos = ItemHandCards.getHandCardGamePos(sender);
             if (gamePos == null) return false;

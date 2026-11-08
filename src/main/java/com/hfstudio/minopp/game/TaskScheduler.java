@@ -15,6 +15,7 @@ public interface TaskScheduler {
     void schedule(int ticks, Runnable task);
 
     class Holder {
+
         public static final ServerTickScheduler INSTANCE = new ServerTickScheduler();
     }
 
@@ -23,6 +24,7 @@ public interface TaskScheduler {
         private final List<ScheduledTask> tasks = new ArrayList<>();
 
         private static class ScheduledTask {
+
             int ticksRemaining;
             final Runnable task;
 

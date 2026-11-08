@@ -30,6 +30,7 @@ public class C2SAutoPlayerConfigPacket {
     }
 
     public static class Client {
+
         public static void sendC2S(EntityAutoPlayer autoPlayer) {
             ByteBuf packet = MinoNetwork.buffer();
             packet.writeInt(autoPlayer.getEntityId());

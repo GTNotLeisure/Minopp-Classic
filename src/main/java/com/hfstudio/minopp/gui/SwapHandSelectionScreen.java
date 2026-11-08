@@ -55,7 +55,8 @@ public class SwapHandSelectionScreen extends GuiScreen {
     private static final int PIP_CAP = 8;
 
     public SwapHandSelectionScreen(BlockPos gamePos, CardPlayer player, Card handCard, boolean shout, CardGame game) {
-        this.title = Chat.translatable("gui.minopp.swap_card_selection.title").getFormattedText();
+        this.title = Chat.translatable("gui.minopp.swap_card_selection.title")
+            .getFormattedText();
         this.gamePos = gamePos;
         this.player = player;
         this.shout = shout;
@@ -90,7 +91,7 @@ public class SwapHandSelectionScreen extends GuiScreen {
     }
 
     private Direction[] getValidDirs(BlockEntityMinoTable tableEntity) {
-        Direction[] all = {leftDir, frontDir, rightDir};
+        Direction[] all = { leftDir, frontDir, rightDir };
         int count = 0;
         for (Direction d : all) if (d != null && tableEntity.players.get(d) != null) count++;
         Direction[] valid = new Direction[count];
@@ -151,14 +152,21 @@ public class SwapHandSelectionScreen extends GuiScreen {
                         if (fromDir != null && toDir != null && tableEntity.game != null) {
                             CardPlayer fromP = tableEntity.game.deAmputate(player.uuid);
                             CardPlayer toP = tableEntity.game.deAmputate(target.uuid);
-                            BlockEntityMinoTable.hideHandUntil.put(player.uuid,
+                            BlockEntityMinoTable.hideHandUntil.put(
+                                player.uuid,
                                 System.currentTimeMillis() + BlockEntityMinoTable.HandSwapAnimation.DURATION_MS);
                             int fromCount = fromP != null ? fromP.hand.size() : 5;
                             int toCount = toP != null ? toP.hand.size() : 5;
-                            BlockEntityMinoTable.activeAnimations.add(new BlockEntityMinoTable.HandSwapAnimation(
-                                BlockEntityMinoTable.getSeatLocalPos(fromDir), BlockEntityMinoTable.getSeatLocalPos(toDir), fromCount));
-                            BlockEntityMinoTable.activeAnimations.add(new BlockEntityMinoTable.HandSwapAnimation(
-                                BlockEntityMinoTable.getSeatLocalPos(toDir), BlockEntityMinoTable.getSeatLocalPos(fromDir), toCount));
+                            BlockEntityMinoTable.activeAnimations.add(
+                                new BlockEntityMinoTable.HandSwapAnimation(
+                                    BlockEntityMinoTable.getSeatLocalPos(fromDir),
+                                    BlockEntityMinoTable.getSeatLocalPos(toDir),
+                                    fromCount));
+                            BlockEntityMinoTable.activeAnimations.add(
+                                new BlockEntityMinoTable.HandSwapAnimation(
+                                    BlockEntityMinoTable.getSeatLocalPos(toDir),
+                                    BlockEntityMinoTable.getSeatLocalPos(fromDir),
+                                    toCount));
                         }
                         C2SPlayCardPacket.Client.sendSwapHandC2S(gamePos, player, handCard, null, shout, target.uuid);
                         mc.displayGuiScreen(null);
@@ -225,8 +233,7 @@ public class SwapHandSelectionScreen extends GuiScreen {
             if (target == null) continue;
 
             boolean selected = selectedSlot == i;
-            boolean hovered = !selected
-                && mouseX >= cardLeft(i, cx, dirs.length)
+            boolean hovered = !selected && mouseX >= cardLeft(i, cx, dirs.length)
                 && mouseX <= cardLeft(i, cx, dirs.length) + CARD_W
                 && mouseY >= cardTop(cy, false)
                 && mouseY <= cardTop(cy, false) + CARD_H + TAB_H;
@@ -290,7 +297,12 @@ public class SwapHandSelectionScreen extends GuiScreen {
             if (handSize > PIP_CAP) {
                 int rows = (pipCount + PIP_COLS - 1) / PIP_COLS;
                 int overflowY = pipAreaTop + rows * (PIP_H + PIP_GAP) + 1;
-                GuiDraw.drawCenteredString(fontRendererObj, "+" + (handSize - PIP_CAP), x + CARD_W / 2, overflowY, 0xFF555555);
+                GuiDraw.drawCenteredString(
+                    fontRendererObj,
+                    "+" + (handSize - PIP_CAP),
+                    x + CARD_W / 2,
+                    overflowY,
+                    0xFF555555);
             }
 
             // tab
@@ -301,7 +313,12 @@ public class SwapHandSelectionScreen extends GuiScreen {
             GuiDraw.fill(x + 1, tabY + 1, x + CARD_W - 1, tabY + TAB_H - 1, tabBg);
             String tabText = selected ? "Selected" : "Swap";
             int tabTextCol = selected ? 0xFF1a1a1a : 0xFF666666;
-            GuiDraw.drawCenteredString(fontRendererObj, tabText, x + CARD_W / 2, tabY + TAB_H / 2 - lineHeight / 2, tabTextCol);
+            GuiDraw.drawCenteredString(
+                fontRendererObj,
+                tabText,
+                x + CARD_W / 2,
+                tabY + TAB_H / 2 - lineHeight / 2,
+                tabTextCol);
         }
 
         // bottom buttons
@@ -309,7 +326,9 @@ public class SwapHandSelectionScreen extends GuiScreen {
         int btnW = 80;
         int btnH = 14;
         int confirmX = cx - btnW / 2;
-        boolean confirmHovered = mouseX >= confirmX && mouseX <= confirmX + btnW && mouseY >= btnY && mouseY <= btnY + btnH;
+        boolean confirmHovered = mouseX >= confirmX && mouseX <= confirmX + btnW
+            && mouseY >= btnY
+            && mouseY <= btnY + btnH;
         boolean confirmActive = selectedSlot != -1;
         int confirmBorder = confirmActive ? (confirmHovered ? 0xFFc9a84c : 0xFF9a7d2e) : 0xFF3a3a3a;
         int confirmFill = confirmActive ? (confirmHovered ? 0xFF9a7d2e : 0xFF2a2a2a) : 0xFF1e1e1e;
@@ -320,10 +339,17 @@ public class SwapHandSelectionScreen extends GuiScreen {
 
         int cancelY = btnY + btnH + 6;
         int cancelX = cx - btnW / 2;
-        boolean cancelHovered = mouseX >= cancelX && mouseX <= cancelX + btnW && mouseY >= cancelY && mouseY <= cancelY + btnH;
+        boolean cancelHovered = mouseX >= cancelX && mouseX <= cancelX + btnW
+            && mouseY >= cancelY
+            && mouseY <= cancelY + btnH;
         GuiDraw.fill(cancelX, cancelY, cancelX + btnW, cancelY + btnH, cancelHovered ? 0xFF555555 : 0xFF3a3a3a);
         GuiDraw.fill(cancelX + 1, cancelY + 1, cancelX + btnW - 1, cancelY + btnH - 1, 0xFF1e1e1e);
-        GuiDraw.drawCenteredString(fontRendererObj, "Cancel", cx, cancelY + btnH / 2 - lineHeight / 2, cancelHovered ? 0xFFAAAAAA : 0xFF666666);
+        GuiDraw.drawCenteredString(
+            fontRendererObj,
+            "Cancel",
+            cx,
+            cancelY + btnH / 2 - lineHeight / 2,
+            cancelHovered ? 0xFFAAAAAA : 0xFF666666);
 
         super.drawScreen(mouseX, mouseY, partialTick);
     }

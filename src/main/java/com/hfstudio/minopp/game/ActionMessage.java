@@ -48,6 +48,7 @@ public final class ActionMessage {
     }
 
     public enum Type {
+
         STATE,
         FAIL,
         MESSAGE_ALL;
@@ -57,5 +58,7 @@ public final class ActionMessage {
         }
     }
 
-    public static final ActionMessage NO_GAME = new ActionMessage(Type.STATE, Chat.translatable("game.minopp.play.no_game"));
+    public static final ActionMessage NO_GAME = new ActionMessage(
+        Type.STATE,
+        Chat.translatable("game.minopp.play.no_game"));
 }

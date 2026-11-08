@@ -36,9 +36,9 @@ public class CardGame {
             if (i == currentPlayerIndex) continue;
             CardPlayer other = players.get(i);
             if (tableEntity.getRule(BlockEntityMinoTable.RULE_JUMP_IN, true) && other.hand.stream()
-                .anyMatch(c -> c.getEquivFamily() == topCard.getEquivFamily()
-                    && c.getEquivSuit() == topCard.getEquivSuit()
-                    && c.number == topCard.number)) {
+                .anyMatch(
+                    c -> c.getEquivFamily() == topCard.getEquivFamily() && c.getEquivSuit() == topCard.getEquivSuit()
+                        && c.number == topCard.number)) {
                 return true;
             }
         }
@@ -254,7 +254,8 @@ public class CardGame {
         ActionReport report = ActionReport.builder(this, srcPlayer);
         CardPlayer targetPlayer = deAmputate(targetPlayerWithoutHand);
         if (targetPlayer == null) return report.fail(Chat.translatable("game.minopp.play.no_player"));
-        if (players.get(currentPlayerIndex).equals(targetPlayer)) {
+        if (players.get(currentPlayerIndex)
+            .equals(targetPlayer)) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_playing"));
         } else if (srcPlayer.equals(targetPlayer)) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_self"));
@@ -268,7 +269,8 @@ public class CardGame {
             }
             targetPlayer.hasShoutedMino = true;
             report.sound(Mino.id("game.doubt_success"), 0);
-            return report.messageAll(Chat.translatable("game.minopp.play.doubt_success", srcPlayer.name, targetPlayer.name));
+            return report
+                .messageAll(Chat.translatable("game.minopp.play.doubt_success", srcPlayer.name, targetPlayer.name));
         }
     }
 
@@ -279,7 +281,8 @@ public class CardGame {
         // Checks if current top card is a draw card and player has matching one
         boolean canStack = tableEntity.getRule(BlockEntityMinoTable.RULE_STACKING, true)
             && topCard.family == Card.Family.DRAW
-            && currentPlayer.hand.stream().anyMatch(c -> c.family == Card.Family.DRAW && c.number == topCard.number);
+            && currentPlayer.hand.stream()
+                .anyMatch(c -> c.family == Card.Family.DRAW && c.number == topCard.number);
 
         if (canStack) return null;
 
@@ -369,11 +372,17 @@ public class CardGame {
     }
 
     public CardPlayer deAmputate(CardPlayer playerWithoutHand) {
-        return players.stream().filter(p -> p.equals(playerWithoutHand)).findFirst().orElse(null);
+        return players.stream()
+            .filter(p -> p.equals(playerWithoutHand))
+            .findFirst()
+            .orElse(null);
     }
 
     public CardPlayer deAmputate(UUID uuid) {
-        return players.stream().filter(p -> p.uuid.equals(uuid)).findFirst().orElse(null);
+        return players.stream()
+            .filter(p -> p.uuid.equals(uuid))
+            .findFirst()
+            .orElse(null);
     }
 
     public enum PlayerActionPhase {

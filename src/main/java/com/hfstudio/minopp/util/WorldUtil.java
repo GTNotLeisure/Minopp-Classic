@@ -14,7 +14,10 @@ public final class WorldUtil {
         if (world == null || uuid == null) return null;
         for (Object o : world.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
-            if (uuid.equals(p.getGameProfile().getId())) return p;
+            if (uuid.equals(
+                p.getGameProfile()
+                    .getId()))
+                return p;
         }
         return null;
     }

@@ -27,9 +27,14 @@ public class ItemHandCards extends Item {
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World level, EntityPlayer player) {
         BlockPos gamePos = getHandCardGamePos(player);
-        if (gamePos != null && level.getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
-            if (tableEntity.game != null && tableEntity.getPlayersList().stream()
-                .anyMatch(p -> p.uuid.equals(player.getGameProfile().getId()))) {
+        if (gamePos != null
+            && level.getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
+            if (tableEntity.game != null && tableEntity.getPlayersList()
+                .stream()
+                .anyMatch(
+                    p -> p.uuid.equals(
+                        player.getGameProfile()
+                            .getId()))) {
                 // Card is valid
                 return stack;
             }
@@ -72,14 +77,17 @@ public class ItemHandCards extends Item {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     public void addInformation(ItemStack stack, EntityPlayer player, List tooltip, boolean advanced) {
         BlockPos tablePos = ItemDataUtils.getBlockPos(stack);
         UUID bearerId = ItemDataUtils.getBearerId(stack);
         if (tablePos != null) {
             tooltip.add("Table: " + tablePos.toShortString());
         }
-        if (bearerId != null && player != null && !bearerId.equals(player.getGameProfile().getId())) {
+        if (bearerId != null && player != null
+            && !bearerId.equals(
+                player.getGameProfile()
+                    .getId())) {
             tooltip.add(EnumChatFormatting.RED + "NOT YOUR CARD!");
         }
         super.addInformation(stack, player, tooltip, advanced);

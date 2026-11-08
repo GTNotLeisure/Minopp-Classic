@@ -52,7 +52,8 @@ public class AutoPlayerScreen extends GuiScreen {
     }
 
     private static String tr(String key, Object... args) {
-        return Chat.translatable(key, args).getFormattedText();
+        return Chat.translatable(key, args)
+            .getFormattedText();
     }
 
     private int leftX() {
@@ -84,13 +85,28 @@ public class AutoPlayerScreen extends GuiScreen {
 
         buttonList.add(new GuiButton(2, rx, y, COL_W, 20, ""));
         buttonList.add(new GuiButton(3, rx, y + ROW_H, COL_W, 20, ""));
-        buttonList.add(new Slider(4, rx, y + ROW_H * 2, COL_W, 20, () -> forgetChance, v -> forgetChance = v,
-            v -> tr("gui.minopp.bot_config.forget_chance") + ": " + (int) (v * 100) + "%"));
+        buttonList.add(
+            new Slider(
+                4,
+                rx,
+                y + ROW_H * 2,
+                COL_W,
+                20,
+                () -> forgetChance,
+                v -> forgetChance = v,
+                v -> tr("gui.minopp.bot_config.forget_chance") + ": " + (int) (v * 100) + "%"));
         buttonList.add(new GuiButton(5, rx, y + ROW_H * 3 + 12, COL_W, 20, ""));
         buttonList.add(new GuiButton(6, rx, y + ROW_H * 4 + 12, COL_W, 20, ""));
 
         int by = y + ROW_H * 5 + 24;
-        buttonList.add(new GuiButton(7, width / 2 - 155, by, 100, 20, EnumChatFormatting.RED + tr("gui.minopp.bot_config.remove")));
+        buttonList.add(
+            new GuiButton(
+                7,
+                width / 2 - 155,
+                by,
+                100,
+                20,
+                EnumChatFormatting.RED + tr("gui.minopp.bot_config.remove")));
         buttonList.add(new GuiButton(8, width / 2 - 50, by, 100, 20, tr("gui.done")));
         buttonList.add(new GuiButton(9, width / 2 + 55, by, 100, 20, tr("gui.cancel")));
         refreshLabels();
@@ -112,7 +128,8 @@ public class AutoPlayerScreen extends GuiScreen {
                 case 1 -> b.displayString = tr("gui.minopp.bot_config.no_push") + ": " + yesNo(noPush);
                 case 2 -> b.displayString = tr("gui.minopp.bot_config.no_win") + ": " + yesNo(noWin);
                 case 3 -> b.displayString = tr("gui.minopp.bot_config.no_player_draw") + ": " + yesNo(noPlayerDraw);
-                case 5 -> b.displayString = tr("gui.minopp.bot_config.no_delay") + ": " + tr("gui.minopp.bot_config.no_delay." + noDelay);
+                case 5 -> b.displayString = tr("gui.minopp.bot_config.no_delay") + ": "
+                    + tr("gui.minopp.bot_config.no_delay." + noDelay);
                 case 6 -> b.displayString = tr("gui.minopp.bot_config.start_game") + ": " + yesNo(startGame);
                 default -> {}
             }
@@ -151,7 +168,9 @@ public class AutoPlayerScreen extends GuiScreen {
         target.setActive(active);
         target.setNoPush(noPush);
         target.setCustomNameTag(nameField.getText());
-        target.setSkin(skinField.getText().trim());
+        target.setSkin(
+            skinField.getText()
+                .trim());
         target.autoPlayer.aiNoWin = noWin;
         target.autoPlayer.aiNoPlayerDraw = noPlayerDraw;
         target.autoPlayer.aiForgetChance = forgetChance;
@@ -189,12 +208,27 @@ public class AutoPlayerScreen extends GuiScreen {
         drawDefaultBackground();
         int lx = leftX(), rx = rightX(), top = topY();
         GuiDraw.drawCenteredString(fontRendererObj, tr("gui.minopp.bot_config.title"), width / 2, top - 18, 0xFFFFFFFF);
-        GuiDraw.drawString(fontRendererObj, EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.entity"), lx, top, 0xFFFFFFAA);
-        GuiDraw.drawString(fontRendererObj, EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.difficulty"), rx, top, 0xFFFFFFAA);
+        GuiDraw.drawString(
+            fontRendererObj,
+            EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.entity"),
+            lx,
+            top,
+            0xFFFFFFAA);
+        GuiDraw.drawString(
+            fontRendererObj,
+            EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.difficulty"),
+            rx,
+            top,
+            0xFFFFFFAA);
         int y = top + 12;
         GuiDraw.drawString(fontRendererObj, tr("gui.minopp.bot_config.custom_name"), lx, y + ROW_H, 0xFFAAAAAA);
         GuiDraw.drawString(fontRendererObj, tr("gui.minopp.bot_config.skin"), lx, y + ROW_H * 2 + 11, 0xFFAAAAAA);
-        GuiDraw.drawString(fontRendererObj, EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.behavior"), rx, y + ROW_H * 3, 0xFFFFFFAA);
+        GuiDraw.drawString(
+            fontRendererObj,
+            EnumChatFormatting.UNDERLINE + tr("gui.minopp.bot_config.category.behavior"),
+            rx,
+            y + ROW_H * 3,
+            0xFFFFFFAA);
         nameField.drawTextBox();
         skinField.drawTextBox();
         super.drawScreen(mouseX, mouseY, partialTicks);
@@ -202,7 +236,9 @@ public class AutoPlayerScreen extends GuiScreen {
         hoverDescription = null;
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
-            if (mouseX >= b.xPosition && mouseY >= b.yPosition && mouseX < b.xPosition + b.width && mouseY < b.yPosition + b.height) {
+            if (mouseX >= b.xPosition && mouseY >= b.yPosition
+                && mouseX < b.xPosition + b.width
+                && mouseY < b.yPosition + b.height) {
                 hoverDescription = switch (b.id) {
                     case 1 -> "gui.minopp.bot_config.no_push.summary";
                     case 2 -> "gui.minopp.bot_config.no_win.summary";
@@ -213,14 +249,16 @@ public class AutoPlayerScreen extends GuiScreen {
                 };
             }
         }
-        if (mouseX >= skinField.xPosition && mouseY >= skinField.yPosition && mouseX < skinField.xPosition + skinField.width
+        if (mouseX >= skinField.xPosition && mouseY >= skinField.yPosition
+            && mouseX < skinField.xPosition + skinField.width
             && mouseY < skinField.yPosition + skinField.height) {
             hoverDescription = "gui.minopp.bot_config.skin.summary";
         }
         if (hoverDescription != null) {
             String text = tr(hoverDescription);
             int w = Math.min(fontRendererObj.getStringWidth(text), 300);
-            int h = fontRendererObj.listFormattedStringToWidth(text, 300).size() * 10;
+            int h = fontRendererObj.listFormattedStringToWidth(text, 300)
+                .size() * 10;
             GuiDraw.fill(width / 2 - w / 2 - 4, height - h - 12, width / 2 + w / 2 + 4, height - 4, 0xC0000000);
             fontRendererObj.drawSplitString(text, width / 2 - w / 2, height - h - 8, 300, 0xFFFFFFFF);
         }
@@ -265,7 +303,8 @@ public class AutoPlayerScreen extends GuiScreen {
         protected void mouseDragged(Minecraft mc, int mouseX, int mouseY) {
             if (visible) {
                 if (dragging) updateValue(mouseX);
-                mc.getTextureManager().bindTexture(buttonTextures);
+                mc.getTextureManager()
+                    .bindTexture(buttonTextures);
                 org.lwjgl.opengl.GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
                 int pos = xPosition + (int) (getter.get() * (width - 8));
                 drawTexturedModalRect(pos, yPosition, 0, 66, 4, 20);

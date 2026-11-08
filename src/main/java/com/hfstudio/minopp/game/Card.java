@@ -68,13 +68,17 @@ public class Card implements Comparable<Card> {
     }
 
     public IChatComponent getDisplayName() {
-        return Chat.translatable("game.minopp.card.suit." + suit.name().toLowerCase())
+        return Chat.translatable(
+            "game.minopp.card.suit." + suit.name()
+                .toLowerCase())
             .appendText(" ")
             .appendSibling(getCardFaceName());
     }
 
     public IChatComponent getCardFaceName() {
-        return Chat.translatable("game.minopp.card.family." + family.name().toLowerCase(),
+        return Chat.translatable(
+            "game.minopp.card.family." + family.name()
+                .toLowerCase(),
             family == Family.DRAW ? -number : (suit == Suit.WILD ? "" : number));
     }
 
@@ -140,7 +144,10 @@ public class Card implements Comparable<Card> {
     }
 
     public Card(NBTTagCompound tag) {
-        this(Family.valueOf(tag.getString("family")), Suit.valueOf(tag.getString("suit")), tag.getInteger("number"),
+        this(
+            Family.valueOf(tag.getString("family")),
+            Suit.valueOf(tag.getString("suit")),
+            tag.getInteger("number"),
             tag.hasKey("actualCard") ? new Card(tag.getCompoundTag("actualCard")) : null);
     }
 

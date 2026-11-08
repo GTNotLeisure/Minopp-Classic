@@ -57,23 +57,37 @@ public class HandCardsItemRenderer implements IItemRenderer {
         tablePos = BlockMinoTable.getCore(level, tablePos.x, tablePos.y, tablePos.z);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(level, tablePos);
         if (tableEntity == null || tableEntity.game == null) return;
-        CardPlayer realPlayer = tableEntity.game.players.stream().filter(p -> p.uuid.equals(bearerId)).findFirst().orElse(null);
+        CardPlayer realPlayer = tableEntity.game.players.stream()
+            .filter(p -> p.uuid.equals(bearerId))
+            .findFirst()
+            .orElse(null);
         if (realPlayer == null) return;
 
         IIcon icon = Mino.ITEM_HAND_CARDS.getIconFromDamage(0);
-        Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.locationItemsTexture);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(TextureMap.locationItemsTexture);
         GL11.glPushMatrix();
-        GL11.glEnable(GL11.GL_RESCALE_NORMAL);
+        GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
         GL11.glTranslated(0, 0, 0.18);
         for (int k = 0; k < realPlayer.hand.size(); k++) {
-            ItemRenderer.renderItemIn2D(Tessellator.instance, icon.getMaxU(), icon.getMinV(), icon.getMinU(), icon.getMaxV(),
-                icon.getIconWidth(), icon.getIconHeight(), 0.0625F);
+            ItemRenderer.renderItemIn2D(
+                Tessellator.instance,
+                icon.getMaxU(),
+                icon.getMinV(),
+                icon.getMinU(),
+                icon.getMaxV(),
+                icon.getIconWidth(),
+                icon.getIconHeight(),
+                0.0625F);
             GL11.glTranslated(0, 0.02, 0.08);
         }
 
         // Render arrow texture above the cards of the current player
         if (tableEntity.game.currentPlayerIndex == tableEntity.game.players.indexOf(realPlayer)) {
-            Minecraft.getMinecraft().getTextureManager().bindTexture(ARROW);
+            Minecraft.getMinecraft()
+                .getTextureManager()
+                .bindTexture(ARROW);
             float v0 = ((int) (System.currentTimeMillis() / 100L) % 5) * 0.2f;
             float v1 = v0 + 0.2f;
             GL11.glTranslated(0.5, 1.3, 0);
@@ -94,7 +108,7 @@ public class HandCardsItemRenderer implements IItemRenderer {
             }
             GL11.glEnable(GL11.GL_CULL_FACE);
         }
-        GL11.glDisable(GL11.GL_RESCALE_NORMAL);
+        GL11.glDisable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
         GL11.glPopMatrix();
     }
 }

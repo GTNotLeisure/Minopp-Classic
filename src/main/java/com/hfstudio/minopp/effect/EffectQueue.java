@@ -17,7 +17,8 @@ public class EffectQueue {
         long time = System.currentTimeMillis();
         synchronized (queue) {
             while (!queue.isEmpty() && queue.peek().time <= time) {
-                queue.poll().summon(level);
+                queue.poll()
+                    .summon(level);
             }
         }
     }
@@ -26,7 +27,12 @@ public class EffectQueue {
         synchronized (queue) {
             long time = System.currentTimeMillis();
             for (EffectEvent event : events) {
-                if (!event.target().isPresent() || event.target().get().equals(self.getGameProfile().getId())) {
+                if (!event.target()
+                    .isPresent() || event.target()
+                        .get()
+                        .equals(
+                            self.getGameProfile()
+                                .getId())) {
                     queue.add(new TimedEvent(event, time, origin, selfIsPartOfSourceGame));
                 }
             }

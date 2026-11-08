@@ -22,10 +22,10 @@ public final class Chat {
     }
 
     public static String toJson(IChatComponent component) {
-        return IChatComponent.Serializer.componentToJson(component);
+        return IChatComponent.Serializer.func_150696_a(component);
     }
 
     public static IChatComponent fromJson(String json) {
-        return IChatComponent.Serializer.jsonToComponent(json);
+        return IChatComponent.Serializer.func_150699_a(json);
     }
 }

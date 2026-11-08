@@ -73,7 +73,8 @@ public class GameOverlayLayer {
             zoomAnimationProgress = zoomAnimationTarget = 0;
         } else {
             TurnDeadMan.tick(tableEntity.game, partialTicks);
-            if (handCardGamePos == null || hitResultGamePos == null || Objects.equals(handCardGamePos, hitResultGamePos)) {
+            if (handCardGamePos == null || hitResultGamePos == null
+                || Objects.equals(handCardGamePos, hitResultGamePos)) {
                 // Only render active view when the player is looking at the same table as the hand cards
                 renderGameActive(partialTicks, tableEntity);
             } else {
@@ -89,12 +90,20 @@ public class GameOverlayLayer {
         if (mc.gameSettings.hideGUI) return;
         int x = ClientConfig.display.guiXPosition, y = ClientConfig.display.guiYPosition;
         FontRenderer font = mc.fontRenderer;
-        for (String part : tableEntity.state.message().getFormattedText().split("\n")) {
+        for (String part : tableEntity.state.message()
+            .getFormattedText()
+            .split("\n")) {
             drawStringWithBackdrop(font, part, x, y, 0xFFFFFFFF);
             y += font.FONT_HEIGHT;
         }
         y += font.FONT_HEIGHT;
-        drawStringWithBackdrop(font, Chat.translatable("gui.minopp.play.start_hint").getFormattedText(), x, y, 0xFF00DD55);
+        drawStringWithBackdrop(
+            font,
+            Chat.translatable("gui.minopp.play.start_hint")
+                .getFormattedText(),
+            x,
+            y,
+            0xFF00DD55);
     }
 
     private void renderGameActive(float partialTicks, BlockEntityMinoTable tableEntity) {
@@ -123,37 +132,70 @@ public class GameOverlayLayer {
         int x = ClientConfig.display.guiXPosition, y = ClientConfig.display.guiYPosition;
 
         FontRenderer font = mc.fontRenderer;
-        drawStringWithBackdrop(font, Chat.translatable("gui.minopp.play.game_active").getFormattedText() + " © Zbx1425", x, y, 0xFF7090FF);
+        drawStringWithBackdrop(
+            font,
+            Chat.translatable("gui.minopp.play.game_active")
+                .getFormattedText() + " © Zbx1425",
+            x,
+            y,
+            0xFF7090FF);
         y += font.FONT_HEIGHT;
         if (currentPlayer.equals(cardPlayer)) {
-            drawStringWithBackdrop(font, Chat.translatable("gui.minopp.play." + game.currentPlayerPhase.name().toLowerCase()).getFormattedText(), x, y,
+            drawStringWithBackdrop(
+                font,
+                Chat.translatable(
+                    "gui.minopp.play." + game.currentPlayerPhase.name()
+                        .toLowerCase())
+                    .getFormattedText(),
+                x,
+                y,
                 (System.currentTimeMillis() % 400 < 200) ? 0xFFFFFFFF : 0xFFFFFF00);
         } else {
-            drawStringWithBackdrop(font, Chat.translatable("gui.minopp.play.turn_other", currentPlayer.name).getFormattedText(), x, y, 0xFFAAAAAA);
+            drawStringWithBackdrop(
+                font,
+                Chat.translatable("gui.minopp.play.turn_other", currentPlayer.name)
+                    .getFormattedText(),
+                x,
+                y,
+                0xFFAAAAAA);
         }
         y += font.FONT_HEIGHT;
 
-        IChatComponent auxInfo = Chat.translatable("gui.minopp.play.direction." + (game.isAntiClockwise ? "ccw" : "cw"));
+        IChatComponent auxInfo = Chat
+            .translatable("gui.minopp.play.direction." + (game.isAntiClockwise ? "ccw" : "cw"));
         if (game.drawCount > 0) {
-            auxInfo = auxInfo.appendText(", ").appendSibling(Chat.translatable("gui.minopp.play.draw_accumulate", game.drawCount));
+            auxInfo = auxInfo.appendText(", ")
+                .appendSibling(Chat.translatable("gui.minopp.play.draw_accumulate", game.drawCount));
         }
         drawStringWithBackdrop(font, auxInfo.getFormattedText(), x, y, 0xFFAAAAAA);
         y += font.FONT_HEIGHT * 2;
 
-        IChatComponent topCardInfo = Chat.translatable("gui.minopp.play.top_card", game.topCard.getDisplayName().getFormattedText());
+        IChatComponent topCardInfo = Chat.translatable(
+            "gui.minopp.play.top_card",
+            game.topCard.getDisplayName()
+                .getFormattedText());
         if (game.topCard.suit == Card.Suit.WILD) {
-            topCardInfo.appendText(", ").appendSibling(Chat.translatable("gui.minopp.play.top_card_wild_color",
-                Chat.translatable("game.minopp.card.suit." + game.topCard.getEquivSuit().name().toLowerCase())));
+            topCardInfo.appendText(", ")
+                .appendSibling(
+                    Chat.translatable(
+                        "gui.minopp.play.top_card_wild_color",
+                        Chat.translatable(
+                            "game.minopp.card.suit." + game.topCard.getEquivSuit()
+                                .name()
+                                .toLowerCase())));
         }
         drawStringWithBackdrop(font, topCardInfo.getFormattedText(), x, y, 0xFFFFFFDD);
         y += font.FONT_HEIGHT * 2;
 
-        for (String part : tableEntity.state.message().getFormattedText().split("\n")) {
+        for (String part : tableEntity.state.message()
+            .getFormattedText()
+            .split("\n")) {
             drawStringWithBackdrop(font, part, x, y, 0xFFFFFFFF);
             y += font.FONT_HEIGHT;
         }
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList.listIterator(tableEntity.clientMessageList.size()); it.hasPrevious(); ) {
+        for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList
+            .listIterator(tableEntity.clientMessageList.size()); it.hasPrevious();) {
             if (y > res.getScaledHeight() - font.FONT_HEIGHT - 40) {
                 break;
             }
@@ -162,9 +204,18 @@ public class GameOverlayLayer {
             if (entry.getSecond() - 200 < currentTime) {
                 it.remove();
             } else {
-                int color = entry.getFirst().type().isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
+                int color = entry.getFirst()
+                    .type()
+                    .isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
                 int alpha = Mth.clamp((int) (0xFF * (entry.getSecond() - currentTime) / 1000), 0x05, 0xFF);
-                drawStringWithBackdrop(font, entry.getFirst().message().getFormattedText(), x, y, alpha << 24 | color);
+                drawStringWithBackdrop(
+                    font,
+                    entry.getFirst()
+                        .message()
+                        .getFormattedText(),
+                    x,
+                    y,
+                    alpha << 24 | color);
                 y += font.FONT_HEIGHT;
             }
         }
@@ -177,20 +228,41 @@ public class GameOverlayLayer {
                 boolean isPass = BlockMinoTable.Client.isCursorHittingPile();
                 if (currentPlayer.equals(cardPlayer) && !(mc.currentScreen instanceof SwapHandSelectionScreen)) {
                     String cursorMessage = switch (game.currentPlayerPhase) {
-                        case DISCARD_HAND -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass_draw").getFormattedText()
-                            : Chat.translatable("gui.minopp.play.cursor.play").getFormattedText();
-                        case DISCARD_DRAWN -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass").getFormattedText()
-                            : Chat.translatable("gui.minopp.play.cursor.play").getFormattedText();
+                        case DISCARD_HAND -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass_draw")
+                            .getFormattedText()
+                            : Chat.translatable("gui.minopp.play.cursor.play")
+                                .getFormattedText();
+                        case DISCARD_DRAWN -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass")
+                            .getFormattedText()
+                            : Chat.translatable("gui.minopp.play.cursor.play")
+                                .getFormattedText();
                     };
-                    String shoutMessage = Chat.translatable("gui.minopp.play.cursor.shout").getFormattedText();
+                    String shoutMessage = Chat.translatable("gui.minopp.play.cursor.shout")
+                        .getFormattedText();
                     boolean isShouting = !isPass && BlockMinoTable.Client.isShoutModifierHeld();
                     boolean highlight = mc.theWorld.getTotalWorldTime() % 3L < 2L && isPass;
-                    int msgWidth = Math.max(font.getStringWidth(cursorMessage), isShouting ? font.getStringWidth(shoutMessage) : 0);
+                    int msgWidth = Math
+                        .max(font.getStringWidth(cursorMessage), isShouting ? font.getStringWidth(shoutMessage) : 0);
                     int msgHeight = isShouting ? font.FONT_HEIGHT * 2 : font.FONT_HEIGHT;
-                    GuiDraw.fill(width / 2 + 8, height / 2 - msgHeight / 2 - 2, width / 2 + msgWidth + 16, height / 2 + msgHeight / 2 + 3, highlight ? 0x80AAAA66 : 0x80000000);
-                    GuiDraw.drawString(font, cursorMessage, width / 2 + 12, height / 2 - msgHeight / 2, highlight ? 0xFF222222 : 0xFFFFFFDD);
+                    GuiDraw.fill(
+                        width / 2 + 8,
+                        height / 2 - msgHeight / 2 - 2,
+                        width / 2 + msgWidth + 16,
+                        height / 2 + msgHeight / 2 + 3,
+                        highlight ? 0x80AAAA66 : 0x80000000);
+                    GuiDraw.drawString(
+                        font,
+                        cursorMessage,
+                        width / 2 + 12,
+                        height / 2 - msgHeight / 2,
+                        highlight ? 0xFF222222 : 0xFFFFFFDD);
                     if (isShouting) {
-                        GuiDraw.drawString(font, shoutMessage, width / 2 + 12, height / 2 - msgHeight / 2 + font.FONT_HEIGHT, highlight ? 0xFF222222 : 0xFFFFFFDD);
+                        GuiDraw.drawString(
+                            font,
+                            shoutMessage,
+                            width / 2 + 12,
+                            height / 2 - msgHeight / 2 + font.FONT_HEIGHT,
+                            highlight ? 0xFF222222 : 0xFFFFFFDD);
                     }
                 }
             }
@@ -198,7 +270,8 @@ public class GameOverlayLayer {
 
         if (TurnDeadMan.isAlarmActive()) {
             if (mc.currentScreen instanceof SwapHandSelectionScreen) return;
-            String deadManMessage = Chat.translatable("gui.minopp.play.cursor.dead_man").getFormattedText();
+            String deadManMessage = Chat.translatable("gui.minopp.play.cursor.dead_man")
+                .getFormattedText();
             boolean highlight = mc.theWorld.getTotalWorldTime() % 3L < 2L;
             int msgWidth = font.getStringWidth(deadManMessage);
             int msgHeight = font.FONT_HEIGHT;
@@ -239,7 +312,8 @@ public class GameOverlayLayer {
         CardPlayer playerWithoutHand = ItemHandCards.getCardPlayer(player);
         CardPlayer realPlayer = tableEntity.game.players.stream()
             .filter(p -> p.equals(playerWithoutHand))
-            .findFirst().orElse(null);
+            .findFirst()
+            .orElse(null);
         if (realPlayer == null) return false;
 
         int myPlayerIndex = tableEntity.game.players.indexOf(realPlayer);
@@ -254,13 +328,15 @@ public class GameOverlayLayer {
         realPlayer.hand.sort(Card::compareTo);
         List<Long> handCardHashes = new ArrayList<>();
         for (Card card : realPlayer.hand) {
-            if (!handCardHashes.isEmpty() && card.hashCode() == (handCardHashes.get(handCardHashes.size() - 1) & 0xFFFFFFFFL)) {
+            if (!handCardHashes.isEmpty()
+                && card.hashCode() == (handCardHashes.get(handCardHashes.size() - 1) & 0xFFFFFFFFL)) {
                 handCardHashes.add(handCardHashes.get(handCardHashes.size() - 1) + 0x100000000L);
             } else {
                 handCardHashes.add((long) card.hashCode());
             }
         }
-        handCardCurrentXOff.keySet().removeIf(hash -> !handCardHashes.contains(hash));
+        handCardCurrentXOff.keySet()
+            .removeIf(hash -> !handCardHashes.contains(hash));
 
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
         int width = res.getScaledWidth();
@@ -275,11 +351,13 @@ public class GameOverlayLayer {
             Float currentXOffBoxed = handCardCurrentXOff.get(handCardHashes.get(i));
             float currentXOff = currentXOffBoxed == null ? CARD_WIDTH + 10 : currentXOffBoxed;
             int x = width - 10 - CARD_WIDTH + (int) currentXOff;
-            handCardCurrentXOff.put(handCardHashes.get(i), (float) Mth.lerp(8 * 0.05 * partialTicks, currentXOff, targetXOff));
+            handCardCurrentXOff
+                .put(handCardHashes.get(i), (float) Mth.lerp(8 * 0.05 * partialTicks, currentXOff, targetXOff));
             int y = height - ((CARD_HEIGHT / 2) + CARD_V_SPACING * (handSize - i)) + cardDrawOffset;
             Card card = realPlayer.hand.get(i);
             if (i == clientHandIndex && isMyTurn) {
-                String cardName = card.getDisplayName().getFormattedText();
+                String cardName = card.getDisplayName()
+                    .getFormattedText();
                 GuiDraw.drawString(font, cardName, x - font.getStringWidth(cardName) - 10, y + 10, 0xFFFFFFDD);
             }
             GuiDraw.fill(x, y, x + CARD_WIDTH, y + CARD_HEIGHT, 0xFF222222);
@@ -293,8 +371,18 @@ public class GameOverlayLayer {
             float shadowAlpha = (!isMyTurn || tableEntity.game.awaitingCutIn) ? 0.5f : 0f;
 
             GL11.glColor4f(1, 1, 1, 1);
-            GuiDraw.blit(BlockEntityMinoTableRenderer.DECK_ATLAS, x + 5, y + 5, CARD_WIDTH - 10, CARD_HEIGHT - 10,
-                cardU + 1, cardV + 1, cardUW - 2, cardVH - 2, 256, 128);
+            GuiDraw.blit(
+                BlockEntityMinoTableRenderer.DECK_ATLAS,
+                x + 5,
+                y + 5,
+                CARD_WIDTH - 10,
+                CARD_HEIGHT - 10,
+                cardU + 1,
+                cardV + 1,
+                cardUW - 2,
+                cardVH - 2,
+                256,
+                128);
             GL11.glPushMatrix();
             GL11.glTranslatef(x + 7, y + 7, 0);
             GL11.glScalef(1.5f, 1.5f, 1);
@@ -305,7 +393,8 @@ public class GameOverlayLayer {
             } else if (card.suit == Card.Suit.WILD && card.family == Card.Family.NUMBER) {
                 GuiDraw.blit(BlockEntityMinoTableRenderer.DECK_ATLAS, 0, 0, 10, 10, 228, 0, 10, 10, 256, 128);
             } else {
-                String cardName = card.getCardFaceName().getFormattedText();
+                String cardName = card.getCardFaceName()
+                    .getFormattedText();
                 // shadowAlpha decides greyed or non-greyed cards
                 int colorA = (int) (0x22 * shadowAlpha + 0xFF * (1 - shadowAlpha));
                 GuiDraw.drawString(font, cardName, 0, 0, 0xFF000000 + colorA * 0x10101);
@@ -321,7 +410,8 @@ public class GameOverlayLayer {
                 if (canCutInWithThisCard) {
                     float pulse = (float) (0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 150.0));
                     int highlightAlpha = (int) (0x90 * pulse);
-                    GuiDraw.fill(x - 2, y - 2, x + CARD_WIDTH + 2, y + CARD_HEIGHT + 2, (highlightAlpha << 24) | 0xFFD700);
+                    GuiDraw
+                        .fill(x - 2, y - 2, x + CARD_WIDTH + 2, y + CARD_HEIGHT + 2, (highlightAlpha << 24) | 0xFFD700);
                 }
             }
         }

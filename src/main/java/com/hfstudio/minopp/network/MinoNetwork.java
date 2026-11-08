@@ -28,6 +28,7 @@ public final class MinoNetwork {
 
     @FunctionalInterface
     public interface C2SPacketHandler {
+
         void handlePacket(EntityPlayerMP player, ByteBuf packet);
     }
 
@@ -91,6 +92,7 @@ public final class MinoNetwork {
     }
 
     public static class C2SMessage extends RawMessage {
+
         public C2SMessage() {}
 
         C2SMessage(String id, ByteBuf data) {
@@ -99,6 +101,7 @@ public final class MinoNetwork {
     }
 
     public static class S2CMessage extends RawMessage {
+
         public S2CMessage() {}
 
         S2CMessage(String id, ByteBuf data) {
@@ -107,6 +110,7 @@ public final class MinoNetwork {
     }
 
     public static class ServerHandler implements IMessageHandler<C2SMessage, IMessage> {
+
         @Override
         public IMessage onMessage(C2SMessage message, MessageContext ctx) {
             C2SPacketHandler handler = SERVER_HANDLERS.get(message.id);
@@ -122,6 +126,7 @@ public final class MinoNetwork {
     }
 
     public static class ClientHandler implements IMessageHandler<S2CMessage, IMessage> {
+
         @Override
         public IMessage onMessage(S2CMessage message, MessageContext ctx) {
             Consumer<ByteBuf> handler = CLIENT_HANDLERS.get(message.id);

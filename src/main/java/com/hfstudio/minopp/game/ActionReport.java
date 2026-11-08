@@ -118,7 +118,8 @@ public class ActionReport {
         for (CardPlayer player : game.players) {
             if (!player.equals(initiator)) {
                 result = result.appendText("\n")
-                    .appendSibling(Chat.translatable("game.minopp.play.game_nearly_won", player.name, player.hand.size()));
+                    .appendSibling(
+                        Chat.translatable("game.minopp.play.game_nearly_won", player.name, player.hand.size()));
             }
         }
         return state(result);
@@ -129,5 +130,6 @@ public class ActionReport {
         return state(message);
     }
 
-    public static final ActionReport NO_GAME = ActionReport.builder().state(Chat.translatable("game.minopp.play.no_game"));
+    public static final ActionReport NO_GAME = ActionReport.builder()
+        .state(Chat.translatable("game.minopp.play.no_game"));
 }

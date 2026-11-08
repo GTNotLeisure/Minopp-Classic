@@ -80,7 +80,8 @@ public class C2SPlayCardPacket {
 
     public static class Client {
 
-        public static void sendPlayCardC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection, boolean shout) {
+        public static void sendPlayCardC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection,
+            boolean shout) {
             ByteBuf packet = MinoNetwork.buffer();
             Buf.writeBlockPos(packet, gamePos);
             Buf.writeUUID(packet, player.uuid);
@@ -108,7 +109,8 @@ public class C2SPlayCardPacket {
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
-        public static void sendSwapHandC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection, boolean shout, UUID targetPlayerUuid) {
+        public static void sendSwapHandC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection,
+            boolean shout, UUID targetPlayerUuid) {
             ByteBuf packet = MinoNetwork.buffer();
             Buf.writeBlockPos(packet, gamePos);
             Buf.writeUUID(packet, player.uuid);

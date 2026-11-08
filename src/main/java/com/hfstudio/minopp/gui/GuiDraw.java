@@ -26,13 +26,16 @@ public final class GuiDraw {
     /**
      * Blits a region of a texture: dest (x, y, w, h), source (u, v, uw, vh) in pixels of a (texW x texH) texture.
      */
-    public static void blit(ResourceLocation texture, float x, float y, float w, float h, float u, float v, float uw, float vh,
-        float texW, float texH) {
-        Minecraft.getMinecraft().getTextureManager().bindTexture(texture);
+    public static void blit(ResourceLocation texture, float x, float y, float w, float h, float u, float v, float uw,
+        float vh, float texW, float texH) {
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(texture);
         blitBound(x, y, w, h, u, v, uw, vh, texW, texH);
     }
 
-    public static void blitBound(float x, float y, float w, float h, float u, float v, float uw, float vh, float texW, float texH) {
+    public static void blitBound(float x, float y, float w, float h, float u, float v, float uw, float vh, float texW,
+        float texH) {
         GL11.glEnable(GL11.GL_BLEND);
         OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         float u0 = u / texW, u1 = (u + uw) / texW, v0 = v / texH, v1 = (v + vh) / texH;

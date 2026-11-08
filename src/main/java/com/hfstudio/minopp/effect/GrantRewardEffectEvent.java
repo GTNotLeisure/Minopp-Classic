@@ -51,7 +51,7 @@ public record GrantRewardEffectEvent(UUID targetPlayer) implements EffectEvent {
             EntityItem itemEntity = player.dropPlayerItemWithRandomChoice(stack, false);
             if (itemEntity != null) {
                 itemEntity.delayBeforeCanPickup = 0;
-                itemEntity.setOwner(player.getCommandSenderName());
+                itemEntity.func_145797_a(player.getCommandSenderName());
             }
         }
         player.inventoryContainer.detectAndSendChanges();

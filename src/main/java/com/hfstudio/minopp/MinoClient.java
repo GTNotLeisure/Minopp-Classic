@@ -36,7 +36,10 @@ public class MinoClient {
     private static final Random RANDOM = new Random();
 
     public static void init() {
-        KEY_SHOUT_MODIFIER = new KeyBinding("key.minopp.shout_modifier", Keyboard.KEY_LCONTROL, "key.categories.minopp");
+        KEY_SHOUT_MODIFIER = new KeyBinding(
+            "key.minopp.shout_modifier",
+            Keyboard.KEY_LCONTROL,
+            "key.categories.minopp");
         cpw.mods.fml.client.registry.ClientRegistry.registerKeyBinding(KEY_SHOUT_MODIFIER);
         MinoNetwork.registerClientReceiver(S2CActionEphemeralPacket.ID, S2CActionEphemeralPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CEffectListPacket.ID, S2CEffectListPacket.Client::handleS2C);
@@ -58,7 +61,8 @@ public class MinoClient {
     }
 
     private static void tickGlows(World level) {
-        for (Iterator<Map.Entry<UUID, Integer>> it = GLOWS.entrySet().iterator(); it.hasNext(); ) {
+        for (Iterator<Map.Entry<UUID, Integer>> it = GLOWS.entrySet()
+            .iterator(); it.hasNext();) {
             Map.Entry<UUID, Integer> entry = it.next();
             int remaining = entry.getValue() - 1;
             if (remaining <= 0) {

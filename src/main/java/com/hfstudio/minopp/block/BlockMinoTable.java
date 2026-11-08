@@ -53,7 +53,8 @@ public class BlockMinoTable extends Block {
 
     /** Exposes the part metadata as the "part" blockstate property for GTNHLib's JSON model pipeline. */
     public static final List<String> PART_NAMES = Arrays.stream(TablePartType.values())
-        .map(TablePartType::getSerializedName).collect(Collectors.toList());
+        .map(TablePartType::getSerializedName)
+        .collect(Collectors.toList());
 
     public BlockMinoTable() {
         super(Material.wood);
@@ -66,7 +67,8 @@ public class BlockMinoTable extends Block {
     }
 
     @Override
-    public boolean onBlockActivated(World level, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+    public boolean onBlockActivated(World level, int x, int y, int z, EntityPlayer player, int side, float hitX,
+        float hitY, float hitZ) {
         BlockPos corePos = getCore(level, x, y, z);
         TileEntity blockEntity = level.getTileEntity(corePos.x, corePos.y, corePos.z);
 
@@ -79,7 +81,9 @@ public class BlockMinoTable extends Block {
                 if (blockEntity instanceof BlockEntityMinoTable tableEntity) {
                     if (tableEntity.game != null) {
                         if (tablePos == null || !tablePos.equals(corePos)) {
-                            Client.displayActionBar(Chat.translatable("game.minopp.play.no_player").getFormattedText());
+                            Client.displayActionBar(
+                                Chat.translatable("game.minopp.play.no_player")
+                                    .getFormattedText());
                             return false;
                         }
                         TurnDeadMan.pedal();
@@ -88,18 +92,31 @@ public class BlockMinoTable extends Block {
                         if (Client.isCursorHittingPile()) {
                             C2SPlayCardPacket.Client.sendPlayNoCardC2S(corePos, playerWithoutHand);
                         } else {
-                            Card selectedCard = realPlayer.hand.get(Mth.clamp(handIndex, 0, realPlayer.hand.size() - 1));
+                            Card selectedCard = realPlayer.hand
+                                .get(Mth.clamp(handIndex, 0, realPlayer.hand.size() - 1));
                             if (selectedCard.suit == Card.Suit.WILD) {
-                                Client.openWildSelectionScreen(corePos, playerWithoutHand, selectedCard, Client.isShoutModifierHeld());
+                                Client.openWildSelectionScreen(
+                                    corePos,
+                                    playerWithoutHand,
+                                    selectedCard,
+                                    Client.isShoutModifierHeld());
                             } else {
                                 if (selectedCard.number == 7
                                     && tableEntity.getRule(BlockEntityMinoTable.RULE_SEVEN0, false)
                                     && selectedCard.canPlayOn(tableEntity.game.topCard)) {
-                                    Client.openSwapHandSelectionScreen(corePos, playerWithoutHand, selectedCard,
-                                        Client.isShoutModifierHeld(), tableEntity.game);
+                                    Client.openSwapHandSelectionScreen(
+                                        corePos,
+                                        playerWithoutHand,
+                                        selectedCard,
+                                        Client.isShoutModifierHeld(),
+                                        tableEntity.game);
                                 } else {
-                                    C2SPlayCardPacket.Client.sendPlayCardC2S(corePos, playerWithoutHand, selectedCard,
-                                        null, Client.isShoutModifierHeld());
+                                    C2SPlayCardPacket.Client.sendPlayCardC2S(
+                                        corePos,
+                                        playerWithoutHand,
+                                        selectedCard,
+                                        null,
+                                        Client.isShoutModifierHeld());
                                 }
                             }
                         }
@@ -110,7 +127,9 @@ public class BlockMinoTable extends Block {
         } else if (blockEntity instanceof BlockEntityMinoTable tableEntity) {
             CardPlayer cardPlayer = ItemHandCards.getCardPlayer(player);
             if (tableEntity.demo) {
-                if (level.isRemote) Client.displayActionBar(Chat.translatable("game.minopp.play.table_in_demo").getFormattedText());
+                if (level.isRemote) Client.displayActionBar(
+                    Chat.translatable("game.minopp.play.table_in_demo")
+                        .getFormattedText());
                 return false;
             }
             if (level.isRemote) {
@@ -129,19 +148,24 @@ public class BlockMinoTable extends Block {
     public static class Client {
 
         public static void displayActionBar(String text) {
-            Minecraft.getMinecraft().ingameGUI.setRecordPlaying(text, false);
+            Minecraft.getMinecraft().ingameGUI.func_110326_a(text, false);
         }
 
-        public static void openWildSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard, boolean shout) {
-            Minecraft.getMinecraft().displayGuiScreen(new WildSelectionScreen(corePos, player, selectedCard, shout));
+        public static void openWildSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard,
+            boolean shout) {
+            Minecraft.getMinecraft()
+                .displayGuiScreen(new WildSelectionScreen(corePos, player, selectedCard, shout));
         }
 
-        public static void openSwapHandSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard, boolean shout, CardGame game) {
-            Minecraft.getMinecraft().displayGuiScreen(new SwapHandSelectionScreen(corePos, player, selectedCard, shout, game));
+        public static void openSwapHandSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard,
+            boolean shout, CardGame game) {
+            Minecraft.getMinecraft()
+                .displayGuiScreen(new SwapHandSelectionScreen(corePos, player, selectedCard, shout, game));
         }
 
         public static void openSeatControlScreen(BlockPos corePos) {
-            Minecraft.getMinecraft().displayGuiScreen(new SeatControlScreen(corePos));
+            Minecraft.getMinecraft()
+                .displayGuiScreen(new SeatControlScreen(corePos));
         }
 
         public static boolean isShoutModifierHeld() {
@@ -153,7 +177,8 @@ public class BlockMinoTable extends Block {
             Minecraft mc = Minecraft.getMinecraft();
             MovingObjectPosition hitResult = mc.objectMouseOver;
             World level = mc.theWorld;
-            if (hitResult != null && level != null && hitResult.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
+            if (hitResult != null && level != null
+                && hitResult.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
                 if (level.getBlock(hitResult.blockX, hitResult.blockY, hitResult.blockZ) == Mino.BLOCK_MINO_TABLE) {
                     return BlockMinoTable.getCore(level, hitResult.blockX, hitResult.blockY, hitResult.blockZ);
                 }
@@ -165,7 +190,8 @@ public class BlockMinoTable extends Block {
             BlockPos gamePos = getCursorPickedGame();
             if (gamePos == null) return false;
             Minecraft mc = Minecraft.getMinecraft();
-            if (mc.theWorld.getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
+            if (mc.theWorld
+                .getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
                 if (tableEntity.game == null) return false;
                 AxisAlignedBB pileAabb = getPileAabb(tableEntity).getOffsetBoundingBox(gamePos.x, gamePos.y, gamePos.z);
                 EntityLivingBase cameraEntity = mc.renderViewEntity;
@@ -173,7 +199,8 @@ public class BlockMinoTable extends Block {
                 float hitDistance = 20;
                 Vec3 rayBegin = cameraEntity.getPosition(partialTicks);
                 Vec3 rayDir = cameraEntity.getLook(partialTicks);
-                Vec3 rayEnd = rayBegin.addVector(rayDir.xCoord * hitDistance, rayDir.yCoord * hitDistance, rayDir.zCoord * hitDistance);
+                Vec3 rayEnd = rayBegin
+                    .addVector(rayDir.xCoord * hitDistance, rayDir.yCoord * hitDistance, rayDir.zCoord * hitDistance);
                 return pileAabb.calculateIntercept(rayBegin, rayEnd) != null || pileAabb.isVecInside(rayBegin);
             }
             return true;
@@ -183,7 +210,8 @@ public class BlockMinoTable extends Block {
             if (tableEntity.game == null) return AxisAlignedBB.getBoundingBox(0, 0, 0, 0, 0, 0);
             float deckHeight = (float) Math.ceil(tableEntity.game.deck.size() / 5f) * (1f / 48f) * 0.4f;
             double cy = 0.94 + deckHeight / 2;
-            return AxisAlignedBB.getBoundingBox(0.25, cy - deckHeight / 2, 0.25, 0.75, cy + deckHeight / 2 + 0.02, 0.75);
+            return AxisAlignedBB
+                .getBoundingBox(0.25, cy - deckHeight / 2, 0.25, 0.75, cy + deckHeight / 2 + 0.02, 0.75);
         }
     }
 
@@ -272,6 +300,7 @@ public class BlockMinoTable extends Block {
     }
 
     public enum TablePartType {
+
         X_LESS_Z_LESS(0, 0),
         X_LESS_Z_MID(0, 1),
         X_LESS_Z_MORE(0, 2),
@@ -291,7 +320,8 @@ public class BlockMinoTable extends Block {
         }
 
         public String getSerializedName() {
-            return this.name().toLowerCase();
+            return this.name()
+                .toLowerCase();
         }
     }
 

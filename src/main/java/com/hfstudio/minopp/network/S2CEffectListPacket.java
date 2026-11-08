@@ -18,11 +18,15 @@ public class S2CEffectListPacket {
 
     public static final String ID = "minopp:effect_list";
 
-    public static void sendS2C(EntityPlayerMP target, List<EffectEvent> events, BlockPos origin, boolean playerPartOfSourceGame) {
+    public static void sendS2C(EntityPlayerMP target, List<EffectEvent> events, BlockPos origin,
+        boolean playerPartOfSourceGame) {
         ByteBuf packet = MinoNetwork.buffer();
         packet.writeInt(events.size());
         for (EffectEvent event : events) {
-            Buf.writeString(packet, event.type().id());
+            Buf.writeString(
+                packet,
+                event.type()
+                    .id());
             event.encode(event, packet);
         }
         Buf.writeBlockPos(packet, origin);
@@ -38,7 +42,9 @@ public class S2CEffectListPacket {
             for (int i = 0; i < size; i++) {
                 String id = Buf.readString(packet);
                 EffectEvent.Type<?> type = EffectEvents.REGISTRY.get(id);
-                sounds.add(type.function().apply(packet));
+                sounds.add(
+                    type.function()
+                        .apply(packet));
             }
             BlockPos origin = Buf.readBlockPos(packet);
             boolean playerPartOfSourceGame = packet.readBoolean();

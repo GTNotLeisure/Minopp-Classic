@@ -29,7 +29,8 @@ public class SeatControlScreen extends GuiScreen {
     private final String title;
 
     public SeatControlScreen(BlockPos gamePos) {
-        this.title = Chat.translatable("gui.minopp.seats.title").getFormattedText();
+        this.title = Chat.translatable("gui.minopp.seats.title")
+            .getFormattedText();
         this.gamePos = gamePos;
     }
 
@@ -40,11 +41,9 @@ public class SeatControlScreen extends GuiScreen {
     private final List<GuiButton> ruleButtons = new ArrayList<>();
     private final List<String> ruleButtonKeys = new ArrayList<>();
 
-    private static final String[][] RULES_LIST = {
-        {BlockEntityMinoTable.RULE_JUMP_IN, "Allow Jump-In"},
-        {BlockEntityMinoTable.RULE_STACKING, "Allow Stacking"},
-        {BlockEntityMinoTable.RULE_SEVEN0, "Allow 7-0 Rules"}
-    };
+    private static final String[][] RULES_LIST = { { BlockEntityMinoTable.RULE_JUMP_IN, "Allow Jump-In" },
+        { BlockEntityMinoTable.RULE_STACKING, "Allow Stacking" },
+        { BlockEntityMinoTable.RULE_SEVEN0, "Allow 7-0 Rules" } };
 
     private BlockEntityMinoTable getTable() {
         return ItemHandCards.getTable(mc.theWorld, gamePos);
@@ -60,14 +59,25 @@ public class SeatControlScreen extends GuiScreen {
         return AbstractClientPlayer.locationStevePng;
     }
 
-    private static final ResourceLocation PANEL_TEXTURE = new ResourceLocation("minecraft", "textures/blocks/planks_spruce.png");
+    private static final ResourceLocation PANEL_TEXTURE = new ResourceLocation(
+        "minecraft",
+        "textures/blocks/planks_spruce.png");
     int LARGE_BTN_WIDTH = 70;
     int LARGE_BTN_HEIGHT = 20;
     int MARGIN = 8;
 
-    int PANEL_HEIGHT = MARGIN + 6 + MARGIN
-        + MARGIN + 9 + MARGIN + LARGE_BTN_HEIGHT + MARGIN + 9 + MARGIN
-        + MARGIN + LARGE_BTN_HEIGHT + MARGIN;
+    int PANEL_HEIGHT = MARGIN + 6
+        + MARGIN
+        + MARGIN
+        + 9
+        + MARGIN
+        + LARGE_BTN_HEIGHT
+        + MARGIN
+        + 9
+        + MARGIN
+        + MARGIN
+        + LARGE_BTN_HEIGHT
+        + MARGIN;
     int PANEL_WIDTH = 260;
 
     private GuiButton stopButton, startButton, leaveButton;
@@ -80,18 +90,36 @@ public class SeatControlScreen extends GuiScreen {
         int xOff = (width - PANEL_WIDTH) / 2;
         int yOff = (height - PANEL_HEIGHT) / 2;
 
-        stopButton = new GuiButton(0, xOff + MARGIN, yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT, LARGE_BTN_WIDTH, LARGE_BTN_HEIGHT,
-            Chat.translatable("gui.minopp.seats.stop").getFormattedText());
+        stopButton = new GuiButton(
+            0,
+            xOff + MARGIN,
+            yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT,
+            LARGE_BTN_WIDTH,
+            LARGE_BTN_HEIGHT,
+            Chat.translatable("gui.minopp.seats.stop")
+                .getFormattedText());
         stopButton.enabled = false;
         buttonList.add(stopButton);
 
-        startButton = new GuiButton(1, xOff + MARGIN + LARGE_BTN_WIDTH + MARGIN, yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT,
-            LARGE_BTN_WIDTH, LARGE_BTN_HEIGHT, Chat.translatable("gui.minopp.seats.start").getFormattedText());
+        startButton = new GuiButton(
+            1,
+            xOff + MARGIN + LARGE_BTN_WIDTH + MARGIN,
+            yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT,
+            LARGE_BTN_WIDTH,
+            LARGE_BTN_HEIGHT,
+            Chat.translatable("gui.minopp.seats.start")
+                .getFormattedText());
         startButton.enabled = false;
         buttonList.add(startButton);
 
-        leaveButton = new GuiButton(2, xOff + PANEL_WIDTH - MARGIN - LARGE_BTN_WIDTH, yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT,
-            LARGE_BTN_WIDTH, LARGE_BTN_HEIGHT, Chat.translatable("gui.minopp.seats.reset").getFormattedText());
+        leaveButton = new GuiButton(
+            2,
+            xOff + PANEL_WIDTH - MARGIN - LARGE_BTN_WIDTH,
+            yOff + PANEL_HEIGHT - MARGIN - LARGE_BTN_HEIGHT,
+            LARGE_BTN_WIDTH,
+            LARGE_BTN_HEIGHT,
+            Chat.translatable("gui.minopp.seats.reset")
+                .getFormattedText());
         leaveButton.enabled = false;
         buttonList.add(leaveButton);
 
@@ -152,29 +180,49 @@ public class SeatControlScreen extends GuiScreen {
         drawDefaultBackground();
         BlockEntityMinoTable tableEntity = getTable();
         if (tableEntity != null) {
-            startButton.enabled = tableEntity.game == null && tableEntity.getPlayersList().size() >= 2;
+            startButton.enabled = tableEntity.game == null && tableEntity.getPlayersList()
+                .size() >= 2;
             stopButton.enabled = tableEntity.game != null;
             CardPlayer cardPlayer = ItemHandCards.getCardPlayer(mc.thePlayer);
-            leaveButton.enabled = tableEntity.game == null && tableEntity.getPlayersList().contains(cardPlayer);
+            leaveButton.enabled = tableEntity.game == null && tableEntity.getPlayersList()
+                .contains(cardPlayer);
 
             int xOff = (width - PANEL_WIDTH) / 2;
             int yOff = (height - PANEL_HEIGHT) / 2;
-            GuiDraw.fill(xOff + MARGIN, yOff + MARGIN, xOff + PANEL_WIDTH + MARGIN, yOff + PANEL_HEIGHT + MARGIN, 0x99000000);
+            GuiDraw.fill(
+                xOff + MARGIN,
+                yOff + MARGIN,
+                xOff + PANEL_WIDTH + MARGIN,
+                yOff + PANEL_HEIGHT + MARGIN,
+                0x99000000);
             // Tiled block texture background
             GuiDraw.fill(xOff - 1, yOff - 1, xOff + PANEL_WIDTH + 1, yOff + PANEL_HEIGHT + 1, 0xCC000000);
             GuiDraw.blit(PANEL_TEXTURE, xOff, yOff, PANEL_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_WIDTH, PANEL_HEIGHT, 16, 16);
             // Dark accent strip for button row
-            GuiDraw.fill(xOff, yOff + PANEL_HEIGHT - LARGE_BTN_HEIGHT, xOff + PANEL_WIDTH, yOff + PANEL_HEIGHT, 0xCC000000);
+            GuiDraw.fill(
+                xOff,
+                yOff + PANEL_HEIGHT - LARGE_BTN_HEIGHT,
+                xOff + PANEL_WIDTH,
+                yOff + PANEL_HEIGHT,
+                0xCC000000);
             // Title backdrop
             GuiDraw.fill(xOff, yOff + MARGIN - 6, xOff + PANEL_WIDTH, yOff + MARGIN + 9 + 6, 0x99000000);
             GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, yOff + MARGIN, 0xFFAAAAAA);
             // middle square
-            GuiDraw.fill(width / 2 - LARGE_BTN_HEIGHT / 2, yOff + MARGIN + 9 + MARGIN + MARGIN + 9 + MARGIN,
-                width / 2 + LARGE_BTN_HEIGHT / 2, yOff + MARGIN + 9 + MARGIN + MARGIN + 9 + MARGIN + LARGE_BTN_HEIGHT, 0xFF3E2723);
+            GuiDraw.fill(
+                width / 2 - LARGE_BTN_HEIGHT / 2,
+                yOff + MARGIN + 9 + MARGIN + MARGIN + 9 + MARGIN,
+                width / 2 + LARGE_BTN_HEIGHT / 2,
+                yOff + MARGIN + 9 + MARGIN + MARGIN + 9 + MARGIN + LARGE_BTN_HEIGHT,
+                0xFF3E2723);
 
             if (settingsOpen) {
-                GuiDraw.fill(settingsButton.xPosition - 1, settingsButton.yPosition - 1,
-                    settingsButton.xPosition + settingsButton.width + 1, settingsButton.yPosition + settingsButton.height + 1, 0xFF4CAF50);
+                GuiDraw.fill(
+                    settingsButton.xPosition - 1,
+                    settingsButton.yPosition - 1,
+                    settingsButton.xPosition + settingsButton.width + 1,
+                    settingsButton.yPosition + settingsButton.height + 1,
+                    0xFF4CAF50);
             }
 
             // settings tab
@@ -198,7 +246,8 @@ public class SeatControlScreen extends GuiScreen {
                     int rowY = sideY + headerHeight + 8 + i * rowHeight;
                     boolean enabled = tableEntity.getRule(ruleKey, true);
                     if (enabled) {
-                        GuiDraw.fill(sideX + 6 - 2, rowY - 2, sideX + 6 + checkSize + 2, rowY + checkSize + 2, 0xFF4CAF50);
+                        GuiDraw
+                            .fill(sideX + 6 - 2, rowY - 2, sideX + 6 + checkSize + 2, rowY + checkSize + 2, 0xFF4CAF50);
                     }
                     GuiDraw.drawString(fontRendererObj, label, sideX + 22, rowY + 1, 0xFFFFFFFF);
                 }
@@ -229,7 +278,10 @@ public class SeatControlScreen extends GuiScreen {
                 String name = getPlayerName(tableEntity, Direction.WEST);
                 int y = yOff + MARGIN + 9 + MARGIN + MARGIN + 9 + MARGIN + LARGE_BTN_HEIGHT / 2 - 9 / 2;
                 ResourceLocation skin = getPlayerSkin(tableEntity, Direction.WEST);
-                int nameX = width / 2 - MARGIN - LARGE_BTN_HEIGHT / 2 - fontRendererObj.getStringWidth(name) - (skin != null ? headSize + 4 : 0);
+                int nameX = width / 2 - MARGIN
+                    - LARGE_BTN_HEIGHT / 2
+                    - fontRendererObj.getStringWidth(name)
+                    - (skin != null ? headSize + 4 : 0);
                 if (skin != null) {
                     GuiDraw.drawPlayerHead(skin, nameX - headSize - 4, y - 1, headSize);
                 }

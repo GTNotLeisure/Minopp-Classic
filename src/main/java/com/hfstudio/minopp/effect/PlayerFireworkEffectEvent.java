@@ -54,15 +54,15 @@ public record PlayerFireworkEffectEvent(int timeOffset, UUID targetPlayer) imple
     public static NBTTagCompound generateWinExplosion() {
         NBTTagCompound explosion1 = new NBTTagCompound();
         explosion1.setByte("Type", (byte) 0); // small ball
-        explosion1.setIntArray("Colors", new int[] {0xD32F2F, 0xF4511E});
-        explosion1.setIntArray("FadeColors", new int[] {0xEF9A9A, 0xFFAB91});
+        explosion1.setIntArray("Colors", new int[] { 0xD32F2F, 0xF4511E });
+        explosion1.setIntArray("FadeColors", new int[] { 0xEF9A9A, 0xFFAB91 });
         explosion1.setBoolean("Flicker", false);
         explosion1.setBoolean("Trail", false);
 
         NBTTagCompound explosion2 = new NBTTagCompound();
         explosion2.setByte("Type", (byte) 1); // large ball
-        explosion2.setIntArray("Colors", new int[] {0xFDD835, 0xC0CA33});
-        explosion2.setIntArray("FadeColors", new int[] {0xFFF59D, 0xE6EE9C});
+        explosion2.setIntArray("Colors", new int[] { 0xFDD835, 0xC0CA33 });
+        explosion2.setIntArray("FadeColors", new int[] { 0xFFF59D, 0xE6EE9C });
         explosion2.setBoolean("Flicker", false);
         explosion2.setBoolean("Trail", false);
 

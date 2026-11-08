@@ -41,10 +41,11 @@ public final class SkinResolver {
                 GameProfile profile = lookupProfile(nameOrUuid);
                 if (profile == null || profile.getId() == null) return;
                 Minecraft mc = Minecraft.getMinecraft();
-                profile = mc.getSessionService().fillProfileProperties(profile, false);
+                profile = mc.func_152347_ac()
+                    .fillProfileProperties(profile, false);
                 PROFILE_CACHE.put(nameOrUuid, profile);
                 final GameProfile filled = profile;
-                mc.addScheduledTask(() -> applyProfile(filled, callback));
+                mc.func_152344_a(() -> applyProfile(filled, callback));
             } catch (Exception e) {
                 Mino.LOGGER.warn("Failed to resolve MinoBot skin {}: {}", nameOrUuid, e.toString());
             }
@@ -58,25 +59,32 @@ public final class SkinResolver {
             return new GameProfile(UUID.fromString(nameOrUuid), null);
         } catch (IllegalArgumentException ignored) {}
         final GameProfile[] result = new GameProfile[1];
-        new YggdrasilAuthenticationService(Proxy.NO_PROXY, UUID.randomUUID().toString()).createProfileRepository()
-            .findProfilesByNames(new String[] {nameOrUuid}, Agent.MINECRAFT, new ProfileLookupCallback() {
-                @Override
-                public void onProfileLookupSucceeded(GameProfile profile) {
-                    result[0] = profile;
-                }
+        new YggdrasilAuthenticationService(
+            Proxy.NO_PROXY,
+            UUID.randomUUID()
+                .toString()).createProfileRepository()
+                    .findProfilesByNames(new String[] { nameOrUuid }, Agent.MINECRAFT, new ProfileLookupCallback() {
 
-                @Override
-                public void onProfileLookupFailed(GameProfile profile, Exception exception) {}
-            });
+                        @Override
+                        public void onProfileLookupSucceeded(GameProfile profile) {
+                            result[0] = profile;
+                        }
+
+                        @Override
+                        public void onProfileLookupFailed(GameProfile profile, Exception exception) {}
+                    });
         return result[0];
     }
 
     @SuppressWarnings("unchecked")
     private static void applyProfile(GameProfile profile, Consumer<ResourceLocation> callback) {
         Minecraft mc = Minecraft.getMinecraft();
-        Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = mc.getSkinManager().loadSkinFromCache(profile);
+        Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = mc.func_152342_ad()
+            .func_152788_a(profile);
         if (textures.containsKey(MinecraftProfileTexture.Type.SKIN)) {
-            callback.accept(mc.getSkinManager().loadSkin(textures.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN));
+            callback.accept(
+                mc.func_152342_ad()
+                    .func_152792_a(textures.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN));
         }
     }
 }
