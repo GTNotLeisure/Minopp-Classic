@@ -137,16 +137,41 @@ public class TableConfig {
         return buildFaces(false).size();
     }
 
+    /**
+     * Copies of the configured deck shuffled together. "Auto" (0) adds a copy for every 4 players beyond the first 4
+     * and makes sure the opening hands plus a healthy draw pile fit, so 20-player games never run dry.
+     */
+    public int effectiveCopies(int playerCount, int deckSize) {
+        int copies = getInt(GameRules.DECK_COPIES);
+        if (copies > 0) return copies;
+        int byPlayers = (int) Math.ceil(Math.max(4, playerCount) / 4.0);
+        int needed = playerCount * getInt(GameRules.INITIAL_HAND) * 2 + 40;
+        int byCards = (int) Math.ceil(needed / (double) Math.max(1, deckSize));
+        return Math.max(1, Math.max(byPlayers, byCards));
+    }
+
+    public TableConfig copy() {
+        TableConfig c = new TableConfig();
+        c.fromTag(toTag());
+        return c;
+    }
+
+    public boolean sameAs(TableConfig other) {
+        if (!packs.equals(other.packs) || !counts.equals(other.counts)) return false;
+        for (GameRules.Rule r : GameRules.all()) if (getInt(r.id()) != other.getInt(r.id())) return false;
+        return true;
+    }
+
+    /** Short human summary such as "classic + no_mercy" (pack ids, translated by the caller). */
+    public List<String> enabledPackIds() {
+        return new ArrayList<>(packs);
+    }
+
     /** Builds and shuffles the physical deck for a game with the given number of players. */
     public List<Card> buildDeck(int playerCount, Random random) {
         List<CardFace> lightFaces = buildFaces(false);
         if (lightFaces.isEmpty()) lightFaces = new TableConfig().buildFaces(false);
-        int copies = getInt(GameRules.DECK_COPIES);
-        if (copies <= 0) {
-            // Auto: enough cards for the opening hands plus a healthy draw pile
-            int needed = playerCount * getInt(GameRules.INITIAL_HAND) * 2 + 40;
-            copies = Math.max(1, (int) Math.ceil(needed / (double) lightFaces.size()));
-        }
+        int copies = effectiveCopies(playerCount, lightFaces.size());
         List<CardFace> allLight = new ArrayList<>();
         for (int i = 0; i < copies; i++) allLight.addAll(lightFaces);
 

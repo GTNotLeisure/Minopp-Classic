@@ -23,12 +23,13 @@ public class C2SSeatControlPacket {
 
     public static final String ID = "minopp:seat_control";
 
-    private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5;
+    private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5, APPLY = 6;
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
         int action = packet.readInt();
-        String key = (action >= RULE) ? Buf.readString(packet) : null;
+        net.minecraft.nbt.NBTTagCompound applyTag = action == APPLY ? Buf.readNbt(packet) : null;
+        String key = (action >= RULE && action != APPLY) ? Buf.readString(packet) : null;
         int value = (action == RULE || action == PACK || action == COUNT) ? packet.readInt() : 0;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null) return;
@@ -81,6 +82,13 @@ public class C2SSeatControlPacket {
                     tableEntity.sync();
                 }
             }
+            case APPLY -> {
+                if (tableEntity.game == null && applyTag != null) {
+                    tableEntity.config.fromTag(applyTag);
+                    tableEntity.onSeatCountChanged();
+                    tableEntity.sync();
+                }
+            }
             default -> {}
         }
     }
@@ -125,6 +133,12 @@ public class C2SSeatControlPacket {
             ByteBuf packet = header(gamePos, COUNT);
             Buf.writeString(packet, countKey);
             packet.writeInt(count);
+            MinoNetwork.sendPacketToServer(ID, packet);
+        }
+
+        public static void sendApplyC2S(BlockPos gamePos, com.hfstudio.minopp.game.TableConfig config) {
+            ByteBuf packet = header(gamePos, APPLY);
+            Buf.writeNbt(packet, config.toTag());
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 

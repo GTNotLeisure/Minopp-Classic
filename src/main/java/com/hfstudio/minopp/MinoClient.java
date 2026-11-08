@@ -19,8 +19,8 @@ import com.hfstudio.minopp.effect.EffectQueue;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.gui.DecisionScreen;
+import com.hfstudio.minopp.gui.GameSettingsScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
-import com.hfstudio.minopp.gui.TableSettingsScreen;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.MinoNetwork;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
@@ -49,6 +49,7 @@ public class MinoClient {
     private static final Random RANDOM = new Random();
     private static boolean wasInWorld = false;
     private static PendingDecision lastOpenedDecision = null;
+    private static boolean themeListenerRegistered = false;
 
     public static void init() {
         KEY_SHOUT_MODIFIER = new KeyBinding(
@@ -64,15 +65,17 @@ public class MinoClient {
         MinoNetwork.registerClientReceiver(
             ThemeSyncPackets.S2C_ID,
             buf -> ThemeManager.INSTANCE.playerThemes.putAll(ThemeSyncPackets.decode(buf)));
-
-        if (Minecraft.getMinecraft()
-            .getResourceManager() instanceof IReloadableResourceManager rm) {
-            rm.registerReloadListener(ThemeManager.INSTANCE);
-        }
     }
 
     public static void tick() {
         Minecraft mc = Minecraft.getMinecraft();
+        if (!themeListenerRegistered) {
+            // Registered after startup (not during mod init) so it never runs inside the startup resource reloads
+            themeListenerRegistered = true;
+            if (mc.getResourceManager() instanceof IReloadableResourceManager rm) {
+                rm.registerReloadListener(ThemeManager.INSTANCE);
+            }
+        }
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
             GLOWS.clear();
@@ -138,7 +141,7 @@ public class MinoClient {
 
     public static void closeSeatControlScreen() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen instanceof SeatControlScreen || mc.currentScreen instanceof TableSettingsScreen) {
+        if (mc.currentScreen instanceof SeatControlScreen || mc.currentScreen instanceof GameSettingsScreen) {
             mc.displayGuiScreen(null);
         }
     }
