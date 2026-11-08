@@ -146,6 +146,8 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     /** Tells the server which theme we use (once per connection, or when it changes). */
     public void sendSelection(boolean force) {
         String current = selected();
+        if (Minecraft.getMinecraft()
+            .getNetHandler() == null) return; // not connected (main menu)
         if (!force && current.equals(lastSentTheme)) return;
         lastSentTheme = current;
         ThemeSyncPackets.sendSelectionC2S(current);

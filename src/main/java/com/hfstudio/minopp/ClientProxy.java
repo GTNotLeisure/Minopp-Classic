@@ -11,9 +11,12 @@ import net.minecraftforge.common.MinecraftForge;
 
 import com.gtnewhorizon.gtnhlib.client.model.loading.ModelRegistry;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.block.BlockMinoTable;
+import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.gui.GameOverlayLayer;
+import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.TurnDeadMan;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -59,6 +62,13 @@ public class ClientProxy extends CommonProxy {
     public static class ClientEvents {
 
         @SubscribeEvent
+        public void onRenderOverlayPre(RenderGameOverlayEvent.Pre event) {
+            // the raised hand row covers the hotbar in interaction mode
+            if (event.type == RenderGameOverlayEvent.ElementType.HOTBAR && HandScreen.isOpen()
+                && !ClientConfig.display.classicInteraction) event.setCanceled(true);
+        }
+
+        @SubscribeEvent
         public void onRenderOverlay(RenderGameOverlayEvent.Post event) {
             if (event.type != RenderGameOverlayEvent.ElementType.ALL) return;
             GameOverlayLayer.INSTANCE.render(event.partialTicks);
@@ -77,6 +87,10 @@ public class ClientProxy extends CommonProxy {
         /** Replaces the Inventory#swapPaint mixin: scrolling selects a card instead of a hotbar slot. */
         @SubscribeEvent(priority = EventPriority.HIGH)
         public void onMouse(MouseEvent event) {
+            if (event.button == 1 && event.buttonstate) {
+                onRightClick(event);
+                return;
+            }
             if (event.dwheel == 0) return;
             Minecraft mc = Minecraft.getMinecraft();
             if (mc.currentScreen != null) return;
@@ -102,6 +116,18 @@ public class ClientProxy extends CommonProxy {
                 Mth.clamp(handIndex - (int) Math.signum(event.dwheel), 0, realPlayer.hand.size() - 1));
 
             TurnDeadMan.pedal();
+            event.setCanceled(true);
+        }
+
+        /**
+         * Right click with hand cards opens interaction mode. With the classic interaction a right click on the table
+         * still plays the selected card, so only clicks elsewhere open it.
+         */
+        private void onRightClick(MouseEvent event) {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc.currentScreen != null || HandScreen.Context.resolve(mc) == null) return;
+            if (ClientConfig.display.classicInteraction && BlockMinoTable.Client.getCursorPickedGame() != null) return;
+            mc.displayGuiScreen(new HandScreen());
             event.setCanceled(true);
         }
     }

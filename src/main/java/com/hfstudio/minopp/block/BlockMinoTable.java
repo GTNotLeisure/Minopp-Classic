@@ -125,6 +125,8 @@ public class BlockMinoTable extends Block {
 
         public static void displayActionBar(String text) {
             Minecraft.getMinecraft().ingameGUI.func_110326_a(text, false);
+            // the raised hand covers the action bar in interaction mode: show it there too
+            com.hfstudio.minopp.gui.HandScreen.notice(text);
         }
 
         /** Works out which choices the selected card needs and either plays it or asks for them first. */
@@ -136,9 +138,20 @@ public class BlockMinoTable extends Block {
             boolean useFlex = isFlexModifierHeld() && tableEntity.config.getBool(GameRules.FLEX_POWER)
                 && realPlayer.powerOn
                 && (type.hasFlex() || face.flexColor != null);
+            // Refuse locally what the server would refuse (not our turn, wrong card, waiting for a decision...),
+            // so no color / target choice is ever opened for a play that cannot happen
+            String reason = game.whyCannotPlay(realPlayer, card, useFlex);
+            if (reason != null) {
+                displayActionBar(
+                    Chat.translatable(reason)
+                        .getFormattedText());
+                return;
+            }
             PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
             choices.useFlex = useFlex;
-            choices.shout = isShoutModifierHeld();
+            // shouting rides along with the card that leaves fewer than 2 cards in hand, never earlier
+            choices.shout = (isShoutModifierHeld() || com.hfstudio.minopp.gui.HandScreen.shoutArmed)
+                && realPlayer.hand.size() <= 2;
 
             CardType.Choice choice = type.choiceFor(useFlex);
             boolean needsColor = choice.needsColor();

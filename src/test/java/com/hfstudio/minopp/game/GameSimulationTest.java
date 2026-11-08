@@ -193,4 +193,40 @@ public class GameSimulationTest {
         assertTrue(c.countDeckSize() > 108);
         runMany("mixed", c, 5, 200);
     }
+
+    @Test
+    public void handMaskHidesOthers() {
+        TableConfig c = new TableConfig();
+        c.resetToPreset(CardPack.FLIP);
+        CardGame game = new CardGame(makePlayers(4));
+        game.detachedConfig = c;
+        game.initiate(game.players.get(0), 7);
+        net.minecraft.nbt.NBTTagCompound table = new net.minecraft.nbt.NBTTagCompound();
+        table.setTag("game", game.toTag());
+        UUID viewer = game.players.get(1).uuid;
+        CardGame seen = new CardGame(
+            HandMask.maskTableTag(table, viewer)
+                .getCompoundTag("game"));
+        for (int p = 0; p < game.players.size(); p++) {
+            CardPlayer real = game.players.get(p), masked = seen.players.get(p);
+            assertEquals(real.hand.size(), masked.hand.size());
+            for (int k = 0; k < real.hand.size(); k++) {
+                Card a = real.hand.get(k), b = masked.hand.get(k);
+                assertEquals(a.uid, b.uid);
+                if (real.uuid.equals(viewer)) assertEquals(a.light, b.light);
+                else assertTrue(b.light.isHidden());
+                // the back of a Flip card stays visible
+                assertEquals(a.dark, b.dark);
+            }
+        }
+        assertEquals(game.deck.size(), seen.deck.size());
+        assertTrue(
+            seen.deck.stream()
+                .allMatch(card -> card.light.isHidden()));
+        assertEquals(game.topCard.light, seen.topCard.light);
+        // the original tag is untouched
+        assertEquals(
+            game.players.get(0).hand.get(0).light,
+            new CardGame(table.getCompoundTag("game")).players.get(0).hand.get(0).light);
+    }
 }

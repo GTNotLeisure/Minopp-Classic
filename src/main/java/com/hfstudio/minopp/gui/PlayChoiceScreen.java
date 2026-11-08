@@ -7,6 +7,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardPlayer;
@@ -16,6 +17,7 @@ import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.render.CardRenderer;
+import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
@@ -64,16 +66,18 @@ public class PlayChoiceScreen extends GuiScreen {
         int cy = height / 2;
         if (colorStep) {
             List<CardColor> colors = CardColor.forSide(darkSide);
-            int bw = 60, gap = 8, total = colors.size() * bw + (colors.size() - 1) * gap;
+            ColorPicker3D.open(gamePos, colors);
+            // the pillars on the table are the main way to pick; these buttons (and keys 1-4) are the fallback
+            int bw = 56, gap = 6, total = colors.size() * bw + (colors.size() - 1) * gap;
             for (int i = 0; i < colors.size(); i++) {
                 CardColor c = colors.get(i);
                 buttonList.add(
                     new UiButton(
                         c.ordinal(),
                         width / 2 - total / 2 + i * (bw + gap),
-                        cy + 10,
+                        height - 50,
                         bw,
-                        20,
+                        18,
                         net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
                             Chat.translatable(c.langKey())
                                 .getFormattedText()),
@@ -83,9 +87,9 @@ public class PlayChoiceScreen extends GuiScreen {
                 new UiButton(
                     -1,
                     width / 2 - 40,
-                    cy + 40,
+                    height - 28,
                     80,
-                    20,
+                    18,
                     Chat.translatable("gui.cancel")
                         .getFormattedText()));
         } else {
@@ -126,7 +130,7 @@ public class PlayChoiceScreen extends GuiScreen {
     @Override
     protected void actionPerformed(GuiButton button) {
         if (button.id == -1) {
-            mc.displayGuiScreen(null);
+            HandScreen.returnFromChoice();
             return;
         }
         if (button.id == -2) {
@@ -136,7 +140,12 @@ public class PlayChoiceScreen extends GuiScreen {
             send();
             return;
         }
-        choices.color = CardColor.values()[button.id];
+        chooseColor(CardColor.values()[button.id]);
+    }
+
+    private void chooseColor(CardColor color) {
+        ColorPicker3D.close();
+        choices.color = color;
         if (targetCount > 0) {
             colorStep = false;
             initGui();
@@ -153,35 +162,117 @@ public class PlayChoiceScreen extends GuiScreen {
                 .put(player.uuid, System.currentTimeMillis() + BlockEntityMinoTable.HandSwapAnimation.DURATION_MS);
         }
         C2SPlayCardPacket.Client.sendPlayCardC2S(gamePos, player, card.uid, choices);
-        mc.displayGuiScreen(null);
+        HandScreen.returnFromChoice();
+    }
+
+    @Override
+    protected void keyTyped(char typedChar, int keyCode) {
+        if (colorStep && keyCode >= org.lwjgl.input.Keyboard.KEY_1 && keyCode <= org.lwjgl.input.Keyboard.KEY_4) {
+            List<CardColor> colors = CardColor.forSide(darkSide);
+            int i = keyCode - org.lwjgl.input.Keyboard.KEY_1;
+            if (i < colors.size()) chooseColor(colors.get(i));
+            return;
+        }
+        if (keyCode == org.lwjgl.input.Keyboard.KEY_ESCAPE) {
+            HandScreen.returnFromChoice();
+            return;
+        }
+        super.keyTyped(typedChar, keyCode);
     }
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         if (!colorStep && picker != null && picker.click(mouseX, mouseY)) return;
+        if (colorStep && button == 0) {
+            int hit = ColorPicker3D.hitTest(mouseX, mouseY);
+            List<CardColor> colors = CardColor.forSide(darkSide);
+            if (hit >= 0 && hit < colors.size()) {
+                mc.getSoundHandler()
+                    .playSound(
+                        net.minecraft.client.audio.PositionedSoundRecord
+                            .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0F));
+                chooseColor(colors.get(hit));
+                return;
+            }
+        }
         super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
+    public void onGuiClosed() {
+        ColorPicker3D.close();
+    }
+
+    /**
+     * The game moves on while the choice is open (turn passed, jump-in window closed, game ended, card taken away by
+     * a swap...). Close instead of leaving a choice that can no longer be sent.
+     */
+    @Override
+    public void updateScreen() {
+        BlockEntityMinoTable table = table();
+        String reason;
+        if (table == null || table.game == null) {
+            reason = "game.minopp.play.no_game";
+        } else {
+            CardPlayer me = table.game.deAmputate(player);
+            reason = me == null ? "game.minopp.play.no_player" : table.game.whyCannotPlay(me, card, choices.useFlex);
+        }
+        if (reason != null) {
+            BlockMinoTable.Client.displayActionBar(
+                Chat.translatable(reason)
+                    .getFormattedText());
+            HandScreen.returnFromChoice();
+        }
+    }
+
+    @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
         String theme = ThemeManager.INSTANCE.selected();
         if (colorStep) {
-            int cy = height / 2;
-            CardRenderer.drawFace2D(card.face(darkSide), theme, width / 2 - 20, cy - 80, 40, 62);
+            // keep the table visible: the color pillars stand on it
+            UiDraw.gradient(0, 0, width, 40, 0xA0300606, 0x00300606);
+            UiDraw.gradient(0, height - 60, width, height, 0x00300606, 0xA0300606);
+            CardRenderer.drawFace2D(card.face(darkSide), theme, 10, 8, 26, 40);
             GuiDraw.drawCenteredString(
                 fontRendererObj,
                 Chat.translatable("gui.minopp.wild_selection.title")
                     .getFormattedText(),
                 width / 2,
-                cy - 10,
+                10,
                 0xFFFFFFFF);
+            GuiDraw.drawCenteredString(
+                fontRendererObj,
+                Chat.translatable("gui.minopp.wild_selection.hint")
+                    .getFormattedText(),
+                width / 2,
+                22,
+                0xFFBBBBBB);
             List<CardColor> colors = CardColor.forSide(darkSide);
-            int bw = 60, gap = 8, total = colors.size() * bw + (colors.size() - 1) * gap;
-            for (int i = 0; i < colors.size(); i++) {
-                int x = width / 2 - total / 2 + i * (bw + gap);
+            int hit = ColorPicker3D.hitTest(mouseX, mouseY);
+            if (hit < 0) {
+                // pointing at a fallback button raises its pillar too
+                for (Object o : buttonList) {
+                    GuiButton b = (GuiButton) o;
+                    if (b.id >= 0 && mouseX >= b.xPosition
+                        && mouseX < b.xPosition + b.width
+                        && mouseY >= b.yPosition
+                        && mouseY < b.yPosition + b.height) {
+                        hit = colors.indexOf(CardColor.values()[b.id]);
+                    }
+                }
+            }
+            ColorPicker3D.hovered = hit;
+            if (hit >= 0 && hit < colors.size()) {
+                String name = Chat.translatable(
+                    colors.get(hit)
+                        .langKey())
+                    .getFormattedText();
+                int w = fontRendererObj.getStringWidth(name);
+                UiDraw.roundRect(mouseX + 8, mouseY - 14, mouseX + 16 + w, mouseY - 2, 3, 0xC0000000);
+                fontRendererObj.drawStringWithShadow(name, mouseX + 12, mouseY - 12, colors.get(hit).rgb | 0xFF000000);
             }
         } else {
+            UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
             String title = Chat
                 .translatable(
                     targetCount > 1 ? "gui.minopp.choice.targets" : "gui.minopp.swap_card_selection.title",

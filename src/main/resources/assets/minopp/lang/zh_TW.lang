@@ -99,3 +99,4 @@ minopp.gui.config.display.guiyposition=游戏界面 Y 坐标
 minopp.gui.config.display.guiyposition.tooltip=游戏界面的 Y 坐标。
 minopp.gui.config.display.enablegamehistorygui=显示对局记录界面
 minopp.gui.config.display.enablegamehistorygui.tooltip=关闭后更接近真实体验，只保留顶牌文本与抢牌提示。
+itemGroup.minopp=Mino++

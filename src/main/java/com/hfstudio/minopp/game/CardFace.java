@@ -36,6 +36,11 @@ public final class CardFace implements Comparable<CardFace> {
         return CardTypes.get(typeId);
     }
 
+    /** A face the server did not reveal to this client (another player's card, peeking disabled). */
+    public boolean isHidden() {
+        return HandMask.HIDDEN_TYPE.equals(typeId);
+    }
+
     public boolean isWild() {
         return color == CardColor.WILD;
     }
@@ -50,6 +55,12 @@ public final class CardFace implements Comparable<CardFace> {
     }
 
     public IChatComponent getDisplayName() {
+        if (isWild()) {
+            // "Wild +4", not "Wild Wild +4": the type name already says it is wild
+            IChatComponent c = Chat.translatable("game.minopp.card.wild_prefix");
+            c.appendSibling(getFaceName());
+            return c;
+        }
         IChatComponent c = Chat.translatable(color.langKey());
         c.appendText(" ");
         c.appendSibling(getFaceName());

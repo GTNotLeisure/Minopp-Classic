@@ -22,6 +22,7 @@ public class ActionReport {
 
     public boolean shouldDestroyGame = false;
     public boolean isFail = false;
+    private int soundTail = 0;
 
     private ActionReport(CardGame game, CardPlayer player) {
         this.initiator = player;
@@ -76,7 +77,24 @@ public class ActionReport {
 
     public ActionReport sound(ResourceLocation sound, int timeOffset) {
         effects.add(new SoundEffectEvent(timeOffset, Optional.empty(), sound));
+        soundTail = Math.max(soundTail, timeOffset);
         return this;
+    }
+
+    public ActionReport sound(ResourceLocation sound, int timeOffset, float volume, float pitch) {
+        effects.add(new SoundEffectEvent(timeOffset, Optional.empty(), sound, volume, pitch));
+        soundTail = Math.max(soundTail, timeOffset);
+        return this;
+    }
+
+    public ActionReport sound(ResourceLocation sound, int timeOffset, CardPlayer target, float volume, float pitch) {
+        effects.add(new SoundEffectEvent(timeOffset, Optional.of(target.uuid), sound, volume, pitch));
+        return this;
+    }
+
+    /** Latest start time (ms) of a sound everyone hears; cues like the turn notice are queued after it. */
+    public int soundTail() {
+        return soundTail;
     }
 
     public ActionReport effect(EffectEvent event) {

@@ -1,0 +1,6 @@
+{
+  "pack": {
+    "pack_format": 4,
+    "description": "Mino++: Classic resources (format 4 lets GTNHLib load the JSON blockstate/models)"
+  }
+}

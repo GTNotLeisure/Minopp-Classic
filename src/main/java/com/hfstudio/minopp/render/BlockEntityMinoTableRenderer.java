@@ -51,14 +51,16 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glRotatef(-90, 1, 0, 0);
         Random deckRandom = new Random(1);
         int layers = (int) Math.ceil(game.deck.size() / 5f);
+        float layerH = 1f / 48f;
         for (int ci = 0; ci < layers; ci++) {
             GL11.glPushMatrix();
-            GL11.glTranslated(
-                deckRandom.nextFloat() * 0.1 - 0.05,
-                deckRandom.nextFloat() * 0.1 - 0.05,
-                ci * (1f / 48f));
-            Card top = ci == layers - 1 && !game.deck.isEmpty() ? game.deck.get(game.deck.size() - 1) : null;
-            CardRenderer.renderCardBack3D(top, game.darkSide, viewerTheme, 0.32f, 0.5f, 0, 0xFFFFFF);
+            GL11.glTranslated(deckRandom.nextFloat() * 0.06 - 0.03, deckRandom.nextFloat() * 0.06 - 0.03, ci * layerH);
+            // card edges of this layer: alternate shades read as individual cards
+            CardRenderer.renderSlabSides(0.32f, 0.5f, -layerH, 0, ci % 2 == 0 ? 0xF4F2EC : 0xD6D2C8);
+            if (ci == layers - 1) {
+                Card top = game.deck.isEmpty() ? null : game.deck.get(game.deck.size() - 1);
+                CardRenderer.renderCardBack3D(top, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF);
+            }
             GL11.glPopMatrix();
         }
         GL11.glPopMatrix();
@@ -104,6 +106,10 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
             GL11.glPopMatrix();
         }
         GL11.glPopMatrix();
+
+        // 3D wild color choice of this client, standing around the pile
+        net.minecraft.entity.EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
+        if (viewer != null) ColorPicker3D.render(blockEntity.getBlockPos(), viewer.posX, viewer.posZ);
 
         // Top card label
         CardFace top = game.topFace();

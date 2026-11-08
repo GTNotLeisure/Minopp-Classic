@@ -58,6 +58,16 @@ public final class CardRenderer {
         }
     }
 
+    /** Just the symbol (or number) of a face, cropped from its layer, for the visible strip of a fanned card. */
+    public static void drawCornerSymbol(CardFace face, String theme, float x, float y, float size) {
+        CardType type = face.type();
+        String layer = type.numbered ? "num_" + Math.max(0, Math.min(9, face.number)) : "symbol_" + type.symbol;
+        if (!bind(theme, layer)) return;
+        GL11.glColor4f(1, 1, 1, 1);
+        // symbols live in the middle of the 32x50 layer: crop a 22x22 square around the center
+        GuiDraw.blitBound(x, y, size, size, 5, 14, 22, 22, 32, 50);
+    }
+
     public static void drawBack2D(String theme, boolean dark, float x, float y, float w, float h) {
         GL11.glColor4f(1, 1, 1, 1);
         if (bind(theme, dark ? "back_dark" : "back")) GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
@@ -82,6 +92,38 @@ public final class CardRenderer {
         t.addVertexWithUV(hw, -hh, z, 1, 1);
         t.addVertexWithUV(hw, hh, z, 1, 0);
         t.draw();
+    }
+
+    /** Side walls of a card-sized slab between z0 and z1 (used to give piles visible card edges). */
+    public static void renderSlabSides(float hw, float hh, float z0, float z1, int color) {
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.setColorOpaque_I(color);
+        t.setNormal(0, -1, 0);
+        t.addVertex(-hw, -hh, z0);
+        t.addVertex(hw, -hh, z0);
+        t.addVertex(hw, -hh, z1);
+        t.addVertex(-hw, -hh, z1);
+        t.setNormal(0, 1, 0);
+        t.addVertex(-hw, hh, z1);
+        t.addVertex(hw, hh, z1);
+        t.addVertex(hw, hh, z0);
+        t.addVertex(-hw, hh, z0);
+        int darker = (color >> 16 & 0xFF) * 9 / 10 << 16 | (color >> 8 & 0xFF) * 9 / 10 << 8 | (color & 0xFF) * 9 / 10;
+        t.setColorOpaque_I(darker);
+        t.setNormal(-1, 0, 0);
+        t.addVertex(-hw, -hh, z1);
+        t.addVertex(-hw, hh, z1);
+        t.addVertex(-hw, hh, z0);
+        t.addVertex(-hw, -hh, z0);
+        t.setNormal(1, 0, 0);
+        t.addVertex(hw, -hh, z0);
+        t.addVertex(hw, hh, z0);
+        t.addVertex(hw, hh, z1);
+        t.addVertex(hw, -hh, z1);
+        t.draw();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
     }
 
     public static void renderFace3D(CardFace face, String theme, float hw, float hh, float z, int color) {

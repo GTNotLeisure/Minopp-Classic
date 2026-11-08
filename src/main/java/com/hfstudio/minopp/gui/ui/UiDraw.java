@@ -175,13 +175,20 @@ public final class UiDraw {
 
     // ------------------------------------------------------------------ textures
 
+    /** Draws a pixel-art UI image; nearest filtering keeps texels crisp (icons are drawn at integer scales). */
     public static void image(String name, float x, float y, float w, float h) {
         GL11.glColor4f(1, 1, 1, 1);
-        GuiDraw.blit(ui(name), x, y, w, h, 0, 0, 1, 1, 1, 1);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(ui(name));
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
     }
 
+    /** Icons are 32x32 pixel art; tab icons also have a native 16x16 version used for small sizes. */
     public static void icon(String id, float x, float y, float size) {
-        image("icon_" + id, x, y, size, size);
+        image("icon_" + id + (size <= 24 ? "_s" : ""), x, y, size, size);
     }
 
     // ------------------------------------------------------------------ background

@@ -22,15 +22,22 @@ public class ClientConfig {
     @Config.Comment("Display settings")
     public static class Display {
 
-        @Config.Comment("X position of the game GUI. Negative goes left, positive goes right. Default is 20.")
-        @Config.DefaultInt(20)
+        @Config.Comment("X position of the game GUI. Negative goes left, positive goes right. Default is 8.")
+        @Config.DefaultInt(8)
         @Config.RangeInt(min = -10000, max = 10000)
-        public int guiXPosition = 20;
+        public int guiXPosition = 8;
 
-        @Config.Comment("Y position of the game GUI. Negative goes up, positive goes down. Default is 60.")
-        @Config.DefaultInt(60)
+        @Config.Comment("Y position of the game GUI. Negative goes up, positive goes down. Default is 30.")
+        @Config.DefaultInt(30)
         @Config.RangeInt(min = -10000, max = 10000)
-        public int guiYPosition = 60;
+        public int guiYPosition = 30;
+
+        @Config.Comment("Use the classic interaction: the hand is fanned vertically on the right, scroll to pick a card and "
+            + "right-click the table to play it (W/S pick cards in interaction mode). When false (default), the hand is "
+            + "spread along the bottom of the screen; right-click opens interaction mode to point at cards (A/D to pick, "
+            + "click to play), right-click again to move freely.")
+        @Config.DefaultBoolean(false)
+        public boolean classicInteraction = false;
 
         @Config.Comment("For a more realistic experience, you can choose to disable the game GUI and any on screen reminders "
             + "(drawing from the deck, turn reminders), the only element that will be displayed is the top card text & "

@@ -50,6 +50,7 @@ public class MinoClient {
     private static boolean wasInWorld = false;
     private static PendingDecision lastOpenedDecision = null;
     private static boolean themeListenerRegistered = false;
+    private static boolean worldPreviewLaunched = false;
 
     public static void init() {
         KEY_SHOUT_MODIFIER = new KeyBinding(
@@ -78,6 +79,19 @@ public class MinoClient {
         }
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
+            if (DevPreview.enabled() && !worldPreviewLaunched
+                && mc.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu) {
+                worldPreviewLaunched = true;
+                mc.launchIntegratedServer(
+                    "minopp_preview",
+                    "Mino Preview",
+                    new net.minecraft.world.WorldSettings(
+                        1425L,
+                        net.minecraft.world.WorldSettings.GameType.CREATIVE,
+                        false,
+                        false,
+                        net.minecraft.world.WorldType.FLAT));
+            }
             if (System.getProperty("minopp.uiPreview") != null
                 && mc.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu) {
                 mc.displayGuiScreen(com.hfstudio.minopp.gui.GameSettingsScreen.preview());
@@ -86,6 +100,24 @@ public class MinoClient {
             if (wasInWorld) ThemeManager.INSTANCE.onDisconnect();
             wasInWorld = false;
             return;
+        }
+        if (System.getProperty("minopp.previewHandScreen") != null && mc.currentScreen == null
+            && com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc) != null) {
+            // dev only: keep interaction mode open so screenshots show it
+            mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
+        }
+        if (System.getProperty("minopp.previewColorPicker") != null && mc.currentScreen == null) {
+            // dev only: keep a wild color choice open (nothing is sent unless a color is clicked)
+            com.hfstudio.minopp.gui.HandScreen.Context ctx = com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc);
+            if (ctx != null) mc.displayGuiScreen(
+                new com.hfstudio.minopp.gui.PlayChoiceScreen(
+                    ctx.pos,
+                    ctx.me,
+                    ctx.hand.get(0),
+                    new com.hfstudio.minopp.game.PlayContext.PlayChoices(),
+                    true,
+                    0,
+                    ctx.game.darkSide));
         }
         if (!wasInWorld) {
             wasInWorld = true;
@@ -134,6 +166,9 @@ public class MinoClient {
             entry.setValue(remaining);
             Entity entity = WorldUtil.getEntityByUUID(level, entry.getKey());
             if (entity == null) continue;
+            // our own glow in first person would just fill the screen with particles
+            Minecraft mc = Minecraft.getMinecraft();
+            if (entity == mc.thePlayer && mc.gameSettings.thirdPersonView == 0) continue;
             for (int i = 0; i < 2; i++) {
                 double px = entity.posX + (RANDOM.nextDouble() - 0.5) * entity.width * 1.6;
                 double py = entity.boundingBox.minY + RANDOM.nextDouble() * entity.height * 1.1;

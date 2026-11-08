@@ -16,6 +16,7 @@ import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -67,7 +68,19 @@ public class HandCardsItemRenderer implements IItemRenderer {
         int n = realPlayer.hand.size();
         for (int k = 0; k < n; k++) {
             Card card = realPlayer.hand.get(k);
-            CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, 0, 0xFFFFFF);
+            // a little thickness so the held fan reads as real cards
+            CardRenderer.renderSlabSides(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
+            CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF);
+            CardFace face = card.face(tableEntity.game.darkSide);
+            if (face.isHidden()) {
+                CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF);
+            } else {
+                // The server sent the real face (peeking allowed, or our own hand): print it on the holder's side
+                GL11.glPushMatrix();
+                GL11.glRotatef(180, 0, 1, 0);
+                CardRenderer.renderFace3D(face, theme, 0.32f, 0.5f, 0.036f, 0xFFFFFF);
+                GL11.glPopMatrix();
+            }
             GL11.glTranslated(0, 0.02, Math.min(0.08, 1.2 / Math.max(1, n)));
         }
 

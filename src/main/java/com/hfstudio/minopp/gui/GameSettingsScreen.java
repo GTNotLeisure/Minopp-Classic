@@ -224,7 +224,8 @@ public class GameSettingsScreen extends GuiScreen {
         BlockEntityMinoTable te = table();
         if (te == null) return;
         TableConfig cfg = te.config;
-        int y = 2;
+        // top padding so check badges and the hover glow (which reach ~5px above a tile) are never clipped
+        int y = 8;
         switch (tab) {
             case DESIGNS -> {
                 List<Tile> list = new ArrayList<>();
@@ -435,7 +436,7 @@ public class GameSettingsScreen extends GuiScreen {
         boolean inView = mouseX >= viewX() && mouseX < viewX() + viewW()
             && mouseY >= viewY()
             && mouseY < viewY() + viewH();
-        UiDraw.scissor(viewX() - 2, viewY(), viewW() + 4, viewH());
+        UiDraw.scissor(viewX() - 5, viewY() - 4, viewW() + 10, viewH() + 4);
         GL11.glPushMatrix();
         GL11.glTranslatef(viewX(), viewY() - offset, 0);
         for (Tile t : tiles) {
@@ -643,7 +644,7 @@ public class GameSettingsScreen extends GuiScreen {
                 UiDraw.image(checked ? "badge_check" : "badge_check_off", x2 - 10, y1 - 3, 12, 12);
             }
         }
-        if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 9, 9);
+        if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 10, 10);
         if (count != null) {
             // centered at the bottom, above the label (rules) or at the card's foot (cards)
             int pillY = t.kind == Kind.CARD ? y2 - 11 : y2 - 24;
@@ -794,7 +795,7 @@ public class GameSettingsScreen extends GuiScreen {
                     DesignStore.Design d = DesignStore.get((Integer) t.payload);
                     if (d != null)
                         drawFan(packPreview(d.config), ThemeManager.INSTANCE.selected(), cx, py + ph - 6, 30);
-                    else UiDraw.image("plus", cx - 16, py + ph / 2f - 16, 32, 32);
+                    else UiDraw.image("plus", cx - 24, py + ph / 2f - 24, 48, 48);
                 }
                 default -> {}
             }

@@ -9,6 +9,6 @@ import com.hfstudio.minopp.Mino;
 public class MinoGuiConfig extends SimpleGuiConfig {
 
     public MinoGuiConfig(GuiScreen parentScreen) throws ConfigException {
-        super(parentScreen, Mino.MOD_ID, Mino.MOD_NAME, true, ClientConfig.class);
+        super(parentScreen, Mino.MOD_ID, Mino.MOD_NAME, true, ClientConfig.class, ServerConfig.class);
     }
 }

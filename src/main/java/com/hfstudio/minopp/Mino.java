@@ -3,7 +3,6 @@ package com.hfstudio.minopp;
 import java.util.UUID;
 
 import net.minecraft.block.Block;
-import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -11,9 +10,11 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
+import net.minecraftforge.event.world.ChunkWatchEvent;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 
 import org.apache.logging.log4j.LogManager;
@@ -24,6 +25,7 @@ import com.gtnewhorizon.gtnhlib.blockstate.registry.BlockPropertyRegistry;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.config.ClientConfig;
+import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.CardPlayer;
@@ -77,23 +79,37 @@ public final class Mino {
     public void preInit(FMLPreInitializationEvent event) {
         try {
             ClientConfig.registerConfig();
+            ServerConfig.registerConfig();
         } catch (Exception e) {
             LOGGER.error("Failed to register config", e);
         }
 
         com.hfstudio.minopp.game.CardPack.init();
 
-        BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(CreativeTabs.tabDecorations);
+        BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(MinoCreativeTab.INSTANCE);
         GameRegistry.registerBlock(BLOCK_MINO_TABLE, "mino_table");
         GameRegistry.registerTileEntity(BlockEntityMinoTable.class, "minopp:mino_table");
         BlockPropertyRegistry.registerProperty(
             BLOCK_MINO_TABLE,
-            IntegerBlockProperty.meta("part")
-                .map(BlockMinoTable.PART_NAMES));
+            // Multipart conditions are compared against stringify(): keep the plain value (the default JSON-encodes
+            // strings, i.e. adds quotes, which would never match "x_less_z_less" in the blockstate file)
+            new IntegerBlockProperty.MappedBlockProperty(IntegerBlockProperty.meta("part"), BlockMinoTable.PART_NAMES) {
+
+                @Override
+                public String stringify(String value) {
+                    return value;
+                }
+
+                @Override
+                public String parse(String text) {
+                    return text;
+                }
+            });
 
         ITEM_HAND_CARDS = new ItemHandCards();
         GameRegistry.registerItem(ITEM_HAND_CARDS, "hand_cards");
         ITEM_COUPON = new ItemCoupon();
+        ITEM_COUPON.setCreativeTab(MinoCreativeTab.INSTANCE);
         GameRegistry.registerItem(ITEM_COUPON, "coupon");
 
         EntityRegistry.registerModEntity(EntityAutoPlayer.class, "mino_auto_player", 0, this, 64, 3, true);
@@ -123,6 +139,9 @@ public final class Mino {
         FMLCommonHandler.instance()
             .bus()
             .register(new com.hfstudio.minopp.network.ThemeSyncPackets.ServerEvents());
+        if (DevPreview.enabled()) FMLCommonHandler.instance()
+            .bus()
+            .register(new DevPreview());
         proxy.init(event);
     }
 
@@ -134,6 +153,20 @@ public final class Mino {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new MinoCommand());
+    }
+
+    /**
+     * Chunk data (with a fully masked description packet) has just been sent: send the viewer the tables in it again,
+     * this time with their own hand revealed.
+     */
+    @SubscribeEvent
+    public void onChunkWatch(ChunkWatchEvent.Watch event) {
+        if (ServerConfig.gameplay.allowPeeking) return;
+        EntityPlayerMP player = event.player;
+        Chunk chunk = player.worldObj.getChunkFromChunkCoords(event.chunk.chunkXPos, event.chunk.chunkZPos);
+        for (Object te : chunk.chunkTileEntityMap.values()) {
+            if (te instanceof BlockEntityMinoTable table && table.game != null) table.sendTo(player);
+        }
     }
 
     @SubscribeEvent

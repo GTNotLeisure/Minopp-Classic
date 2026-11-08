@@ -76,3 +76,4 @@ minopp.gui.config.display.guiyposition=Game GUI Y Position
 minopp.gui.config.display.guiyposition.tooltip=Y position of the game GUI.
 minopp.gui.config.display.enablegamehistorygui=Show Game History GUI
 minopp.gui.config.display.enablegamehistorygui.tooltip=Disable for a more realistic experience; only the top card text and jump-in reminders remain.
+itemGroup.minopp=Mino++

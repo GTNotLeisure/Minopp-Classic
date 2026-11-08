@@ -39,9 +39,10 @@ public class ItemHandCards extends Item {
                 return stack;
             }
         }
-        // Game table not found, card no longer usable
+        // Game table not found, card no longer usable. 1.7.10 expects a stack back (never null): an empty stack
+        // makes vanilla clear the slot.
         stack.stackSize = 0;
-        return null;
+        return stack;
     }
 
     public static CardPlayer getCardPlayer(EntityPlayer player) {

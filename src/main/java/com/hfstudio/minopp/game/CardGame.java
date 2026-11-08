@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import net.minecraft.util.ResourceLocation;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
@@ -28,7 +27,6 @@ import com.hfstudio.minopp.util.NbtUtil;
  */
 public class CardGame {
 
-    private static final ResourceLocation NOTE_BASS = new ResourceLocation("minecraft", "note.bass");
     private static final long DECISION_TIMEOUT_MS = 15000;
 
     /** Turn order (sorted by seat). Eliminated players stay in the list but are skipped. */
@@ -164,10 +162,11 @@ public class CardGame {
         }
         topCard = tobeTopCard;
         currentColor = topFace().color;
-        return ActionReport.builder(this, cardPlayer)
-            .sound(Mino.id("game.play"), 0)
-            .sound(NOTE_BASS, 500, players.get(currentPlayerIndex))
-            .gameStarted();
+        ActionReport report = ActionReport.builder(this, cardPlayer);
+        GameSounds.deal(report, initialCardCount + 3);
+        report.sound(GameSounds.PLAY, report.soundTail() + 250);
+        GameSounds.turn(report, players.get(currentPlayerIndex), false, report.soundTail() + 500);
+        return report.gameStarted();
     }
 
     // ===================================================================================== validation
@@ -217,6 +216,28 @@ public class CardGame {
                 .equals(top.symbolKey())) return null;
         }
         return "game.minopp.play.invalid_card";
+    }
+
+    /**
+     * Every check {@link #playCard} makes before playing, without side effects: null when the card can be played
+     * right now (on its turn or as a jump-in), else the lang key of the reason. Used by clients so they never open a
+     * color/target choice for a card the server would refuse.
+     */
+    public String whyCannotPlay(CardPlayer player, Card card, boolean useFlex) {
+        int idx = players.indexOf(player);
+        if (idx == -1 || players.get(idx).eliminated) return "game.minopp.play.no_player";
+        CardPlayer real = players.get(idx);
+        if (real.hand.stream()
+            .noneMatch(c -> c.uid == card.uid)) return "game.minopp.play.not_your_card";
+        if (!decisions.isEmpty()) return "game.minopp.play.waiting_decision";
+        boolean identical = isIdenticalToTop(card);
+        if (awaitingCutIn && !(identical && rule(GameRules.JUMP_IN))) return "game.minopp.play.not_match_cut";
+        if (awaitingCutIn && idx != currentPlayerIndex) return null;
+        if (awaitingCutIn || idx != currentPlayerIndex) {
+            boolean jumpIn = rule(GameRules.JUMP_IN) && pendingDraw == 0 && identical && idx != currentPlayerIndex;
+            return jumpIn ? null : "game.minopp.play.not_your_turn";
+        }
+        return checkPlayable(real, card, useFlex);
     }
 
     public boolean canPlay(CardPlayer player, Card card) {
@@ -311,6 +332,7 @@ public class CardGame {
         extraTurn = false;
         deferAdvance = false;
         doDiscardCard(cardPlayer, card, report);
+        GameSounds.cardPlayed(report, type, useFlex);
 
         // New color
         if (type.keepsColor) {
@@ -343,7 +365,7 @@ public class CardGame {
             report.messageAll(Chat.translatable("game.minopp.play.dance_penalty", cardPlayer.name));
         }
 
-        if (choices.shout) {
+        if (choices.shout && cardPlayer.hand.size() < 2) {
             report.combineWith(shoutMino(cardPlayer));
         }
 
@@ -424,7 +446,6 @@ public class CardGame {
             takePendingDraw(cardPlayer, report);
             ActionReport end = checkEndConditions(cardPlayer, report);
             if (end != null) return end;
-            report.sound(NOTE_BASS, 500 * (amount + 1), cardPlayer);
             advanceTurn(report);
             return report.drew(amount);
         }
@@ -450,7 +471,6 @@ public class CardGame {
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
 
-        report.sound(NOTE_BASS, 500 * (drawn > 1 ? drawn + 1 : 1), cardPlayer);
         boolean playable = last != null && canPlay(cardPlayer, last);
         if (playable && rule(GameRules.FORCED_PLAY)) {
             PlayContext.PlayChoices choices = AutoPlayer.defaultChoices(this, cardPlayer, last);
@@ -475,17 +495,13 @@ public class CardGame {
     public ActionReport shoutMino(CardPlayer realPlayer) {
         ActionReport report = ActionReport.builder(this, realPlayer);
         if (!realPlayer.hasShoutedMino) {
-            if (realPlayer.hand.size() <= 1) {
-                realPlayer.hasShoutedMino = true;
-                report.sound(Mino.id("game.mino_shout"), 0);
-                return report.messageAll(Chat.translatable("game.minopp.play.mino_shout", realPlayer.name));
-            } else {
-                drawCards(realPlayer, config().getInt(GameRules.SHOUT_PENALTY), report);
-                realPlayer.hasShoutedMino = true; // Avoid penalty again and again
-                report.sound(Mino.id("game.mino_shout"), 0);
-                report.sound(Mino.id("game.mino_shout_invalid"), 500);
-                return report.messageAll(Chat.translatable("game.minopp.play.mino_shout_invalid", realPlayer.name));
+            // MINO can only be shouted with fewer than 2 cards left; earlier shouts are simply refused
+            if (realPlayer.hand.size() >= 2) {
+                return report.fail(Chat.translatable("game.minopp.play.mino_shout_too_early"));
             }
+            realPlayer.hasShoutedMino = true;
+            report.sound(Mino.id("game.mino_shout"), 0);
+            return report.messageAll(Chat.translatable("game.minopp.play.mino_shout", realPlayer.name));
         }
         return null;
     }
@@ -643,6 +659,7 @@ public class CardGame {
     public void advanceTurn(ActionReport report) {
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         drawnCardUid = -1;
+        int previousIndex = currentPlayerIndex;
         if (forcedNext != null) {
             CardPlayer target = deAmputate(forcedNext);
             forcedNext = null;
@@ -667,7 +684,7 @@ public class CardGame {
                 balloonHolder = null;
                 int penalty = config().getInt(GameRules.BALLOON_PENALTY);
                 drawCards(current, penalty, report);
-                report.sound(Mino.id("game.mino_shout_invalid"), 0);
+                GameSounds.balloonPop(report);
                 report.messageAll(Chat.translatable("game.minopp.play.balloon_pop", current.name, penalty));
             }
         }
@@ -685,7 +702,7 @@ public class CardGame {
         }
 
         current.hasShoutedMino = false;
-        if (topFace().number != 0) report.sound(NOTE_BASS, 500, current);
+        GameSounds.turn(report, current, currentPlayerIndex == previousIndex, Math.max(450, report.soundTail() + 300));
         resolvePenaltyFor(current, report);
     }
 
@@ -694,6 +711,7 @@ public class CardGame {
         ActionReport report = ActionReport.builder(this, currentPlayer());
         CardPlayer current = currentPlayer();
         current.hasShoutedMino = false;
+        if (pendingDraw <= 0) GameSounds.turn(report, current, false, 0);
         resolvePenaltyFor(current, report);
         return report;
     }
@@ -722,7 +740,7 @@ public class CardGame {
         currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         CardPlayer nextPlayer = players.get(currentPlayerIndex);
         nextPlayer.hasShoutedMino = false;
-        if (topFace().number != 0) report.sound(NOTE_BASS, 1000, nextPlayer);
+        GameSounds.turn(report, nextPlayer, false, Math.max(900, report.soundTail() + 300));
     }
 
     private void takePendingDraw(CardPlayer victim, ActionReport report) {
@@ -1007,7 +1025,7 @@ public class CardGame {
         topCard = card;
         card.owner = player.uuid;
         player.hand.remove(card);
-        report.sound(Mino.id("game.play"), 0);
+        report.sound(GameSounds.PLAY, 0);
     }
 
     private void reshuffle() {
@@ -1037,11 +1055,8 @@ public class CardGame {
             c.owner = cardPlayer.uuid;
             cardPlayer.hand.add(c);
             drawn.add(c);
-            if (report != null) {
-                report.sound(Mino.id("game.draw"), 500 * i);
-                if (count > 1) report.sound(Mino.id("game.draw"), 500 * i + 200);
-            }
         }
+        GameSounds.draws(report, drawn.size(), 0);
         return drawn;
     }
 
@@ -1062,7 +1077,7 @@ public class CardGame {
             links.values()
                 .removeIf(u -> u.equals(p.uuid));
             report.messageAll(Chat.translatable("game.minopp.play.mercy", p.name, limit));
-            report.sound(Mino.id("game.mino_shout_invalid"), 0);
+            GameSounds.elimination(report);
         }
     }
 

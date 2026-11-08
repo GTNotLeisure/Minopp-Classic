@@ -23,6 +23,7 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.world.WorldServer;
 
 import com.hfstudio.minopp.Mino;
+import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.effect.EffectEvent;
 import com.hfstudio.minopp.effect.EffectEvents;
 import com.hfstudio.minopp.effect.SeatActionTakenEffectEvent;
@@ -32,6 +33,7 @@ import com.hfstudio.minopp.game.AutoPlayer;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.HandMask;
 import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
@@ -510,13 +512,49 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public void sync() {
         markDirty();
-        if (worldObj != null) worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        if (worldObj == null) return;
+        if (worldObj.isRemote || ServerConfig.gameplay.allowPeeking || game == null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            return;
+        }
+        // Without peeking every viewer gets their own copy, revealing only their own hand
+        NBTTagCompound tag = new NBTTagCompound();
+        writeToNBT(tag);
+        double range = Math.max(
+            4,
+            MinecraftServer.getServer()
+                .getConfigurationManager()
+                .getViewDistance())
+            * 16 + 16;
+        for (Object o : worldObj.playerEntities) {
+            if (!(o instanceof EntityPlayerMP player)) continue;
+            if (player.getDistanceSq(xCoord + 1.5, player.posY, zCoord + 1.5) > range * range) continue;
+            sendTo(player, tag);
+        }
+    }
+
+    /** Sends this table's state to one player, with other players' cards hidden unless peeking is allowed. */
+    public void sendTo(EntityPlayerMP player) {
+        NBTTagCompound tag = new NBTTagCompound();
+        writeToNBT(tag);
+        sendTo(player, tag);
+    }
+
+    private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
+        NBTTagCompound tag = ServerConfig.gameplay.allowPeeking ? fullTag
+            : HandMask.maskTableTag(
+                fullTag,
+                player.getGameProfile()
+                    .getId());
+        player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }
 
     @Override
     public Packet getDescriptionPacket() {
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
+        // Sent to whoever loads the chunk: hide every hand; ChunkWatchEvent then sends the viewer their own hand
+        if (!ServerConfig.gameplay.allowPeeking) tag = HandMask.maskTableTag(tag, null);
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag);
     }
 
