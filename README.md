@@ -1,113 +1,217 @@
-# Mino++: Classic
+<div align="center">
+  <img src="./src/main/resources/minopp.png" width="225" alt="Mino++: Classic Logo">
 
-在 Minecraft 1.7.10 中还原一个特定的著名卡牌游戏。本项目是 [Mino++: Expanded](https://github.com/) (1.20.1, Architectury) 的 1.7.10 移植版。
+  <h1>Mino++: Classic</h1>
+  <h2><em>A card table for Minecraft 1.7.10</em></h2>
 
-- Mod ID：`minopp`，包名：`com.hfstudio.minopp`
-- 硬依赖：[GTNHLib](https://github.com/GTNewHorizons/GTNHLib)（配置框架、JSON 方块模型、JvmDowngrader 运行时）
+  <p>
+    <strong>Shed your hand, shout "Mino!", and watch out for the Draw Ten.</strong>
+  </p>
 
-## 与 1.20.1 版本的差异
+  <p>
+    <a href="https://github.com/GTNotLeisure/Minopp-Classic/releases/latest">
+      <img src="https://img.shields.io/github/v/release/GTNotLeisure/Minopp-Classic?style=for-the-badge&color=orange" alt="Latest Version">
+    </a>
+    <a href="https://www.gnu.org/licenses/gpl-3.0.html">
+      <img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge" alt="License">
+    </a>
+    <img src="https://img.shields.io/badge/Minecraft-1.7.10-green?style=for-the-badge" alt="Minecraft 1.7.10">
+  </p>
 
-| 1.20.1 | 1.7.10 |
-| --- | --- |
-| YetAnotherConfigLib 机器人配置界面 | 原生 GuiScreen（`AutoPlayerScreen`） |
-| ForgeConfigSpec 客户端配置 | GTNHLib `@Config`（模组列表中可直接编辑） |
-| `Inventory#swapPaint` Mixin | `MouseEvent` 滚轮事件 |
-| FOV Mixin / 事件 | `FOVUpdateEvent` |
-| BlockState `part` 属性 | 元数据 + GTNHLib 方块状态属性，沿用原版 JSON 模型 |
-| 发光（Glowing）效果 | 获胜者周围的粒子效果（1.7.10 无发光效果） |
-| 东方 Project 女仆兼容 | 未移植（仅 1.20.1 Forge） |
+  <p>
+    <b>Mino++: Classic</b> brings a well-known color-and-number card game to Minecraft 1.7.10.
+    <br>
+    Place a table, sit down with friends or bots, mix <strong>17 card packs</strong>, tune <strong>29 rules</strong>
+    and play with an animated, controller-style interface.
+  </p>
+</div>
 
-## 操作备注
+<hr>
 
-默认交互模式（配置 `classicInteraction=false`）：
+## 📑 Table of Contents
+- [📑 Table of Contents](#-table-of-contents)
+- [🔧 Required Dependencies](#-required-dependencies)
+- [✨ Key Features](#-key-features)
+- [🃏 Card Packs](#-card-packs)
+- [📏 Rules](#-rules)
+- [🎮 Controls](#-controls)
+- [🖥️ Server Configuration](#️-server-configuration)
+- [📥 Downloads \& Compatibility](#-downloads--compatibility)
+- [🧱 Building](#-building)
+- [📜 Credits \& Attributions](#-credits--attributions)
 
-- 手牌以弧形展开在屏幕底部，轮到自己时所有可出的牌会金边高亮并略微抬起。
-- 手持手牌右键进入交互模式：光标指向卡牌即选中，左键 / 空格出牌，A/D（或方向键、滚轮）切换，Q 摸牌 / 跳过，再次右键（或 Esc）恢复自由移动。
-- 交互模式左下角有「摸牌/跳过」与「MINO!」按钮。
-- 选择万能牌颜色时，桌面牌堆周围会升起四根立体色柱，指向并点击即可选色（也可按 1-4 或点底部按钮）。
+<hr>
 
-经典交互模式（`classicInteraction=true`）：
+## 🔧 Required Dependencies
 
-- 手牌竖向展开在右侧，滚轮选牌；右击牌堆抽牌或表示不出，右击牌桌其他区域出牌。
-- 对着牌桌以外的地方右键也可进入交互模式，此时用 W/S 切换。
+* [GTNHLib (>= 0.11.54)](https://github.com/GTNewHorizons/GTNHLib)
 
-通用：
+Optional:
 
-- 只能在自己的回合、手牌不超过 2 张时喊 Mino：点「MINO!」按钮（或聊天栏输入 Mino）立即喊出，也可以出牌时按住 Ctrl 一起喊。不在自己回合或手牌更多时喊会被拒绝（不罚牌）；喊过之后再摸牌，喊话失效。
-- 不是自己的回合、牌不能出或正在等待其他玩家决定时，不会弹出选色 / 选人界面；界面打开期间局面变化（回合结束、牌局结束等）会自动关闭并提示原因。
-- 如果忘记了在出牌同时喊 Mino，可以在聊天栏打出 Mino 补上。
-- 要质疑某人没有喊 Mino，直接殴打对方即可。
-- 如果牌桌打掉了但还持有绑定到牌桌的手牌，手持右键天空解绑。
+* [NeverEnoughCharacters](https://github.com/asdflj/NeverEnoughCharacters-Rework): the settings search box then accepts pinyin for Chinese names.
 
-## 构建
+## ✨ Key Features
 
-```
-./gradlew build
-```
+* **A real table**: a 3×3 table you place in front of you. Seats go around it, the draw pile and discard pile sit in the middle, and every hand is visible from the outside.
+* **Hand at your fingertips**: your hand fans out at the bottom of the screen. Playable cards glow on your turn. Right click to grab the cards, A/D to pick one, Space to play it.
+* **3D color picker**: picking a wild color raises four pillars from the table. Point at one, or use WASD and Enter.
+* **Mix any packs**: combine the Classic deck with No Mercy, Flip, Flex, All Wild, Party and eleven more packs. A card that appears in several packs is counted once.
+* **Official rules**: challenge a Wild Draw Four, use the official opening card, score points to a target (single round, 200, 300, 500, 750, 1000 or your own number), and see a settlement board after every round.
+* **House rules**: Jump-In, Stacking, 7-0, Draw to Match, Play Doubles, Bring a Card, Deflect, Mercy Rule, and more.
+* **Team mode**: up to 10 equally sized teams, optional team relay.
+* **Bots**: seat bots from the table lobby (left click adds, right click removes). Bots stay at their table, and a stand-in plays for anyone who disconnects mid-game.
+* **Saved designs**: keep your favorite pack and rule setups and apply them to any table.
+* **Animations**: direction arrows on the table, bouncing skip signs, a coin toss for 50/50, the Time Balloon swelling over its holder, flying cards, and particles for expansion cards.
+* **Translations**: English, 简体中文, 繁體中文（台灣）, 繁體中文（香港）, Deutsch and 日本語.
 
-## 牌局设置（牌桌 → 规则与卡牌）
+<hr>
 
-空手右键牌桌打开大厅，`Z` 进入「牌局设置」，`Q`/`E` 切换选项卡，鼠标悬停显示说明：
+## 🃏 Card Packs
 
-| 选项卡 | 操作 |
-| --- | --- |
-| 我的设计 | 本地保存最多 8 套方案（`config/minopp/designs.json`）。左键应用到牌桌，右键用当前设置覆盖，`X`/`Delete` 删除，空位点击保存 |
-| 组合包 | 左键：使用该包的预设组合（替换牌组）；右键：单独加入/移除此包，可自由混搭 |
-| 当家规则 | 开关类规则点击切换；数值类左键 +1、右键 -1（Shift 为 5） |
-| 卡牌 | 左键加入/移除，右键 +1，Shift+右键 -1，Ctrl+点击恢复默认。右上角为勾选，下方为数量；带四色角标的牌按「每色数量 ×4」调整 |
-| 牌桌 | 座位数（2-20）、起始手牌、牌组份数（`A` = 自动：超过 4 人每 4 人加一份，并保证手牌和牌堆够用）等 |
-| 风格 | 选择你的卡牌主题 |
+The **Classic** deck provides the number cards. Packs without numbers always get the Classic deck added when you pick them as a preset.
 
-## 卡牌主题包（纯客户端）
+| Pack | Players | Contents |
+|:-----|:-------:|:---------|
+| **Classic** | 2–10 | The original 108 card deck. |
+| **No Mercy** | 2–6 | 168 brutal cards: Discard All, Skip Everyone, Wild Draw Six and Ten, Wild Color Roulette; mercy rule and stack-any. |
+| **Flip** | 2–10 | Double-sided deck: Redstone, Gold, Emerald and Diamond on the light side; Rose Quartz, Turquoise, Amber and Amethyst on the dark side. |
+| **Flex** | 2–6 | Two-colored Flex cards and power cards. |
+| **All Wild** | 2–10 | Every card is wild: just play the action. |
+| **Party** | 6–16 | Point Taken, Drawn Together, Pile Up. |
+| **Modern Classic** | 2–10 | Gift, Bonus Turn, Wild Swap Hands, Wild Hand Shuffle. |
+| **Legend Pack** | 2–8 | Trial: everyone discards a color or draws. |
+| **Anniversary Pack** | 2–8 | 50/50: a coin flip decides who draws 4. |
+| **Weekend Pack** | 2–8 | Wild Draw Six, Wild Reverse Draw Six, Double Discard All, Time Balloon. |
+| **Blaster Pack** | 2–8 | Blaster, Wild Blast All, Trade Hands, Discard All. |
+| **Jungle Pack** | 2–8 | Wild Hand Shuffle, Wild Rebound, Wild Smoke Bomb, Wild Echo. |
+| **Dance Pack** | 3–10 | Wild Crossfade, Wild Dance Floor, Wild Even Out, Wild Surprise. |
+| **Rascal Pack** | 2–8 | Wild Card Storm, Wild Booby Trap, Wild Hurry Up, Wild Shield. |
+| **Myth Pack** | 2–8 | Wild Trickster, Wild Surge. |
+| **Whirlwind Pack** | 3–8 | Wild Cyclone, Wild Thief. |
+| **Teams Pack** | 4–20 | Wild Team Play, Wild Team Draw Four, team relay. |
 
-主题来自任意资源包，安装了相同主题的玩家能看到你打出的牌使用你的主题。资源包结构：
+<details>
+<summary><strong>How mixed packs build the deck (Click to expand)</strong></summary>
+<br>
 
-```
-assets/minopp/themes.json
-    { "themes": [ { "id": "my_theme", "name": "My Theme", "fallback": "classic" } ] }
-assets/minopp/textures/cards/my_theme/
-    frame_<颜色>.png      牌面底（red/yellow/green/blue/pink/teal/orange/purple/wild）
-    num_<0-9>.png         数字
-    symbol_<牌型>.png     功能牌图案（牌型 id 见 CardTypes）
-    flex_<颜色>.png       弹性牌的第二色覆盖层
-    mark_power.png        能量数字标记
-    back.png / back_dark.png   牌背
-```
+* Every card face is counted once. If two enabled packs contain the same card, the deck gets the larger of their counts.
+* A count you set yourself in the Cards tab always wins.
+* Heavy draw cards (Draw Six, Draw Ten, Color Roulette) switch on the Mercy rule when you add them, so a game cannot grow forever.
+* Flex cards switch on Flex Power. Rules that depend on another rule switch it on with them (Stack Any Draw needs Stacking, Team Relay needs Team Mode).
+</details>
 
-所有图层均为 32x50，主题未提供的图层会回退到 `fallback` 主题。多个资源包的 `themes.json` 会合并。
+<hr>
 
-## 官方规则
+## 📏 Rules
 
-- 默认按官方规则：可以打出刚摸到的可用牌；可以质疑变色 +4（对方手中有当前颜色的牌则由对方摸牌，质疑失败多摸 2 张）；开局翻开的牌按官方处理（禁止、反转、+2 对第一位玩家生效，变色可自由出色，变色 +4 放回重翻），可在规则中关闭。
-- 以 +2 / +4 出完最后一张时，下家仍要摸这些牌（积分赛计分用）。
-- 叠加（+2 接 +2）是常见村规，官方规则不允许叠加，可以在规则里关闭。
-- 翻面（Flip）暗面的四种颜色使用宝石名称：粉晶、绿松石、琥珀、紫水晶。
+<details>
+<summary><strong>📘 Basic (Click to expand)</strong></summary>
+<br>
 
-## 新增卡牌与规则
+* **Play Drawn Card**: a card you just drew may be played right away.
+* **Official Opening Card**: the first card is turned over and applied like in the official rules.
+</details>
 
-- 冲击炮扩展（灵感来自发牌器玩法）：冲击炮（下家随机摸 0-6 张并跳过）、万能群体冲击（其他人各随机摸 0-3 张）、交换手牌、全部弃牌。
-- 现代经典：赠礼（随机送一张牌给下家）、额外回合、万能换手牌、万能洗手牌。
-- 旋风扩展：万能旋风（所有人按方向传一张牌）、万能神偷（从任意玩家手中拿走一张牌）。
-- 丛林扩展：变色手牌大乱炖、变色反弹、变色烟雾弹（偷看所有人手牌并隐藏自己的牌数）、变色回响（复制下面那张牌的效果）。
-- 舞会扩展：变色交叉换位（与对面换手牌）、变色舞池、变色拉平（所有人弃到最少手牌数）、变色惊喜（随机效果）。
-- 捣蛋扩展：变色卡牌风暴、变色诡雷（下一个摸牌的人额外摸 3 张）、变色快点儿（接下来的回合限时）、变色护盾（挡下罚牌）。
-- 神话扩展：变色诡计（指定玩家摸 4 弃 2）、变色神力（弃掉分值最高的两张）。
-- 团队扩展（参考 UNO Teams）：变色团队接力、变色团队 +4，以及「团队接力」规则（出完手牌拿走队友一半的牌）。
-- 五五开改为官方规则：指定两名对手抛硬币，输的一方摸 4 张。
-- 新的常见规则：反弹罚牌（跳过/反转可以弹开 +N）、同数连出（同一回合打出多张相同数字）、数字收尾（最后一张必须是数字牌）、积分赛（官方计分，先到目标分者赢得整场）。
+<details>
+<summary><strong>🏠 House Rules (Click to expand)</strong></summary>
+<br>
 
-## 团队模式
+* **Jump-In**: play an identical card out of turn.
+* **Stacking**: answer a draw card with another one and pass the total on.
+* **7-0**: a 7 swaps hands with a player you choose, a 0 rotates all hands.
+* **Draw to Match**: keep drawing until you can play.
+* **Forced Play**: you must play when you can.
+* **No Bluffing** / **Challenge Wild Draw Four**: control whether a Wild Draw Four can be challenged.
+* **Stack Draw Four on Draw Two**, **Deflect**.
+* **Play Doubles**: after a number card, add more cards with the same number.
+* **Bring a Card** (off by default): after a colored action card, play one more card of the same color.
+* **Number Finish**: your last card must be a number card.
+</details>
 
-- 在「规则与卡牌」的模式分类中开启「团队模式」，并设置「队伍数量」（2-10）。
-- 入座的玩家和机器人自动加入人数最少的队伍；在大厅中左键 / 右键点击座位切换队伍（自己的座位或机器人的座位），按 T 或「自动分队」可按座位交替平均分配。
-- 只有每个队伍人数相等（且每队至少一人）时才能开始游戏，大厅顶部会显示各队人数。
-- 同队玩家一起获胜；机器人不会把针对性效果用在队友身上。
+<details>
+<summary><strong>💀 No Mercy (Click to expand)</strong></summary>
+<br>
 
-## 服务端配置（`config/minopp/minopp-server.cfg`）
+* **Mercy Rule**: a player who reaches the limit (default 25 cards) is out.
+* **Stack Any Draw**: any draw card can answer any other.
+</details>
 
-- `allowPeeking`（默认 `false`）：是否允许偷看他人手牌。开启后，玩家手中卡牌朝向自己的一面会显示牌面，站在其身后即可看到；关闭时服务器不会把其他玩家的牌面（以及牌堆顺序）发送给客户端，即使使用修改过的客户端也看不到。
+<details>
+<summary><strong>🎲 Modes and Table (Click to expand)</strong></summary>
+<br>
 
-## 翻译
+* **Team Mode** with 2 to 10 teams, **Team Relay**, **Flip Mode**, **Flex Power**.
+* **Seats** (2–20), **Starting Hand**, **Deck Copies** (automatic for big tables), **Jump-In Window**, **Mino Penalty**, **Balloon Penalty**.
+* **Points Target**: single round, 200, 300, 500, 750, 1000, or a custom value. The winner of a round scores the cards left in the other hands (numbers at face value, actions 20, wilds 50).
+</details>
 
-- 支持简体中文、繁体中文（台湾、香港）、日语、德语，所有语言与英文键完全一致（有测试保证）。
-- 卡牌术语参照官方译名：中文参照一起优诺（禁止、反转、+2、变色、+4），日语参照 Mattel Japan（スキップ、リバース、ドロー2、ワイルド、ワイルド ドロー4），德语参照 Mattel 德语说明书（Aussetzen、Retour、Zieh 2、Farbenwahl、Zieh 4 Farbenwahl）；颜色使用 Minecraft 官方译名（红石、绿宝石、钻石、金）。
+<hr>
+
+## 🎮 Controls
+
+<details>
+<summary><strong>🃏 At the table (Click to expand)</strong></summary>
+<br>
+
+* Hold the hand cards and **right click** to enter interaction mode. Right click again (or Esc) to move freely.
+* **A / D**, arrow keys or the mouse wheel pick a card. **Space** or left click plays it. **Q** draws or passes.
+* Shout **Mino!** with the button, by holding Ctrl while playing, or by typing "Mino" in chat. You can only shout on your own turn with two cards or fewer.
+* Hit a player who forgot to shout to catch them.
+* With `classicInteraction=true` the hand is shown on the right and W/S pick a card.
+</details>
+
+<details>
+<summary><strong>⚙️ Settings screen (Click to expand)</strong></summary>
+<br>
+
+* **Q / E** (or click the keys) switch tabs. **W A S D** or the arrow keys move between tiles like a TV remote, **Enter** / **Space** acts as a left click and **R** as a right click.
+* Number tiles: left click −1, right click +1, Shift+left click clears, Shift+right click lets you type a value (Enter or click elsewhere confirms), Ctrl+click restores the default.
+* Type in the search box at the bottom left (or press `/` or Ctrl+F) to filter every tab.
+</details>
+
+<hr>
+
+## 🖥️ Server Configuration
+
+`config/minopp/minopp-server.cfg` (also editable from the mod list):
+
+| Option | Default | Effect |
+|:-------|:-------:|:-------|
+| `allowPeeking` | `false` | Everyone can see every hand. Off by default; hands are sent to their owners only. |
+| `everyoneCanManageBots` | `false` | Let every player add and remove bots. When off, only operators (and the single-player host) can. |
+
+<hr>
+
+## 📥 Downloads & Compatibility
+
+| Minecraft | Forge | Status | Download |
+|:---------:|:-----:|:------:|:---------|
+| **1.7.10** | `10.13.4.1614` | ✅ **Supported** | [![Latest](https://img.shields.io/badge/Download-Latest-success)](https://github.com/GTNotLeisure/Minopp-Classic/releases/latest) |
+
+Works with GT New Horizons and with [Angelica](https://github.com/GTNewHorizons/Angelica).
+
+## 🧱 Building
+
+* **Java**: a modern JDK (the build downgrades bytecode for Java 8 with JvmDowngrader)
+* **Gradle wrapper**: use the included `gradlew` / `gradlew.bat`
+* Build: `./gradlew build` (Windows: `gradlew.bat build`)
+* Run the tests: `./gradlew test`
+
+Install the plain `minopp-*.jar` together with GTNHLib. The `-dev`, `-sources` and `-predowngrade` jars are for development.
+
+<hr>
+
+## 📜 Credits & Attributions
+
+| Project | Author | License |
+|:--------|:-------|:--------|
+| **Mino++** (original mod) | [Zbx1425](https://github.com/zbx1425/minopp) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
+| **Mino++: Expanded** | [VengeancePC](https://github.com/VengeancePC/Minopp-Expanded) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
+| **GTNHLib** | [GTNewHorizons](https://github.com/GTNewHorizons/GTNHLib) | [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) |
+
+Mino++: Classic is a 1.7.10 port and continuation of Mino++: Expanded. Code taken from Mino++ remains available under its original MIT license; see [LICENSE-MIT-Zbx1425.txt](./LICENSE-MIT-Zbx1425.txt).
+This project is not affiliated with or endorsed by Mattel or Ubisoft.
+
+---
+
+<p align="center">Licensed under <strong>GPLv3</strong>.</p>
