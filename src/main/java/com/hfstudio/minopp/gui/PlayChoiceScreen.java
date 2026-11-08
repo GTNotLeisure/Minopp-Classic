@@ -3,8 +3,13 @@ package com.hfstudio.minopp.gui;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.ResourceLocation;
+
+import org.lwjgl.input.Keyboard;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
@@ -56,7 +61,6 @@ public class PlayChoiceScreen extends GuiScreen {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void initGui() {
         buttonList.clear();
         int cy = height / 2;
@@ -73,7 +77,7 @@ public class PlayChoiceScreen extends GuiScreen {
                         height - 50,
                         bw,
                         18,
-                        net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
+                        EnumChatFormatting.getTextWithoutFormattingCodes(
                             Chat.translatable(c.langKey())
                                 .getFormattedText()),
                         c.rgb));
@@ -161,13 +165,13 @@ public class PlayChoiceScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
-        if (colorStep && keyCode >= org.lwjgl.input.Keyboard.KEY_1 && keyCode <= org.lwjgl.input.Keyboard.KEY_4) {
+        if (colorStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_4) {
             List<CardColor> colors = CardColor.forSide(darkSide);
-            int i = keyCode - org.lwjgl.input.Keyboard.KEY_1;
+            int i = keyCode - Keyboard.KEY_1;
             if (i < colors.size()) chooseColor(colors.get(i));
             return;
         }
-        if (keyCode == org.lwjgl.input.Keyboard.KEY_ESCAPE) {
+        if (keyCode == Keyboard.KEY_ESCAPE) {
             HandScreen.returnFromChoice();
             return;
         }
@@ -182,9 +186,7 @@ public class PlayChoiceScreen extends GuiScreen {
             List<CardColor> colors = CardColor.forSide(darkSide);
             if (hit >= 0 && hit < colors.size()) {
                 mc.getSoundHandler()
-                    .playSound(
-                        net.minecraft.client.audio.PositionedSoundRecord
-                            .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0F));
+                    .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
                 chooseColor(colors.get(hit));
                 return;
             }
@@ -239,8 +241,8 @@ public class PlayChoiceScreen extends GuiScreen {
             List<CardColor> colors = CardColor.forSide(darkSide);
             int hit = ColorPicker3D.hitTest(mouseX, mouseY);
             if (hit < 0) {
-                for (Object o : buttonList) {
-                    GuiButton b = (GuiButton) o;
+                for (GuiButton o : buttonList) {
+                    GuiButton b = o;
                     if (b.id >= 0 && mouseX >= b.xPosition
                         && mouseX < b.xPosition + b.width
                         && mouseY >= b.yPosition

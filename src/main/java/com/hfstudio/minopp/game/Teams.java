@@ -81,7 +81,10 @@ public final class Teams {
         int[] sizes = sizes(seated, teamCount);
         boolean equal = true;
         for (int t = 0; t < teamCount; t++) {
-            if (sizes[t] == 0 || sizes[t] != sizes[0]) equal = false;
+            if (sizes[t] == 0 || sizes[t] != sizes[0]) {
+                equal = false;
+                break;
+            }
         }
         if (equal) return null;
         return Chat.translatable("game.minopp.play.teams_unequal", summary(seated, teamCount));

@@ -5,6 +5,7 @@ import java.util.List;
 
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.EnumChatFormatting;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardColor;
@@ -41,7 +42,6 @@ public class DecisionScreen extends GuiScreen {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void initGui() {
         buttonList.clear();
         CardGame game = game();
@@ -79,7 +79,7 @@ public class DecisionScreen extends GuiScreen {
                             cy,
                             bw,
                             20,
-                            net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
+                            EnumChatFormatting.getTextWithoutFormattingCodes(
                                 Chat.translatable(c.langKey())
                                     .getFormattedText()),
                             c.rgb));

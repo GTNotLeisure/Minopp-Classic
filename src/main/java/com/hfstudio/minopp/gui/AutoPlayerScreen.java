@@ -2,6 +2,7 @@ package com.hfstudio.minopp.gui;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -10,6 +11,7 @@ import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.EnumChatFormatting;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.network.C2SAutoPlayerConfigPacket;
@@ -64,7 +66,6 @@ public class AutoPlayerScreen extends GuiScreen {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void initGui() {
         Keyboard.enableRepeatEvents(true);
         buttonList.clear();
@@ -116,8 +117,8 @@ public class AutoPlayerScreen extends GuiScreen {
     }
 
     private void refreshLabels() {
-        for (Object o : buttonList) {
-            GuiButton b = (GuiButton) o;
+        for (GuiButton o : buttonList) {
+            GuiButton b = o;
             switch (b.id) {
                 case 0 -> b.displayString = tr("gui.minopp.bot_config.active") + ": " + onOff(active);
                 case 1 -> b.displayString = tr("gui.minopp.bot_config.no_push") + ": " + yesNo(noPush);
@@ -229,8 +230,8 @@ public class AutoPlayerScreen extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
 
         hoverDescription = null;
-        for (Object o : buttonList) {
-            GuiButton b = (GuiButton) o;
+        for (GuiButton o : buttonList) {
+            GuiButton b = o;
             if (mouseX >= b.xPosition && mouseY >= b.yPosition
                 && mouseX < b.xPosition + b.width
                 && mouseY < b.yPosition + b.height) {
@@ -266,12 +267,12 @@ public class AutoPlayerScreen extends GuiScreen {
 
     private static class Slider extends GuiButton {
 
-        private final java.util.function.Supplier<Float> getter;
+        private final Supplier<Float> getter;
         private final Consumer<Float> setter;
         private final Function<Float, String> formatter;
         private boolean dragging;
 
-        Slider(int id, int x, int y, int w, int h, java.util.function.Supplier<Float> getter, Consumer<Float> setter,
+        Slider(int id, int x, int y, int w, int h, Supplier<Float> getter, Consumer<Float> setter,
             Function<Float, String> formatter) {
             super(id, x, y, w, h, "");
             this.getter = getter;
@@ -299,7 +300,7 @@ public class AutoPlayerScreen extends GuiScreen {
                 if (dragging) updateValue(mouseX);
                 mc.getTextureManager()
                     .bindTexture(buttonTextures);
-                org.lwjgl.opengl.GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+                GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
                 int pos = xPosition + (int) (getter.get() * (width - 8));
                 drawTexturedModalRect(pos, yPosition, 0, 66, 4, 20);
                 drawTexturedModalRect(pos + 4, yPosition, 196, 66, 4, 20);

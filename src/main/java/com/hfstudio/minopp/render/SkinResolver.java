@@ -72,7 +72,6 @@ public final class SkinResolver {
         return result[0];
     }
 
-    @SuppressWarnings("unchecked")
     private static void applyProfile(GameProfile profile, Consumer<ResourceLocation> callback) {
         Minecraft mc = Minecraft.getMinecraft();
         Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = mc.func_152342_ad()

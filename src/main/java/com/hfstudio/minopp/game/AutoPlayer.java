@@ -22,8 +22,8 @@ public class AutoPlayer {
 
     public static boolean isOnlinePlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return false;
-        for (Object o : server.getConfigurationManager().playerEntityList) {
-            if (((EntityPlayerMP) o).getGameProfile()
+        for (EntityPlayerMP o : server.getConfigurationManager().playerEntityList) {
+            if (o.getGameProfile()
                 .getId()
                 .equals(uuid)) return true;
         }

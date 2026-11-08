@@ -37,8 +37,7 @@ public final class ActionMessage {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof ActionMessage)) return false;
-        ActionMessage that = (ActionMessage) o;
+        if (!(o instanceof ActionMessage that)) return false;
         return type == that.type && message.equals(that.message);
     }
 

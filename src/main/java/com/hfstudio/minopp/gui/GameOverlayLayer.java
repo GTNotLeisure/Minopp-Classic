@@ -1,5 +1,6 @@
 package com.hfstudio.minopp.gui;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
@@ -29,6 +30,7 @@ import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.CardRenderer;
@@ -166,7 +168,7 @@ public class GameOverlayLayer {
                     .getFormattedText(),
                 x,
                 y,
-                com.hfstudio.minopp.gui.ui.UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()));
+                UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()));
         } else {
             drawStringWithBackdrop(
                 font,
@@ -271,13 +273,13 @@ public class GameOverlayLayer {
                     p.eliminated ? "x"
                         : game.hiddenCounts.contains(p.uuid) && !p.equals(cardPlayer) ? "?"
                             : String.valueOf(p.hand.size()));
-            if (p.team >= 0) counts.append(com.hfstudio.minopp.game.Teams.format(p.team))
+            if (p.team >= 0) counts.append(Teams.format(p.team))
                 .append('[')
                 .append(p.team + 1)
                 .append(']');
         }
-        for (Object line : font.listFormattedStringToWidth(counts.toString(), 260)) {
-            drawStringWithBackdrop(font, (String) line, x, y, 0xFFAAAAAA);
+        for (String line : font.listFormattedStringToWidth(counts.toString(), 260)) {
+            drawStringWithBackdrop(font, line, x, y, 0xFFAAAAAA);
             y += lh;
         }
         y += lh;
@@ -352,7 +354,7 @@ public class GameOverlayLayer {
                     isShouting ? font.getStringWidth(shoutMessage) : 0,
                     isFlexing ? font.getStringWidth(flexMessage) : 0));
             int msgHeight = lh * lines;
-            com.hfstudio.minopp.gui.ui.UiDraw.roundFrame(
+            UiDraw.roundFrame(
                 width / 2 + 8,
                 height / 2 - msgHeight / 2 - 3,
                 width / 2 + msgWidth + 17,
@@ -377,8 +379,8 @@ public class GameOverlayLayer {
             int glow = (int) (60 + 120 * p) << 24 | 0xFFC21E;
             GL11.glPushMatrix();
             GL11.glTranslatef((float) (width / 2), (float) (height / 2 + 14), 0);
-            com.hfstudio.minopp.gui.ui.UiDraw.roundRect(-msgWidth / 2 - 9, -3, msgWidth / 2 + 9, lh + 5, 7, glow);
-            com.hfstudio.minopp.gui.ui.UiDraw
+            UiDraw.roundRect(-msgWidth / 2 - 9, -3, msgWidth / 2 + 9, lh + 5, 7, glow);
+            UiDraw
                 .roundFrame(-msgWidth / 2 - 7, -1, msgWidth / 2 + 7, lh + 3, 6, 1, 0xFFFFC21E, 0xE0402A08, 0xE0281A04);
             GuiDraw.drawString(font, deadManMessage, -msgWidth / 2, 1, 0xFFFFF2C0);
             GL11.glPopMatrix();
@@ -461,7 +463,7 @@ public class GameOverlayLayer {
                     GuiDraw.drawString(font, cardName, x - font.getStringWidth(cardName) - 10, y + 10, 0xFFFFFFDD);
                 }
                 if (selected) {
-                    com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
+                    UiDraw.roundRect(
                         x + 3,
                         y + 3,
                         x + CARD_WIDTH + 3,
@@ -471,7 +473,7 @@ public class GameOverlayLayer {
                 }
                 if (isMyTurn && game.canPlay(realPlayer, card)) {
                     int rim = 0xA0 + (int) (0x5F * slowPulse());
-                    com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
+                    UiDraw.roundRect(
                         x - 2,
                         y - 2,
                         x + CARD_WIDTH + 2,
@@ -489,7 +491,7 @@ public class GameOverlayLayer {
                 float shadowAlpha = !isMyTurn ? 0.5f : (playable ? 0f : 0.3f);
                 if (shadowAlpha > 0) {
                     int corner = Math.max(1, CARD_WIDTH * 3 / 32);
-                    com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
+                    UiDraw.roundRect(
                         x,
                         y,
                         x + CARD_WIDTH,
@@ -500,7 +502,7 @@ public class GameOverlayLayer {
                 if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && game.isIdenticalToTop(card)) {
                     float pulse = (float) (0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 300.0));
                     int highlightAlpha = (int) (0x90 * pulse);
-                    com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
+                    UiDraw.roundRect(
                         x - 2,
                         y - 2,
                         x + CARD_WIDTH + 2,
@@ -515,7 +517,7 @@ public class GameOverlayLayer {
     }
 
     /** Card hit areas of the last frame, topmost first: {index, centerX, centerY, angle (rad), w, h}. */
-    private static final List<float[]> cardRects = new java.util.ArrayList<>();
+    private static final List<float[]> cardRects = new ArrayList<>();
     private float rowRaise = 0;
     private final Map<Integer, Float> rowLift = new HashMap<>();
     private long lastRowNanos = System.nanoTime();

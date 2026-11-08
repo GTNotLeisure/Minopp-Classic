@@ -205,8 +205,8 @@ public class TableConfig {
         packs.clear();
         counts.clear();
         NBTTagCompound rulesTag = tag.getCompoundTag("rules");
-        for (Object k : rulesTag.func_150296_c()) {
-            String key = (String) k;
+        for (String k : rulesTag.func_150296_c()) {
+            String key = k;
             GameRules.Rule def = GameRules.get(key);
             if (def == null) continue;
             // Rules of the original mod were stored as booleans
@@ -224,9 +224,9 @@ public class TableConfig {
             packs.add(CardPack.CLASSIC);
         }
         NBTTagCompound countsTag = tag.getCompoundTag("counts");
-        for (Object k : countsTag.func_150296_c()) {
+        for (String k : countsTag.func_150296_c()) {
             if (counts.size() >= 512) break;
-            setCount((String) k, countsTag.getInteger((String) k));
+            setCount(k, countsTag.getInteger(k));
         }
     }
 }

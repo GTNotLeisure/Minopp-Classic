@@ -1,5 +1,6 @@
 package com.hfstudio.minopp.item;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ import net.minecraft.world.World;
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
+import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.util.BlockPos;
 
@@ -67,9 +70,8 @@ public class ItemHandCards extends Item {
         return te instanceof BlockEntityMinoTable ? (BlockEntityMinoTable) te : null;
     }
 
-    public static java.util.List<com.hfstudio.minopp.game.Card> sortedHand(com.hfstudio.minopp.game.CardGame game,
-        CardPlayer player) {
-        java.util.List<com.hfstudio.minopp.game.Card> hand = new java.util.ArrayList<>(player.hand);
+    public static List<Card> sortedHand(CardGame game, CardPlayer player) {
+        List<Card> hand = new ArrayList<>(player.hand);
         hand.sort((a, b) -> a.compareTo(b, game.darkSide));
         return hand;
     }

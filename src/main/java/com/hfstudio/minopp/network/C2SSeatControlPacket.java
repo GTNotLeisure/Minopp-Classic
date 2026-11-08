@@ -1,13 +1,18 @@
 package com.hfstudio.minopp.network;
 
 import java.util.List;
+import java.util.UUID;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
@@ -25,7 +30,7 @@ public class C2SSeatControlPacket {
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
         int action = packet.readInt();
-        net.minecraft.nbt.NBTTagCompound applyTag = action == APPLY ? Buf.readNbt(packet) : null;
+        NBTTagCompound applyTag = action == APPLY ? Buf.readNbt(packet) : null;
         String key = (action == RULE || action == PACK || action == COUNT || action == PRESET || action == TEAM)
             ? Buf.readString(packet)
             : null;
@@ -46,7 +51,7 @@ public class C2SSeatControlPacket {
                         player.addChatComponentMessage(Chat.translatable("game.minopp.play.no_enough_player"));
                         return;
                     }
-                    net.minecraft.util.IChatComponent teamProblem = tableEntity.startProblem();
+                    IChatComponent teamProblem = tableEntity.startProblem();
                     if (teamProblem != null) {
                         player.addChatComponentMessage(teamProblem);
                         return;
@@ -96,17 +101,17 @@ public class C2SSeatControlPacket {
                 }
             }
             case TEAM -> {
-                java.util.UUID target;
+                UUID target;
                 try {
-                    target = java.util.UUID.fromString(key);
+                    target = UUID.fromString(key);
                 } catch (IllegalArgumentException e) {
                     return;
                 }
                 boolean self = target.equals(cardPlayer.uuid);
-                boolean bot = net.minecraft.server.MinecraftServer.getServer()
+                boolean bot = MinecraftServer.getServer()
                     .getConfigurationManager().playerEntityList.stream()
                         .noneMatch(
-                            o -> ((EntityPlayerMP) o).getGameProfile()
+                            o -> o.getGameProfile()
                                 .getId()
                                 .equals(target));
                 if (self || bot) tableEntity.setTeam(target, value);
@@ -129,7 +134,7 @@ public class C2SSeatControlPacket {
             MinoNetwork.sendPacketToServer(ID, header(gamePos, gameEnable ? START : STOP));
         }
 
-        public static void sendTeamC2S(BlockPos gamePos, java.util.UUID player, int team) {
+        public static void sendTeamC2S(BlockPos gamePos, UUID player, int team) {
             ByteBuf packet = header(gamePos, TEAM);
             Buf.writeString(packet, player.toString());
             packet.writeInt(team);
@@ -169,7 +174,7 @@ public class C2SSeatControlPacket {
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
-        public static void sendApplyC2S(BlockPos gamePos, com.hfstudio.minopp.game.TableConfig config) {
+        public static void sendApplyC2S(BlockPos gamePos, TableConfig config) {
             ByteBuf packet = header(gamePos, APPLY);
             Buf.writeNbt(packet, config.toTag());
             MinoNetwork.sendPacketToServer(ID, packet);

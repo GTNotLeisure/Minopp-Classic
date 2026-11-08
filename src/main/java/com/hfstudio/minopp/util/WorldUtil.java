@@ -12,8 +12,8 @@ public final class WorldUtil {
 
     public static EntityPlayer getPlayerByUUID(World world, UUID uuid) {
         if (world == null || uuid == null) return null;
-        for (Object o : world.playerEntities) {
-            EntityPlayer p = (EntityPlayer) o;
+        for (EntityPlayer o : world.playerEntities) {
+            EntityPlayer p = o;
             if (uuid.equals(
                 p.getGameProfile()
                     .getId()))
@@ -26,8 +26,8 @@ public final class WorldUtil {
         if (world == null || uuid == null) return null;
         EntityPlayer player = getPlayerByUUID(world, uuid);
         if (player != null) return player;
-        for (Object o : world.loadedEntityList) {
-            Entity e = (Entity) o;
+        for (Entity o : world.loadedEntityList) {
+            Entity e = o;
             if (uuid.equals(e.getUniqueID())) return e;
         }
         return null;

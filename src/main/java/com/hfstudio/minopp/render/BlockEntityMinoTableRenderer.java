@@ -1,11 +1,16 @@
 package com.hfstudio.minopp.render;
 
+import java.util.Map;
+import java.util.Random;
+import java.util.WeakHashMap;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.IChatComponent;
 
@@ -90,7 +95,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         BATCH.flush();
         GL11.glPopMatrix();
 
-        net.minecraft.entity.EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
+        EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
         if (viewer != null) ColorPicker3D.render(blockEntity.getBlockPos(), viewer.posX, viewer.posZ);
 
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
@@ -125,7 +130,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     private static final CardBatch BATCH = new CardBatch();
     private static final float[] JITTER = new float[512 * 3];
     static {
-        java.util.Random r = new java.util.Random(1);
+        Random r = new Random(1);
         for (int i = 0; i < JITTER.length; i++) JITTER[i] = r.nextFloat();
     }
 
@@ -133,7 +138,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         return JITTER[(index & 511) * 3 + axis];
     }
 
-    private static final java.util.Map<BlockEntityMinoTable, Object[]> LABELS = new java.util.WeakHashMap<>();
+    private static final Map<BlockEntityMinoTable, Object[]> LABELS = new WeakHashMap<>();
 
     private static String topLabel(BlockEntityMinoTable table, CardGame game) {
         Object[] cached = LABELS.get(table);

@@ -3,6 +3,7 @@ package com.hfstudio.minopp.entity;
 import java.util.Random;
 
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
@@ -25,6 +26,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
+import com.hfstudio.minopp.render.SkinResolver;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Vec3d;
 
@@ -90,7 +92,7 @@ public class EntityAutoPlayer extends EntityLiving {
                 clientSkinValidFor = getSkin();
                 clientSkinLocation = null;
                 if (!clientSkinValidFor.isEmpty()) {
-                    com.hfstudio.minopp.render.SkinResolver.resolve(
+                    SkinResolver.resolve(
                         clientSkinValidFor,
                         loc -> { if (clientSkinValidFor.equals(getSkin())) clientSkinLocation = loc; });
                 }
@@ -305,7 +307,7 @@ public class EntityAutoPlayer extends EntityLiving {
     }
 
     @Override
-    public void applyEntityCollision(net.minecraft.entity.Entity entity) {
+    public void applyEntityCollision(Entity entity) {
         if (!noPush) super.applyEntityCollision(entity);
     }
 

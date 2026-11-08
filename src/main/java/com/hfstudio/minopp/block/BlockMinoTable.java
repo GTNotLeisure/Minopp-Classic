@@ -34,6 +34,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.PlayContext;
+import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayChoiceScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
 import com.hfstudio.minopp.gui.TurnDeadMan;
@@ -120,7 +121,7 @@ public class BlockMinoTable extends Block {
 
         public static void displayActionBar(String text) {
             Minecraft.getMinecraft().ingameGUI.func_110326_a(text, false);
-            com.hfstudio.minopp.gui.HandScreen.notice(text);
+            HandScreen.notice(text);
         }
 
         public static void playCard(BlockPos corePos, BlockEntityMinoTable tableEntity, CardPlayer realPlayer,

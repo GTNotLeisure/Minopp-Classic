@@ -49,8 +49,8 @@ public final class ThemeSyncPackets {
     private static void broadcast(Map<UUID, String> themes) {
         MinecraftServer server = MinecraftServer.getServer();
         if (server == null) return;
-        for (Object o : server.getConfigurationManager().playerEntityList) {
-            MinoNetwork.sendPacketToPlayer((EntityPlayerMP) o, S2C_ID, encode(themes));
+        for (EntityPlayerMP o : server.getConfigurationManager().playerEntityList) {
+            MinoNetwork.sendPacketToPlayer(o, S2C_ID, encode(themes));
         }
     }
 

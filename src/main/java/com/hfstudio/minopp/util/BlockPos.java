@@ -49,8 +49,7 @@ public final class BlockPos {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof BlockPos)) return false;
-        BlockPos p = (BlockPos) o;
+        if (!(o instanceof BlockPos p)) return false;
         return x == p.x && y == p.y && z == p.z;
     }
 

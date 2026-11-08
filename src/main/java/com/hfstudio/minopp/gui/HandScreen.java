@@ -3,11 +3,15 @@ package com.hfstudio.minopp.gui;
 import java.util.List;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
+import com.hfstudio.minopp.MinoClient;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.config.ClientConfig;
@@ -140,7 +144,7 @@ public class HandScreen extends GuiScreen {
         int prev = classic ? Keyboard.KEY_W : Keyboard.KEY_A;
         int next = classic ? Keyboard.KEY_S : Keyboard.KEY_D;
         if (keyCode == Keyboard.KEY_ESCAPE || keyCode == mc.gameSettings.keyBindInventory.getKeyCode()
-            || keyCode == com.hfstudio.minopp.MinoClient.KEY_HAND.getKeyCode()) {
+            || keyCode == MinoClient.KEY_HAND.getKeyCode()) {
             mc.displayGuiScreen(null);
         } else if (ctx == null) {
             return;
@@ -158,7 +162,7 @@ public class HandScreen extends GuiScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = Mouse.getEventDWheel();
         Context ctx = Context.resolve(mc);
         if (wheel != 0 && ctx != null)
             select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - Integer.signum(wheel));
@@ -191,9 +195,7 @@ public class HandScreen extends GuiScreen {
         if (clamped != ItemHandCards.getClientHandIndex(mc.thePlayer)) {
             ItemDataUtils.setHandIndex(mc.thePlayer.getHeldItem(), clamped);
             mc.getSoundHandler()
-                .playSound(
-                    net.minecraft.client.audio.PositionedSoundRecord
-                        .func_147674_a(new net.minecraft.util.ResourceLocation("random.click"), 1.9f));
+                .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("random.click"), 1.9f));
             TurnDeadMan.pedal();
         }
     }

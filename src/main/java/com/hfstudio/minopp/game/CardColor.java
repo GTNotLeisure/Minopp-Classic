@@ -1,7 +1,5 @@
 package com.hfstudio.minopp.game;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import net.minecraft.util.EnumChatFormatting;
@@ -36,8 +34,8 @@ public enum CardColor {
         this.side = side;
     }
 
-    public static final List<CardColor> LIGHT = Collections.unmodifiableList(Arrays.asList(RED, YELLOW, GREEN, BLUE));
-    public static final List<CardColor> DARK = Collections.unmodifiableList(Arrays.asList(PINK, TEAL, ORANGE, PURPLE));
+    public static final List<CardColor> LIGHT = List.of(RED, YELLOW, GREEN, BLUE);
+    public static final List<CardColor> DARK = List.of(PINK, TEAL, ORANGE, PURPLE);
 
     public static List<CardColor> forSide(boolean dark) {
         return dark ? DARK : LIGHT;

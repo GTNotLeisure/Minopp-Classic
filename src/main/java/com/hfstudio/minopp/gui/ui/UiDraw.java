@@ -8,6 +8,7 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.opengl.GL11;
@@ -127,7 +128,7 @@ public final class UiDraw {
         GL11.glPushMatrix();
         GL11.glTranslatef(x, y, 0);
         GL11.glScalef(scale, scale, 1);
-        String plain = net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(text);
+        String plain = EnumChatFormatting.getTextWithoutFormattingCodes(text);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 if (dx != 0 || dy != 0) font.drawString(plain, dx, dy, outline);

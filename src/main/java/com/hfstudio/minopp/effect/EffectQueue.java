@@ -27,8 +27,9 @@ public class EffectQueue {
         synchronized (queue) {
             long time = System.currentTimeMillis();
             for (EffectEvent event : events) {
-                if (!event.target()
-                    .isPresent() || event.target()
+                if (event.target()
+                    .isEmpty()
+                    || event.target()
                         .get()
                         .equals(
                             self.getGameProfile()

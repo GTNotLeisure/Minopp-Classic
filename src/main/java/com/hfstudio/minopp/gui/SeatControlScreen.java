@@ -2,19 +2,27 @@ package com.hfstudio.minopp.gui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.IChatComponent;
+import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SSeatControlPacket;
+import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
@@ -91,17 +99,17 @@ public class SeatControlScreen extends GuiScreen {
                 true));
     }
 
-    private static net.minecraft.util.IChatComponent teamProblem(BlockEntityMinoTable te) {
+    private static IChatComponent teamProblem(BlockEntityMinoTable te) {
         if (!Teams.enabled(te.config)) return null;
         return Teams.problem(te.getPlayersList(), Teams.count(te.config));
     }
 
     private boolean canChangeTeam(CardPlayer p) {
-        java.util.UUID me = mc.thePlayer.getGameProfile()
+        UUID me = mc.thePlayer.getGameProfile()
             .getId();
         if (p.uuid.equals(me)) return true;
-        for (Object o : mc.theWorld.playerEntities) {
-            if (((net.minecraft.entity.player.EntityPlayer) o).getGameProfile()
+        for (EntityPlayer o : mc.theWorld.playerEntities) {
+            if (o.getGameProfile()
                 .getId()
                 .equals(p.uuid)) return false;
         }
@@ -138,7 +146,7 @@ public class SeatControlScreen extends GuiScreen {
             te.config.countDeckSize());
         if (te.game != null) sub = EnumChatFormatting.YELLOW + tr("gui.minopp.play.game_active");
         if (te.game == null && Teams.enabled(te.config)) {
-            net.minecraft.util.IChatComponent problem = teamProblem(te);
+            IChatComponent problem = teamProblem(te);
             sub += "   " + Teams.summary(te.getPlayersList(), Teams.count(te.config))
                 .getFormattedText() + (problem == null ? EnumChatFormatting.GREEN + "  \u2714" : "");
         }
@@ -150,10 +158,10 @@ public class SeatControlScreen extends GuiScreen {
         int cx = (areaX1 + areaX2) / 2, cy = (areaY1 + areaY2) / 2;
         int rx = (areaX2 - areaX1) / 2 - 34, ry = (areaY2 - areaY1) / 2 - 20;
         drawFelt(cx, cy, (int) (rx * 0.62), (int) (ry * 0.55));
-        int target = te.config.getInt(com.hfstudio.minopp.game.GameRules.SCORE_TARGET) * 100;
+        int target = te.config.getInt(GameRules.SCORE_TARGET) * 100;
         if (target > 0 && !te.scores.isEmpty()) {
             StringBuilder line = new StringBuilder(tr("gui.minopp.seats.points", target));
-            for (java.util.Map.Entry<java.util.UUID, Integer> e : te.scores.entrySet()) {
+            for (Map.Entry<UUID, Integer> e : te.scores.entrySet()) {
                 line.append("  ")
                     .append(EnumChatFormatting.WHITE)
                     .append(te.scoreNames.getOrDefault(e.getKey(), "?"))
@@ -180,7 +188,7 @@ public class SeatControlScreen extends GuiScreen {
 
         for (Action act : actions) drawAction(act, mouseX, mouseY);
 
-        net.minecraft.util.IChatComponent problem = te.game == null ? teamProblem(te) : null;
+        IChatComponent problem = te.game == null ? teamProblem(te) : null;
         if (problem != null) {
             String why = fontRendererObj.trimStringToWidth(tr("gui.minopp.seats.teams_unequal"), width - 40);
             fontRendererObj.drawStringWithShadow(why, 16, height - 49, 0xFFFF8080);
@@ -216,8 +224,7 @@ public class SeatControlScreen extends GuiScreen {
         UiDraw.roundRect(-42, -42, 42, 42, 40, 0xFF6A3A1A, 0xFF4A2410);
         UiDraw.roundRect(-38, -38, 38, 38, 36, 0xFF3FA046, 0xFF1F6A28);
         GL11.glPopMatrix();
-        com.hfstudio.minopp.render.CardRenderer
-            .drawBack2D(ThemeManager.INSTANCE.selected(), false, cx - 9, cy - 14, 18, 28);
+        CardRenderer.drawBack2D(ThemeManager.INSTANCE.selected(), false, cx - 9, cy - 14, 18, 28);
     }
 
     private void drawSeat(BlockEntityMinoTable te, int seat, int x, int y, int mouseX, int mouseY) {
@@ -334,9 +341,7 @@ public class SeatControlScreen extends GuiScreen {
             default -> {}
         }
         mc.getSoundHandler()
-            .playSound(
-                net.minecraft.client.audio.PositionedSoundRecord
-                    .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0f));
+            .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0f));
     }
 
     @Override
@@ -361,9 +366,7 @@ public class SeatControlScreen extends GuiScreen {
                 int next = Math.floorMod(Math.max(0, p.team) + (button == 0 ? 1 : -1), count);
                 C2SSeatControlPacket.Client.sendTeamC2S(gamePos, p.uuid, next);
                 mc.getSoundHandler()
-                    .playSound(
-                        net.minecraft.client.audio.PositionedSoundRecord
-                            .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0f));
+                    .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0f));
                 return;
             }
         }

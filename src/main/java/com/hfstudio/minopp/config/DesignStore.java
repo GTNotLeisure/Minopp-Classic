@@ -17,6 +17,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
@@ -103,7 +104,7 @@ public final class DesignStore {
         JsonArray arr = new JsonArray();
         for (Design d : designs) {
             if (d == null) {
-                arr.add(com.google.gson.JsonNull.INSTANCE);
+                arr.add(JsonNull.INSTANCE);
                 continue;
             }
             JsonObject o = new JsonObject();

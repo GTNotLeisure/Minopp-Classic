@@ -7,10 +7,13 @@ import java.util.Random;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.resources.IReloadableResourceManager;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldSettings;
+import net.minecraft.world.WorldType;
 
 import org.lwjgl.input.Keyboard;
 
@@ -18,8 +21,11 @@ import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.effect.EffectQueue;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.PendingDecision;
+import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.gui.DecisionScreen;
 import com.hfstudio.minopp.gui.GameSettingsScreen;
+import com.hfstudio.minopp.gui.HandScreen;
+import com.hfstudio.minopp.gui.PlayChoiceScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.MinoNetwork;
@@ -80,22 +86,15 @@ public class MinoClient {
         }
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
-            if (DevPreview.enabled() && !worldPreviewLaunched
-                && mc.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu) {
+            if (DevPreview.enabled() && !worldPreviewLaunched && mc.currentScreen instanceof GuiMainMenu) {
                 worldPreviewLaunched = true;
                 mc.launchIntegratedServer(
                     "minopp_preview",
                     "Mino Preview",
-                    new net.minecraft.world.WorldSettings(
-                        1425L,
-                        net.minecraft.world.WorldSettings.GameType.CREATIVE,
-                        false,
-                        false,
-                        net.minecraft.world.WorldType.FLAT));
+                    new WorldSettings(1425L, WorldSettings.GameType.CREATIVE, false, false, WorldType.FLAT));
             }
-            if (System.getProperty("minopp.uiPreview") != null
-                && mc.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu) {
-                mc.displayGuiScreen(com.hfstudio.minopp.gui.GameSettingsScreen.preview());
+            if (System.getProperty("minopp.uiPreview") != null && mc.currentScreen instanceof GuiMainMenu) {
+                mc.displayGuiScreen(GameSettingsScreen.preview());
             }
             GLOWS.clear();
             if (wasInWorld) ThemeManager.INSTANCE.onDisconnect();
@@ -103,31 +102,31 @@ public class MinoClient {
             return;
         }
         while (KEY_HAND.isPressed()) {
-            if (mc.currentScreen == null && com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc) != null) {
-                mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
+            if (mc.currentScreen == null && HandScreen.Context.resolve(mc) != null) {
+                mc.displayGuiScreen(new HandScreen());
             }
         }
         if (System.getProperty("minopp.previewHandScreen") != null && mc.currentScreen == null
-            && com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc) != null) {
-            mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
+            && HandScreen.Context.resolve(mc) != null) {
+            mc.displayGuiScreen(new HandScreen());
         }
         if (System.getProperty("minopp.previewTeams") != null && mc.currentScreen == null) {
             for (Object te : level.loadedTileEntityList) {
-                if (te instanceof com.hfstudio.minopp.block.BlockEntityMinoTable table && table.getPlayersList()
+                if (te instanceof BlockEntityMinoTable table && table.getPlayersList()
                     .size() >= 3) {
-                    mc.displayGuiScreen(new com.hfstudio.minopp.gui.SeatControlScreen(table.getBlockPos()));
+                    mc.displayGuiScreen(new SeatControlScreen(table.getBlockPos()));
                     break;
                 }
             }
         }
         if (System.getProperty("minopp.previewColorPicker") != null && mc.currentScreen == null) {
-            com.hfstudio.minopp.gui.HandScreen.Context ctx = com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc);
+            HandScreen.Context ctx = HandScreen.Context.resolve(mc);
             if (ctx != null) mc.displayGuiScreen(
-                new com.hfstudio.minopp.gui.PlayChoiceScreen(
+                new PlayChoiceScreen(
                     ctx.pos,
                     ctx.me,
                     ctx.hand.get(0),
-                    new com.hfstudio.minopp.game.PlayContext.PlayChoices(),
+                    new PlayContext.PlayChoices(),
                     true,
                     0,
                     ctx.game.darkSide));

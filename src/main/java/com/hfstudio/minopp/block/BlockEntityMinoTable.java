@@ -21,6 +21,7 @@ import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.IChatComponent;
 import net.minecraft.world.WorldServer;
 
 import com.hfstudio.minopp.Mino;
@@ -177,10 +178,10 @@ public class BlockEntityMinoTable extends TileEntity {
         scores.clear();
         scoreNames.clear();
         NBTTagCompound scoresTag = compoundTag.getCompoundTag("scores");
-        for (Object k : scoresTag.func_150296_c()) {
+        for (String k : scoresTag.func_150296_c()) {
             try {
-                UUID id = UUID.fromString((String) k);
-                NBTTagCompound entry = scoresTag.getCompoundTag((String) k);
+                UUID id = UUID.fromString(k);
+                NBTTagCompound entry = scoresTag.getCompoundTag(k);
                 scores.put(id, entry.getInteger("points"));
                 scoreNames.put(id, entry.getString("name"));
             } catch (IllegalArgumentException ignored) {}
@@ -352,14 +353,14 @@ public class BlockEntityMinoTable extends TileEntity {
         Teams.normalize(getPlayersList(), Teams.count(config));
     }
 
-    public net.minecraft.util.IChatComponent startProblem() {
+    public IChatComponent startProblem() {
         if (!Teams.enabled(config)) return null;
         List<CardPlayer> seated = getPlayersList();
         Teams.normalize(seated, Teams.count(config));
         return Teams.problem(seated, Teams.count(config));
     }
 
-    public boolean setTeam(java.util.UUID uuid, int team) {
+    public boolean setTeam(UUID uuid, int team) {
         if (game != null || !Teams.enabled(config) || team < 0 || team >= Teams.count(config)) return false;
         for (CardPlayer p : getPlayersList()) {
             if (p.uuid.equals(uuid)) {
@@ -381,7 +382,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (game != null) return;
         List<CardPlayer> playerList = getPlayersList();
         if (playerList.size() < 2) return;
-        net.minecraft.util.IChatComponent teamProblem = startProblem();
+        IChatComponent teamProblem = startProblem();
         if (teamProblem != null) {
             state = ActionReport.builder(initiator)
                 .panic(teamProblem).state;
@@ -461,8 +462,8 @@ public class BlockEntityMinoTable extends TileEntity {
         gameEnd = true;
         game = null;
 
-        for (Object o : worldObj.playerEntities) {
-            EntityPlayer mcPlayer = (EntityPlayer) o;
+        for (EntityPlayer o : worldObj.playerEntities) {
+            EntityPlayer mcPlayer = o;
             ItemStack[] items = mcPlayer.inventory.mainInventory;
             for (int i = 0; i < items.length; i++) {
                 ItemStack invItem = items[i];
@@ -629,7 +630,7 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
-        java.util.UUID viewer = player.getGameProfile()
+        UUID viewer = player.getGameProfile()
             .getId();
         boolean reveal = ServerConfig.gameplay.allowPeeking || game != null && game.isPeeking(viewer);
         NBTTagCompound tag = reveal ? fullTag : HandMask.maskTableTag(fullTag, viewer);

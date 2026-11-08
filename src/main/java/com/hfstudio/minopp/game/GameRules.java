@@ -1,7 +1,6 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +78,7 @@ public final class GameRules {
     }
 
     public static List<Rule> all() {
-        return Collections.unmodifiableList(new ArrayList<>(REGISTRY.values()));
+        return List.copyOf(REGISTRY.values());
     }
 
     public static List<Rule> byCategory(Category category) {

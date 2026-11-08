@@ -28,12 +28,14 @@ import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionReport;
+import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.TaskScheduler;
 import com.hfstudio.minopp.item.ItemCoupon;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.network.MinoNetwork;
+import com.hfstudio.minopp.network.ThemeSyncPackets;
 import com.hfstudio.minopp.util.BlockPos;
 
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -84,7 +86,7 @@ public final class Mino {
             LOGGER.error("Failed to register config", e);
         }
 
-        com.hfstudio.minopp.game.CardPack.init();
+        CardPack.init();
 
         BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(MinoCreativeTab.INSTANCE);
         GameRegistry.registerBlock(BLOCK_MINO_TABLE, "mino_table");
@@ -138,7 +140,7 @@ public final class Mino {
             .register(TaskScheduler.Holder.INSTANCE);
         FMLCommonHandler.instance()
             .bus()
-            .register(new com.hfstudio.minopp.network.ThemeSyncPackets.ServerEvents());
+            .register(new ThemeSyncPackets.ServerEvents());
         if (DevPreview.enabled()) FMLCommonHandler.instance()
             .bus()
             .register(new DevPreview());

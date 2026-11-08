@@ -5,14 +5,19 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.nbt.NBTTagString;
+import net.minecraft.util.ResourceLocation;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
@@ -561,7 +566,7 @@ public class CardGame {
         return report.fail(Chat.translatable("game.minopp.play.no_decision"));
     }
 
-    public ActionReport tickDecisions(long now, java.util.function.Predicate<UUID> isHuman) {
+    public ActionReport tickDecisions(long now, Predicate<UUID> isHuman) {
         if (decisions.isEmpty()) return null;
         boolean changed = false;
         for (PendingDecision d : decisions) {
@@ -782,7 +787,7 @@ public class CardGame {
     public int turnSerial;
     public boolean trapArmed;
     public int hurryTurns;
-    public final java.util.Set<UUID> hiddenCounts = new java.util.HashSet<>();
+    public final Set<UUID> hiddenCounts = new HashSet<>();
     private final Map<UUID, Long> peekUntil = new HashMap<>();
 
     public boolean isPeeking(UUID viewer) {
@@ -1096,7 +1101,7 @@ public class CardGame {
     public void discardAllOfColor(CardPlayer player, CardColor color, ActionReport report) {
         List<Card> toDiscard = player.hand.stream()
             .filter(c -> face(c).color == color)
-            .collect(Collectors.toList());
+            .toList();
         if (toDiscard.isEmpty()) return;
         player.hand.removeAll(toDiscard);
         for (Card c : toDiscard) {
@@ -1357,7 +1362,7 @@ public class CardGame {
             count += 3;
             if (report != null) {
                 report.messageAll(Chat.translatable("game.minopp.play.trap_sprung", cardPlayer.name));
-                report.sound(new net.minecraft.util.ResourceLocation("minecraft", "random.explode"), 0, 0.4f, 1.3f);
+                report.sound(new ResourceLocation("minecraft", "random.explode"), 0, 0.4f, 1.3f);
             }
         }
         List<Card> drawn = drawCardsRaw(cardPlayer, count, report);
@@ -1519,7 +1524,7 @@ public class CardGame {
         tag.setBoolean("trapArmed", trapArmed);
         tag.setInteger("hurryTurns", hurryTurns);
         NBTTagList hidden = new NBTTagList();
-        for (UUID u : hiddenCounts) hidden.appendTag(new net.minecraft.nbt.NBTTagString(u.toString()));
+        for (UUID u : hiddenCounts) hidden.appendTag(new NBTTagString(u.toString()));
         tag.setTag("hiddenCounts", hidden);
         tag.setBoolean("isAntiClockwise", isAntiClockwise);
         tag.setTag("deck", writeCards(deck));

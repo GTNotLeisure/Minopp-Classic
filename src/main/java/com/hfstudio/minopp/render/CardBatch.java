@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.render;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,7 +47,7 @@ public final class CardBatch {
         int size;
 
         void add(float x, float y, float z, float u, float v, int color, int normal) {
-            if (size + 7 > data.length) data = java.util.Arrays.copyOf(data, data.length * 2);
+            if (size + 7 > data.length) data = Arrays.copyOf(data, data.length * 2);
             data[size++] = x;
             data[size++] = y;
             data[size++] = z;

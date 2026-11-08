@@ -5,9 +5,14 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.StatCollector;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -18,6 +23,7 @@ import com.hfstudio.minopp.config.DesignStore;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPack;
+import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.CardTypes;
 import com.hfstudio.minopp.game.GameRules;
@@ -120,7 +126,7 @@ public class GameSettingsScreen extends GuiScreen {
         te.config.setPackEnabled(CardPack.NO_MERCY, true);
         te.config.setCount("weekend:wild_time_balloon", 2);
         for (int i = 0; i < 5; i++) {
-            te.seats[i] = new com.hfstudio.minopp.game.CardPlayer(java.util.UUID.randomUUID(), "Player" + i);
+            te.seats[i] = new CardPlayer(UUID.randomUUID(), "Player" + i);
         }
         tab = Tab.valueOf(System.getProperty("minopp.uiPreviewTab", "PACKS"));
         return new GameSettingsScreen(new BlockPos(0, 0, 0), null, te);
@@ -128,7 +134,7 @@ public class GameSettingsScreen extends GuiScreen {
 
     public static void open(BlockPos gamePos, GuiScreen parent, Tab initial) {
         if (initial != null) tab = initial;
-        net.minecraft.client.Minecraft.getMinecraft()
+        Minecraft.getMinecraft()
             .displayGuiScreen(new GameSettingsScreen(gamePos, parent));
     }
 
@@ -148,7 +154,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static boolean hasTr(String key) {
-        return !net.minecraft.util.StatCollector.translateToLocal(key)
+        return !StatCollector.translateToLocal(key)
             .equals(key);
     }
 
@@ -460,7 +466,7 @@ public class GameSettingsScreen extends GuiScreen {
             List<String> lines = new ArrayList<>();
             lines.add(hovered.title);
             for (String d : hovered.desc)
-                for (Object l : fontRendererObj.listFormattedStringToWidth(d, 200)) lines.add((String) l);
+                for (String l : fontRendererObj.listFormattedStringToWidth(d, 200)) lines.add(l);
             for (String c : hovered.controls) lines.add(EnumChatFormatting.GRAY + c);
             UiDraw.tooltip(fontRendererObj, lines, mouseX, mouseY, width, height);
         }
@@ -794,18 +800,18 @@ public class GameSettingsScreen extends GuiScreen {
             lines.addAll(t.desc);
         }
         for (String line : lines) {
-            for (Object l : fontRendererObj.listFormattedStringToWidth(line, infoW - 16)) {
+            for (String l : fontRendererObj.listFormattedStringToWidth(line, infoW - 16)) {
                 if (ty > y2 - 12) break;
-                UiDraw.scaledCentered(fontRendererObj, (String) l, cx, ty, 1f, 0xFFFFFFFF);
+                UiDraw.scaledCentered(fontRendererObj, l, cx, ty, 1f, 0xFFFFFFFF);
                 ty += 10;
             }
             ty += 3;
         }
         if (t != null) {
             for (String c : t.controls) {
-                for (Object l : fontRendererObj.listFormattedStringToWidth(c, infoW - 16)) {
+                for (String l : fontRendererObj.listFormattedStringToWidth(c, infoW - 16)) {
                     if (ty > y2 - 12) break;
-                    UiDraw.scaledCentered(fontRendererObj, (String) l, cx, ty, 1f, 0xFFBBBBBB);
+                    UiDraw.scaledCentered(fontRendererObj, l, cx, ty, 1f, 0xFFBBBBBB);
                     ty += 10;
                 }
             }
@@ -895,16 +901,12 @@ public class GameSettingsScreen extends GuiScreen {
         infoTile = null;
         hovered = null;
         mc.getSoundHandler()
-            .playSound(
-                net.minecraft.client.audio.PositionedSoundRecord
-                    .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.2f));
+            .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.2f));
     }
 
     private void click() {
         mc.getSoundHandler()
-            .playSound(
-                net.minecraft.client.audio.PositionedSoundRecord
-                    .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0f));
+            .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0f));
     }
 
     private void onTileClicked(Tile t, int button) {
