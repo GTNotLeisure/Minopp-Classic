@@ -150,7 +150,7 @@ public final class TableFx {
 
     private static boolean isSkip(String id) {
         return switch (id) {
-            case "skip", "skip_everyone", "aw_skip", "aw_skip_two", "flex_skip" -> true;
+            case "skip", "skip_everyone", "aw_skip", "aw_skip_two", "flex_skip", "reverse_skip" -> true;
             default -> false;
         };
     }

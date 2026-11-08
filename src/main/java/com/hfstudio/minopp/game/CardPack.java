@@ -30,6 +30,15 @@ public final class CardPack {
     public static final String RASCAL = "rascal";
     public static final String MYTH = "myth";
     public static final String TEAMS = "teams";
+    public static final String STACK = "stack";
+    public static final String SWAP = "swap";
+    public static final String REVERSE_PACK = "reverse_pack";
+    public static final String SPEED = "speed";
+    public static final String FRENEMIES = "frenemies";
+    public static final String DEFENSE = "defense";
+    public static final String COMEBACK = "comeback";
+    public static final String LOVE_ISLAND = "love_island";
+    public static final String BILLIE = "billie";
 
     /**
      * One line of a deck composition.
@@ -313,6 +322,57 @@ public final class CardPack {
     public static final CardPack PACK_WHIRLWIND = new Builder(WHIRLWIND).entry("wild_cyclone", 2)
         .entry("wild_thief", 2)
         .players(3, 8)
+        .build();
+    public static final CardPack PACK_STACK = new Builder(STACK).entry("stack1", 1)
+        .entry("stack2", 1)
+        .entry("wild_stack3", 4)
+        .entry("wild_stack_number", 4)
+        .rule(GameRules.STACKING, 1)
+        .players(2, 10)
+        .build();
+    public static final CardPack PACK_SWAP = new Builder(SWAP).entry("swap_one", 1)
+        .entry("refresh_hand", 1)
+        .entry("wild_force_trade", 4)
+        .entry("wild_pass_hands", 4)
+        .players(3, 10)
+        .build();
+    public static final CardPack PACK_REVERSE = new Builder(REVERSE_PACK).entry("reverse_skip", 1)
+        .entry("reverse_draw2", 1)
+        .entry("wild_power_reverse", 4)
+        .entry("wild_no_u", 4)
+        .players(3, 10)
+        .build();
+    public static final CardPack PACK_SPEED = new Builder(SPEED).entry("speed_up", 3)
+        .entry("wild_double_speed", 4)
+        .players(2, 8)
+        .build();
+    public static final CardPack PACK_FRENEMIES = new Builder(FRENEMIES).entry("wild_petty_play", 4)
+        .entry("wild_eliminator", 4)
+        .entry("wild_instigator", 4)
+        .entry("wild_nemesis", 4)
+        .players(3, 10)
+        .build();
+    public static final CardPack PACK_DEFENSE = new Builder(DEFENSE).entry("wild_block", 4)
+        .entry("wild_block_rebound", 4)
+        .entry("wild_block_deflect", 4)
+        .entry("wild_redirect", 4)
+        .players(2, 10)
+        .build();
+    public static final CardPack PACK_COMEBACK = new Builder(COMEBACK).entry("wild_swap_hands", 4)
+        .entry("wild_match_max", 4)
+        .entry("wild_misery", 4)
+        .players(2, 10)
+        .build();
+    public static final CardPack PACK_LOVE_ISLAND = new Builder(LOVE_ISLAND).entry("wild_eggs_basket", 4)
+        .entry("wild_pull_chat", 4)
+        .entry("wild_got_text", 4)
+        .players(3, 10)
+        .build();
+    public static final CardPack PACK_BILLIE = new Builder(BILLIE).entry("wild_pass_color", 4)
+        .entry("trick_wild", 4)
+        .entry("wild_color_challenge", 4)
+        .entry("reveal_hands", 1)
+        .players(2, 10)
         .build();
 
     public static void init() {

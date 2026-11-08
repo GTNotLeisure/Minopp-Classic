@@ -565,5 +565,245 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.teamDraw(ctx.player, 2, ctx.report))
             .build());
 
+    // Add-On packs
+    public static final CardType STACK1 = register(
+        CardType.builder("stack1", CardPack.STACK)
+            .label("S1")
+            .sort(90)
+            .draw(1)
+            .answersDraw()
+            .condition((game, player, face) -> game.pendingDraw == 0 || face.color == game.currentColor)
+            .effect(ctx -> ctx.game.addPendingDraw(1, ctx.player))
+            .build());
+    public static final CardType STACK2 = register(
+        CardType.builder("stack2", CardPack.STACK)
+            .label("S2")
+            .sort(91)
+            .draw(2)
+            .answersDraw()
+            .condition((game, player, face) -> game.pendingDraw == 0 || face.color == game.currentColor)
+            .effect(ctx -> ctx.game.addPendingDraw(2, ctx.player))
+            .build());
+    public static final CardType WILD_STACK3 = register(
+        CardType.builder("wild_stack3", CardPack.STACK)
+            .wild()
+            .label("S3")
+            .sort(92)
+            .draw(3)
+            .answersDraw()
+            .effect(ctx -> ctx.game.addPendingDraw(3, ctx.player))
+            .build());
+    public static final CardType WILD_STACK_NUMBER = register(
+        CardType.builder("wild_stack_number", CardPack.STACK)
+            .wild()
+            .label("S#")
+            .sort(93)
+            .answersDraw()
+            .effect(ctx -> ctx.game.stackNumber(ctx.player, ctx.report))
+            .build());
+    public static final CardType SWAP_ONE = register(
+        CardType.builder("swap_one", CardPack.SWAP)
+            .choice(Choice.TARGET)
+            .label("⇄1")
+            .sort(94)
+            .effect(ctx -> ctx.game.swapOne(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType REFRESH_HAND = register(
+        CardType.builder("refresh_hand", CardPack.SWAP)
+            .label("↻")
+            .sort(95)
+            .effect(ctx -> ctx.game.refreshHand(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_FORCE_TRADE = register(
+        CardType.builder("wild_force_trade", CardPack.SWAP)
+            .wild()
+            .choice(Choice.COLOR_AND_TWO_TARGETS)
+            .label("W⇋")
+            .sort(96)
+            .effect(ctx -> ctx.game.forceTrade(ctx.target(0), ctx.target(1), ctx.report))
+            .build());
+    public static final CardType WILD_PASS_HANDS = register(
+        CardType.builder("wild_pass_hands", CardPack.SWAP)
+            .wild()
+            .label("W⟳")
+            .sort(97)
+            .effect(ctx -> ctx.game.passHands(ctx.report))
+            .build());
+    public static final CardType REVERSE_SKIP = register(
+        CardType.builder("reverse_skip", CardPack.REVERSE_PACK)
+            .match("skip")
+            .label("⇆Ø")
+            .sort(98)
+            .effect(ctx -> ctx.game.reverseSkip())
+            .build());
+    public static final CardType REVERSE_DRAW2 = register(
+        CardType.builder("reverse_draw2", CardPack.REVERSE_PACK)
+            .match("draw2")
+            .label("⇆2")
+            .sort(99)
+            .draw(2)
+            .effect(ctx -> ctx.game.reverseDraw2(ctx.player))
+            .build());
+    public static final CardType WILD_POWER_REVERSE = register(
+        CardType.builder("wild_power_reverse", CardPack.REVERSE_PACK)
+            .wild()
+            .label("W⇆")
+            .sort(100)
+            .effect(ctx -> ctx.game.powerReverse())
+            .build());
+    public static final CardType WILD_NO_U = register(
+        CardType.builder("wild_no_u", CardPack.REVERSE_PACK)
+            .wild()
+            .label("NO U")
+            .sort(101)
+            .answersDraw()
+            .effect(ctx -> ctx.game.noU(ctx.player, ctx.report))
+            .build());
+    public static final CardType SPEED_UP = register(
+        CardType.builder("speed_up", CardPack.SPEED)
+            .label("»")
+            .sort(102)
+            .effect(ctx -> ctx.game.speedUp(1, ctx.report))
+            .build());
+    public static final CardType WILD_DOUBLE_SPEED = register(
+        CardType.builder("wild_double_speed", CardPack.SPEED)
+            .wild()
+            .label("W»»")
+            .sort(103)
+            .effect(ctx -> ctx.game.speedUp(2, ctx.report))
+            .build());
+    public static final CardType WILD_PETTY_PLAY = register(
+        CardType.builder("wild_petty_play", CardPack.FRENEMIES)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W+3")
+            .sort(104)
+            .effect(ctx -> ctx.game.targetDraws(ctx.target(0), 3, ctx.report))
+            .build());
+    public static final CardType WILD_ELIMINATOR = register(
+        CardType.builder("wild_eliminator", CardPack.FRENEMIES)
+            .wild()
+            .label("W✕")
+            .sort(105)
+            .effect(ctx -> ctx.game.eliminator(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_INSTIGATOR = register(
+        CardType.builder("wild_instigator", CardPack.FRENEMIES)
+            .wild()
+            .choice(Choice.COLOR_AND_TWO_TARGETS)
+            .label("W2+2")
+            .sort(106)
+            .effect(ctx -> {
+                ctx.game.targetDraws(ctx.target(0), 2, ctx.report);
+                ctx.game.targetDraws(ctx.target(1), 2, ctx.report);
+            })
+            .build());
+    public static final CardType WILD_NEMESIS = register(
+        CardType.builder("wild_nemesis", CardPack.FRENEMIES)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W☠")
+            .sort(107)
+            .effect(ctx -> ctx.game.markNemesis(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType WILD_BLOCK = register(
+        CardType.builder("wild_block", CardPack.DEFENSE)
+            .wild()
+            .label("W▣")
+            .sort(108)
+            .answersDraw()
+            .effect(ctx -> ctx.game.block(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_BLOCK_REBOUND = register(
+        CardType.builder("wild_block_rebound", CardPack.DEFENSE)
+            .wild()
+            .label("W▣↩")
+            .sort(109)
+            .answersDraw()
+            .effect(ctx -> ctx.game.blockRebound(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_BLOCK_DEFLECT = register(
+        CardType.builder("wild_block_deflect", CardPack.DEFENSE)
+            .wild()
+            .label("W▣→")
+            .sort(110)
+            .answersDraw()
+            .effect(ctx -> ctx.game.blockDeflect(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_REDIRECT = register(
+        CardType.builder("wild_redirect", CardPack.DEFENSE)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W➶")
+            .sort(111)
+            .answersDraw()
+            .effect(ctx -> ctx.game.redirect(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType WILD_MATCH_MAX = register(
+        CardType.builder("wild_match_max", CardPack.COMEBACK)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W=")
+            .sort(112)
+            .effect(ctx -> ctx.game.matchTheMax(ctx.target(0), ctx.report))
+            .build());
+    public static final CardType WILD_MISERY = register(
+        CardType.builder("wild_misery", CardPack.COMEBACK)
+            .wild()
+            .label("W☹")
+            .sort(113)
+            .effect(ctx -> ctx.game.misery(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_EGGS_BASKET = register(
+        CardType.builder("wild_eggs_basket", CardPack.LOVE_ISLAND)
+            .wild()
+            .choice(Choice.COLOR_AND_TWO_TARGETS)
+            .label("W♥")
+            .sort(114)
+            .effect(ctx -> ctx.game.linkPlayers(ctx.target(0), ctx.target(1), ctx.report))
+            .build());
+    public static final CardType WILD_PULL_CHAT = register(
+        CardType.builder("wild_pull_chat", CardPack.LOVE_ISLAND)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W☏")
+            .sort(115)
+            .effect(ctx -> ctx.game.pullForChat(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType WILD_GOT_TEXT = register(
+        CardType.builder("wild_got_text", CardPack.LOVE_ISLAND)
+            .wild()
+            .label("W✉")
+            .sort(116)
+            .effect(ctx -> ctx.game.gotAText(ctx.player, ctx.choices.color, ctx.report))
+            .build());
+    public static final CardType WILD_PASS_COLOR = register(
+        CardType.builder("wild_pass_color", CardPack.BILLIE)
+            .wild()
+            .label("W→")
+            .sort(117)
+            .effect(ctx -> ctx.game.passColor(ctx.choices.color, ctx.report))
+            .build());
+    public static final CardType TRICK_WILD = register(
+        CardType.builder("trick_wild", CardPack.BILLIE)
+            .wild()
+            .label("W?")
+            .sort(118)
+            .effect(ctx -> ctx.game.trickWild(ctx.player, ctx.choices.color, ctx.report))
+            .build());
+    public static final CardType WILD_COLOR_CHALLENGE = register(
+        CardType.builder("wild_color_challenge", CardPack.BILLIE)
+            .wild()
+            .label("W!")
+            .sort(119)
+            .effect(ctx -> ctx.game.colorChallenge(ctx.player, ctx.choices.color, ctx.report))
+            .build());
+    public static final CardType REVEAL_HANDS = register(
+        CardType.builder("reveal_hands", CardPack.BILLIE)
+            .label("◉")
+            .sort(120)
+            .effect(ctx -> ctx.game.revealHands(ctx.player, ctx.report))
+            .build());
+
     public static void init() {}
 }

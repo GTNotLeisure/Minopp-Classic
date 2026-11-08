@@ -436,7 +436,17 @@ public class CardGame {
         if (end != null) return end;
 
         if (!deferAdvance) {
+            if (!isCut && speedLevel > 1 && pendingDraw == 0 && decisions.isEmpty()) {
+                playedThisTurn++;
+                if (playedThisTurn < speedLevel) {
+                    currentPlayerPhase = PlayerActionPhase.SPEED;
+                    return report.speed(speedLevel - playedThisTurn, speedLevel);
+                }
+                advanceTurn(report);
+                return report.played();
+            }
             if (!isCut && !brought
+                && speedLevel <= 1
                 && rule(GameRules.BRING_CARD)
                 && !face.isNumber()
                 && !face.isWild()
@@ -498,6 +508,17 @@ public class CardGame {
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
 
+        if (currentPlayerPhase == PlayerActionPhase.SPEED
+            || speedLevel > 1 && pendingDraw == 0 && currentPlayerPhase == PlayerActionPhase.DISCARD_HAND) {
+            int amount = speedLevel;
+            speedLevel = 1;
+            drawCards(cardPlayer, amount, report);
+            report.sound(GameSounds.PASS, 0);
+            ActionReport end = checkEndConditions(cardPlayer, report);
+            if (end != null) return end;
+            advanceTurn(report);
+            return report.state(Chat.translatable("game.minopp.play.crash", cardPlayer.name, amount));
+        }
         if (currentPlayerPhase == PlayerActionPhase.CHAIN || currentPlayerPhase == PlayerActionPhase.BRING) {
             report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
@@ -729,6 +750,12 @@ public class CardGame {
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         drawnCardUid = -1;
         chainNumber = -1;
+        playedThisTurn = 0;
+        if (pendingSpeed > 0) {
+            speedLevel = Math.min(5, speedLevel + pendingSpeed);
+            pendingSpeed = 0;
+        }
+        if (revealTurns > 0) revealTurns--;
         int previousIndex = currentPlayerIndex;
         if (forcedNext != null) {
             CardPlayer target = deAmputate(forcedNext);
@@ -816,6 +843,11 @@ public class CardGame {
 
     private void takePendingDraw(CardPlayer victim, ActionReport report) {
         int amount = pendingDraw;
+        UUID source = pendingDrawSource;
+        if (source != null && victim.uuid.equals(nemesis.get(source))) {
+            amount += 2;
+            report.messageAll(Chat.translatable("game.minopp.play.nemesis_hit", victim.name));
+        }
         pendingDraw = 0;
         lastDrawValue = 0;
         pendingDrawSource = null;
@@ -846,6 +878,7 @@ public class CardGame {
     private final Map<UUID, Long> peekUntil = new HashMap<>();
 
     public boolean isPeeking(UUID viewer) {
+        if (revealTurns > 0) return true;
         Long until = peekUntil.get(viewer);
         return until != null && until > System.currentTimeMillis();
     }
@@ -1124,6 +1157,265 @@ public class CardGame {
         player.hand.add(c);
         target.hasShoutedMino = false;
         report.messageAll(Chat.translatable("game.minopp.play.thief", player.name, target.name));
+    }
+
+    // ---- Add-On packs
+
+    public int speedLevel = 1, pendingSpeed, playedThisTurn;
+    public int revealTurns;
+    public final Map<UUID, UUID> nemesis = new HashMap<>();
+
+    public void speedUp(int amount, ActionReport report) {
+        pendingSpeed += amount;
+        report.messageAll(Chat.translatable("game.minopp.play.speed_up", Math.min(5, speedLevel + pendingSpeed)));
+    }
+
+    public void stackNumber(CardPlayer player, ActionReport report) {
+        int n = 0;
+        for (int guard = 0; guard < 60 && !deck.isEmpty(); guard++) {
+            Card c = deck.remove(deck.size() - 1);
+            c.owner = null;
+            discardDeck.add(0, c);
+            CardFace f = face(c);
+            if (f.isNumber() && !f.isWild()) {
+                n = Math.max(0, f.number);
+                break;
+            }
+        }
+        if (n > 0) addPendingDraw(n, player);
+        report.messageAll(Chat.translatable("game.minopp.play.stack_number", player.name, n));
+    }
+
+    public void swapOne(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target == null || target.equals(player) || target.hand.isEmpty()) return;
+        Card taken = target.hand.remove(random.nextInt(target.hand.size()));
+        Card give = player.hand.stream()
+            .max(Comparator.comparingInt(this::cardPoints))
+            .orElse(null);
+        taken.owner = player.uuid;
+        player.hand.add(taken);
+        if (give != null) {
+            player.hand.remove(give);
+            give.owner = target.uuid;
+            target.hand.add(give);
+        }
+        player.hasShoutedMino = false;
+        target.hasShoutedMino = false;
+        report.messageAll(Chat.translatable("game.minopp.play.swap_one", player.name, target.name));
+    }
+
+    public void refreshHand(CardPlayer player, ActionReport report) {
+        int n = player.hand.size();
+        if (n == 0) return;
+        for (Card c : new ArrayList<>(player.hand)) toDeckBottom(c);
+        player.hand.clear();
+        player.hasShoutedMino = false;
+        drawCards(player, n, report);
+        report.messageAll(Chat.translatable("game.minopp.play.refresh_hand", player.name, n));
+    }
+
+    public void forceTrade(CardPlayer a, CardPlayer b, ActionReport report) {
+        if (a == null || b == null || a.equals(b)) return;
+        swapHands(a, b, report);
+        a.hasShoutedMino = false;
+        b.hasShoutedMino = false;
+        report.messageAll(Chat.translatable("game.minopp.play.force_trade", a.name, b.name));
+    }
+
+    public void passHands(ActionReport report) {
+        rotateHands(report);
+        for (CardPlayer p : players) p.hasShoutedMino = false;
+        report.messageAll(Chat.translatable("game.minopp.play.pass_hands"));
+    }
+
+    private boolean turnReverses() {
+        if (activePlayers().size() <= 2) return false;
+        isAntiClockwise = !isAntiClockwise;
+        return true;
+    }
+
+    public void reverseSkip() {
+        turnReverses();
+        skipNext(1);
+    }
+
+    public void reverseDraw2(CardPlayer player) {
+        turnReverses();
+        addPendingDraw(2, player);
+    }
+
+    public void powerReverse() {
+        turnReverses();
+        giveExtraTurn();
+    }
+
+    private CardPlayer drawSource(CardPlayer player) {
+        if (pendingDraw <= 0 || pendingDrawSource == null || pendingDrawSource.equals(player.uuid)) return null;
+        CardPlayer source = deAmputate(pendingDrawSource);
+        return source == null || source.eliminated ? null : source;
+    }
+
+    public void noU(CardPlayer player, ActionReport report) {
+        CardPlayer source = drawSource(player);
+        if (source == null) {
+            reverse();
+            return;
+        }
+        int amount = pendingDraw;
+        takePendingDraw(source, report);
+        report.messageAll(Chat.translatable("game.minopp.play.no_u", player.name, source.name, amount));
+    }
+
+    public void block(CardPlayer player, ActionReport report) {
+        if (pendingDraw <= 0) return;
+        int amount = pendingDraw;
+        pendingDraw = 0;
+        lastDrawValue = 0;
+        pendingDrawSource = null;
+        challengeable = null;
+        report.messageAll(Chat.translatable("game.minopp.play.block", player.name, amount));
+    }
+
+    public void blockRebound(CardPlayer player, ActionReport report) {
+        CardPlayer source = drawSource(player);
+        if (source == null) return;
+        int amount = pendingDraw + 1;
+        pendingDraw = amount;
+        takePendingDraw(source, report);
+        report.messageAll(Chat.translatable("game.minopp.play.no_u", player.name, source.name, amount));
+    }
+
+    public void blockDeflect(CardPlayer player, ActionReport report) {
+        if (pendingDraw > 0)
+            report.messageAll(Chat.translatable("game.minopp.play.deflect_on", player.name, nextPlayer().name));
+    }
+
+    public void redirect(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (pendingDraw <= 0 || target == null || target.equals(player)) return;
+        int amount = pendingDraw;
+        takePendingDraw(target, report);
+        report.messageAll(Chat.translatable("game.minopp.play.redirect", player.name, target.name, amount));
+    }
+
+    public void eliminator(CardPlayer player, ActionReport report) {
+        int total = 0;
+        for (CardPlayer p : activePlayers()) {
+            if (p.equals(player)) continue;
+            List<Card> wilds = p.hand.stream()
+                .filter(c -> face(c).isWild())
+                .toList();
+            for (Card c : wilds) {
+                p.hand.remove(c);
+                c.owner = null;
+                discardDeck.add(0, c);
+            }
+            total += wilds.size();
+        }
+        report.messageAll(Chat.translatable("game.minopp.play.eliminator", player.name, total));
+    }
+
+    public void markNemesis(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target == null || target.equals(player)) return;
+        nemesis.put(player.uuid, target.uuid);
+        report.messageAll(Chat.translatable("game.minopp.play.nemesis", player.name, target.name));
+    }
+
+    private int largestHand() {
+        int max = 0;
+        for (CardPlayer p : activePlayers()) max = Math.max(max, p.hand.size());
+        return max;
+    }
+
+    public void matchTheMax(CardPlayer target, ActionReport report) {
+        if (target == null) return;
+        int n = largestHand() - target.hand.size();
+        if (n > 0) drawCards(target, n, report);
+        report.messageAll(Chat.translatable("game.minopp.play.match_max", target.name, Math.max(0, n)));
+    }
+
+    public void misery(CardPlayer player, ActionReport report) {
+        int max = largestHand();
+        for (CardPlayer p : activePlayers()) {
+            if (!p.equals(player) && p.hand.size() < max) drawCards(p, max - p.hand.size(), report);
+        }
+        report.messageAll(Chat.translatable("game.minopp.play.misery", player.name, max));
+    }
+
+    public void pullForChat(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target == null || target.equals(player)) return;
+        peekUntil.put(player.uuid, System.currentTimeMillis() + 6000);
+        swapOne(player, target, report);
+    }
+
+    public void gotAText(CardPlayer player, CardColor color, ActionReport report) {
+        int twist = random.nextInt(4);
+        report.messageAll(Chat.translatable("game.minopp.play.text." + twist, player.name));
+        switch (twist) {
+            case 0 -> everyoneElseDraws(player, 1, report);
+            case 1 -> {
+                CardPlayer other = randomOpponent(player);
+                if (other != null) swapHands(player, other, report);
+            }
+            case 2 -> passHands(report);
+            default -> colorChallenge(player, color, report);
+        }
+    }
+
+    public void passColor(CardColor color, ActionReport report) {
+        List<CardPlayer> active = activePlayers();
+        int size = active.size();
+        if (size < 2 || color == null) return;
+        List<List<Card>> passed = new ArrayList<>();
+        for (CardPlayer p : active) {
+            List<Card> out = p.hand.stream()
+                .filter(c -> !face(c).isWild() && face(c).color == color)
+                .toList();
+            p.hand.removeAll(out);
+            passed.add(out);
+        }
+        for (int i = 0; i < size; i++) {
+            CardPlayer to = active.get(isAntiClockwise ? (i - 1 + size) % size : (i + 1) % size);
+            for (Card c : passed.get(i)) c.owner = to.uuid;
+            to.hand.addAll(passed.get(i));
+            to.hasShoutedMino = false;
+        }
+        handMoveKind = 0;
+        handMoveCounter++;
+        report.messageAll(Chat.translatable("game.minopp.play.pass_color", Chat.translatable(color.langKey())));
+    }
+
+    private boolean holdsColor(CardPlayer p, CardColor color) {
+        return p.hand.stream()
+            .anyMatch(c -> !face(c).isWild() && face(c).color == color);
+    }
+
+    public void trickWild(CardPlayer player, CardColor color, ActionReport report) {
+        CardPlayer next = nextPlayer();
+        if (color == null || next == null || next.equals(player) || holdsColor(next, color)) return;
+        giveExtraTurn();
+        report.messageAll(Chat.translatable("game.minopp.play.trick_wild", player.name, next.name));
+    }
+
+    public void colorChallenge(CardPlayer player, CardColor color, ActionReport report) {
+        if (color == null) return;
+        int others = 0, shown = 0;
+        for (CardPlayer p : activePlayers()) {
+            if (p.equals(player)) continue;
+            others++;
+            if (holdsColor(p, color)) shown++;
+            else drawCards(p, 2, report);
+        }
+        if (others > 0 && shown == others) {
+            drawCards(player, 3, report);
+            report.messageAll(Chat.translatable("game.minopp.play.challenge_backfire", player.name));
+        } else {
+            report.messageAll(Chat.translatable("game.minopp.play.color_challenge", player.name, others - shown));
+        }
+    }
+
+    public void revealHands(CardPlayer player, ActionReport report) {
+        revealTurns = activePlayers().size();
+        report.messageAll(Chat.translatable("game.minopp.play.reveal_hands", player.name));
     }
 
     public int cardPoints(Card c) {
@@ -1509,6 +1801,7 @@ public class CardGame {
         DISCARD_DRAWN,
         CHAIN,
         BRING,
+        SPEED,
     }
 
     private static List<Card> readCards(NBTTagList list) {
@@ -1540,6 +1833,16 @@ public class CardGame {
         turnSerial = tag.getInteger("turnSerial");
         trapArmed = tag.getBoolean("trapArmed");
         hurryTurns = tag.getInteger("hurryTurns");
+        speedLevel = Math.max(1, tag.getInteger("speedLevel"));
+        pendingSpeed = tag.getInteger("pendingSpeed");
+        playedThisTurn = tag.getInteger("playedThisTurn");
+        revealTurns = tag.getInteger("revealTurns");
+        nemesis.clear();
+        NBTTagList nemesisTag = tag.getTagList("nemesis", 10);
+        for (int i = 0; i < nemesisTag.tagCount(); i++) {
+            NBTTagCompound l = nemesisTag.getCompoundTagAt(i);
+            nemesis.put(NbtUtil.getUUID(l, "a"), NbtUtil.getUUID(l, "b"));
+        }
         hiddenCounts.clear();
         NBTTagList hidden = tag.getTagList("hiddenCounts", 8);
         for (int i = 0; i < hidden.tagCount(); i++) {
@@ -1590,6 +1893,18 @@ public class CardGame {
         tag.setInteger("turnSerial", turnSerial);
         tag.setBoolean("trapArmed", trapArmed);
         tag.setInteger("hurryTurns", hurryTurns);
+        tag.setInteger("speedLevel", speedLevel);
+        tag.setInteger("pendingSpeed", pendingSpeed);
+        tag.setInteger("playedThisTurn", playedThisTurn);
+        tag.setInteger("revealTurns", revealTurns);
+        NBTTagList nemesisTag = new NBTTagList();
+        for (Map.Entry<UUID, UUID> e : nemesis.entrySet()) {
+            NBTTagCompound l = new NBTTagCompound();
+            NbtUtil.putUUID(l, "a", e.getKey());
+            NbtUtil.putUUID(l, "b", e.getValue());
+            nemesisTag.appendTag(l);
+        }
+        tag.setTag("nemesis", nemesisTag);
         NBTTagList hidden = new NBTTagList();
         for (UUID u : hiddenCounts) hidden.appendTag(new NBTTagString(u.toString()));
         tag.setTag("hiddenCounts", hidden);

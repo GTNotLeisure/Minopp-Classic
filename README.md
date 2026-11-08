@@ -21,7 +21,7 @@
   <p>
     <b>Mino++: Classic</b> brings a well-known color-and-number card game to Minecraft 1.7.10.
     <br>
-    Place a table, sit down with friends or bots, mix <strong>17 card packs</strong>, tune <strong>29 rules</strong>
+    Place a table, sit down with friends or bots, mix <strong>26 card packs</strong>, tune <strong>29 rules</strong>
     and play with an animated, controller-style interface.
   </p>
 </div>
@@ -55,7 +55,7 @@ Optional:
 * **A real table**: a 3×3 table you place in front of you. Seats go around it, the draw pile and discard pile sit in the middle, and every hand is visible from the outside.
 * **Hand at your fingertips**: your hand fans out at the bottom of the screen. Playable cards glow on your turn. Right click to grab the cards, A/D to pick one, Space to play it.
 * **3D color picker**: picking a wild color raises four pillars from the table. Point at one, or use WASD and Enter.
-* **Mix any packs**: combine the Classic deck with No Mercy, Flip, Flex, All Wild, Party and eleven more packs. A card that appears in several packs is counted once.
+* **Mix any packs**: combine the Classic deck with No Mercy, Flip, Flex, All Wild, Party and twenty more packs, including the official Add-On Packs. A card that appears in several packs is counted once.
 * **Official rules**: challenge a Wild Draw Four, use the official opening card, score points to a target (single round, 200, 300, 500, 750, 1000 or your own number), and see a settlement board after every round.
 * **House rules**: Jump-In, Stacking, 7-0, Draw to Match, Play Doubles, Bring a Card, Deflect, Mercy Rule, and more.
 * **Team mode**: up to 10 equally sized teams, optional team relay.
@@ -89,6 +89,15 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 | **Myth Pack** | 2–8 | Wild Trickster, Wild Surge. |
 | **Whirlwind Pack** | 3–8 | Wild Cyclone, Wild Thief. |
 | **Teams Pack** | 4–20 | Wild Team Play, Wild Team Draw Four, team relay. |
+| **Stack Pack** | 2–10 | Stack 1, Stack 2, Wild Stack 3, Wild Stack Number: answer a draw of the same color and pass it on. |
+| **Swap Pack** | 3–10 | Swap 1, Refresh Hand, Wild Force Trade, Wild Pass Hands. |
+| **Reverse Pack** | 3–10 | Reverse Skip, Reverse Draw Two, Wild Power Reverse, Wild NO U. |
+| **Speed Pack** | 2–8 | Speed Up and Wild Double Speed Up: play that many cards per turn or crash and draw. |
+| **Frenemies Pack** | 3–10 | Wild Petty Play, Wild Eliminator, Wild Instigator, Wild Nemesis. |
+| **Defense Pack** | 2–10 | Wild Block, Wild Block and Rebound, Wild Block and Deflect, Wild Redirect. |
+| **Comeback Pack** | 2–10 | Wild Swap Hands, Wild Match the Max, Wild Misery Loves Company. |
+| **Love Island Pack** | 3–10 | Wild Eggs in One Basket, Wild Pull You for a Chat, Wild I've Got a Text. |
+| **Billie Eilish Pack** | 2–10 | Wild Pass Color, Trick Wild, Wild Color Challenge, Reveal Hands. |
 
 <details>
 <summary><strong>How mixed packs build the deck (Click to expand)</strong></summary>

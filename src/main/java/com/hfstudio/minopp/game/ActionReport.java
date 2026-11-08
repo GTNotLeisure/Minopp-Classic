@@ -110,6 +110,10 @@ public class ActionReport {
         return state(Chat.translatable("game.minopp.play.played", initiator.name, topName()));
     }
 
+    public ActionReport speed(int remaining, int level) {
+        return state(Chat.translatable("game.minopp.play.speed", initiator.name, remaining, level));
+    }
+
     public ActionReport bring() {
         return state(Chat.translatable("game.minopp.play.bring", initiator.name));
     }
