@@ -1,0 +1,74 @@
+{
+  "game.play": {
+    "category": "player",
+    "sounds": [
+      "minopp:play"
+    ]
+  },
+  "game.draw": {
+    "category": "player",
+    "sounds": [
+      "minopp:draw"
+    ]
+  },
+  "game.draw_multi": {
+    "category": "player",
+    "sounds": [
+      "minopp:draw_multi"
+    ]
+  },
+  "game.pass": {
+    "category": "player",
+    "sounds": [
+      "minopp:pass"
+    ]
+  },
+  "game.turn_notice": {
+    "category": "player",
+    "sounds": [
+      "minopp:turn_notice"
+    ]
+  },
+  "game.turn_notice_again": {
+    "category": "player",
+    "sounds": [
+      "minopp:turn_notice_again"
+    ]
+  },
+  "game.turn_notice_continuous": {
+    "category": "player",
+    "sounds": [
+      "minopp:turn_notice_continuous"
+    ]
+  },
+  "game.win": {
+    "category": "player",
+    "sounds": [
+      "minopp:win"
+    ]
+  },
+  "game.mino_shout": {
+    "category": "player",
+    "sounds": [
+      "minopp:mino_shout"
+    ]
+  },
+  "game.mino_shout_invalid": {
+    "category": "player",
+    "sounds": [
+      "minopp:mino_shout_invalid"
+    ]
+  },
+  "game.doubt_success": {
+    "category": "player",
+    "sounds": [
+      "minopp:doubt_success"
+    ]
+  },
+  "game.hand_change": {
+    "category": "player",
+    "sounds": [
+      "minopp:hand_change"
+    ]
+  }
+}

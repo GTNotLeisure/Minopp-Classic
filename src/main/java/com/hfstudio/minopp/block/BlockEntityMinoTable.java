@@ -202,7 +202,7 @@ public class BlockEntityMinoTable extends TileEntity {
         rules.clear();
         if (compoundTag.hasKey("rules")) {
             NBTTagCompound rulesTag = compoundTag.getCompoundTag("rules");
-            for (Object key : rulesTag.func_150296_c()) {
+            for (Object key : rulesTag.getKeySet()) {
                 rules.put((String) key, rulesTag.getBoolean((String) key));
             }
         }
@@ -359,7 +359,7 @@ public class BlockEntityMinoTable extends TileEntity {
                                 EntityItem itemEntity = mcPlayer.dropPlayerItemWithRandomChoice(handCard, false);
                                 if (itemEntity != null) {
                                     itemEntity.delayBeforeCanPickup = 0;
-                                    itemEntity.func_145797_a(mcPlayer.getCommandSenderName());
+                                    itemEntity.setOwner(mcPlayer.getCommandSenderName());
                                 }
                             }
                             mcPlayer.addChatComponentMessage(Chat.translatable("game.minopp.play.hand_card_in_inventory"));
@@ -521,7 +521,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     @Override
     public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
-        readFromNBT(pkt.func_148857_g());
+        readFromNBT(pkt.getNbtCompound());
     }
 
     @Override

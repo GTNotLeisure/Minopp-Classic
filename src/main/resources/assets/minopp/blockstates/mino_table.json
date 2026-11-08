@@ -1,0 +1,13 @@
+{
+  "multipart": [
+    { "when": { "part": "x_less_z_less" }, "apply": { "model": "minopp:block/mino_table_corner", "y": 0,   "uvlock": true } },
+    { "when": { "part": "x_less_z_mid"  }, "apply": { "model": "minopp:block/mino_table_edge",   "y": 0,   "uvlock": true } },
+    { "when": { "part": "x_less_z_more" }, "apply": { "model": "minopp:block/mino_table_corner", "y": 270, "uvlock": true } },
+    { "when": { "part": "x_mid_z_less"  }, "apply": { "model": "minopp:block/mino_table_edge",   "y": 90,  "uvlock": true } },
+    { "when": { "part": "x_mid_z_mid"   }, "apply": { "model": "minopp:block/mino_table_center", "y": 0,   "uvlock": true } },
+    { "when": { "part": "x_mid_z_more"  }, "apply": { "model": "minopp:block/mino_table_edge",   "y": 270, "uvlock": true } },
+    { "when": { "part": "x_more_z_less" }, "apply": { "model": "minopp:block/mino_table_corner", "y": 90,  "uvlock": true } },
+    { "when": { "part": "x_more_z_mid"  }, "apply": { "model": "minopp:block/mino_table_edge",   "y": 180, "uvlock": true } },
+    { "when": { "part": "x_more_z_more" }, "apply": { "model": "minopp:block/mino_table_corner", "y": 180, "uvlock": true } }
+  ]
+}

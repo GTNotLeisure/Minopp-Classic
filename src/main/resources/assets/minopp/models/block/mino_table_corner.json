@@ -1,0 +1,286 @@
+{
+  "textures": {
+    "1": "minecraft:blocks/planks_spruce",
+    "3": "minecraft:blocks/log_big_oak",
+    "particle": "minecraft:blocks/log_big_oak"
+  },
+  "elements": [
+    {
+      "name": "vertical_main_leg",
+      "from": [
+        0.6,
+        -0.3,
+        0.5
+      ],
+      "to": [
+        4.2,
+        14.3,
+        4.3
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            12,
+            2,
+            14,
+            16
+          ],
+          "texture": "#3"
+        },
+        "east": {
+          "uv": [
+            14,
+            2,
+            16,
+            16
+          ],
+          "texture": "#3"
+        },
+        "south": {
+          "uv": [
+            8,
+            2,
+            10,
+            16
+          ],
+          "texture": "#3"
+        },
+        "west": {
+          "uv": [
+            10,
+            2,
+            12,
+            16
+          ],
+          "texture": "#3"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "texture": "#3"
+        },
+        "down": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#3",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "name": "upper_horizontal_beam",
+      "from": [
+        4.2,
+        6.5,
+        0.5
+      ],
+      "to": [
+        16,
+        10.1,
+        4.1
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            12,
+            16,
+            14
+          ],
+          "texture": "#3"
+        },
+        "east": {
+          "uv": [
+            14,
+            2,
+            16,
+            16
+          ],
+          "texture": "#3"
+        },
+        "south": {
+          "uv": [
+            2,
+            8,
+            16,
+            10
+          ],
+          "texture": "#3"
+        },
+        "west": {
+          "uv": [
+            10,
+            2,
+            12,
+            16
+          ],
+          "texture": "#3"
+        },
+        "up": {
+          "uv": [
+            2,
+            12,
+            16,
+            16
+          ],
+          "texture": "#3"
+        },
+        "down": {
+          "uv": [
+            2,
+            12,
+            16,
+            16
+          ],
+          "texture": "#3"
+        }
+      }
+    },
+    {
+      "name": "lower_horizontal_beam",
+      "from": [
+        0.6,
+        6.5,
+        4.3
+      ],
+      "to": [
+        4.2,
+        10.1,
+        16
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            12,
+            2,
+            14,
+            16
+          ],
+          "texture": "#3"
+        },
+        "east": {
+          "uv": [
+            2,
+            14,
+            16,
+            16
+          ],
+          "texture": "#3"
+        },
+        "south": {
+          "uv": [
+            8,
+            2,
+            10,
+            16
+          ],
+          "texture": "#3"
+        },
+        "west": {
+          "uv": [
+            2,
+            10,
+            16,
+            12
+          ],
+          "texture": "#3"
+        },
+        "up": {
+          "uv": [
+            2,
+            10,
+            4.2,
+            16
+          ],
+          "texture": "#3"
+        },
+        "down": {
+          "uv": [
+            2,
+            10,
+            4.2,
+            16
+          ],
+          "texture": "#3"
+        }
+      }
+    },
+    {
+      "name": "table_top",
+      "from": [
+        0,
+        12,
+        0
+      ],
+      "to": [
+        16,
+        15,
+        16
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            3
+          ],
+          "texture": "#1"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            16,
+            3
+          ],
+          "texture": "#1"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            3
+          ],
+          "texture": "#1"
+        },
+        "west": {
+          "uv": [
+            0,
+            3,
+            16,
+            0
+          ],
+          "texture": "#1"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#1"
+        },
+        "down": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#1"
+        }
+      }
+    }
+  ]
+}
