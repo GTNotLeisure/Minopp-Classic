@@ -11,6 +11,8 @@ import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.PendingDecision;
+import com.hfstudio.minopp.gui.ui.UiButton;
+import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.util.BlockPos;
@@ -48,7 +50,7 @@ public class DecisionScreen extends GuiScreen {
         switch (type) {
             case CHALLENGE -> {
                 buttonList.add(
-                    new GuiButton(
+                    new UiButton(
                         1,
                         width / 2 - 104,
                         cy,
@@ -57,7 +59,7 @@ public class DecisionScreen extends GuiScreen {
                         Chat.translatable("gui.minopp.decision.do_challenge")
                             .getFormattedText()));
                 buttonList.add(
-                    new GuiButton(
+                    new UiButton(
                         0,
                         width / 2 + 4,
                         cy,
@@ -72,14 +74,16 @@ public class DecisionScreen extends GuiScreen {
                 for (int i = 0; i < colors.size(); i++) {
                     CardColor c = colors.get(i);
                     buttonList.add(
-                        new GuiButton(
+                        new UiButton(
                             c.ordinal(),
                             width / 2 - total / 2 + i * (bw + gap),
                             cy,
                             bw,
                             20,
-                            Chat.translatable(c.langKey())
-                                .getFormattedText()));
+                            net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
+                                Chat.translatable(c.langKey())
+                                    .getFormattedText()),
+                            c.rgb));
                 }
             }
             case POINT_TAKEN -> {
@@ -95,7 +99,7 @@ public class DecisionScreen extends GuiScreen {
                 picker = new PlayerPicker(others, sizes, 1);
                 picker.layout(width / 2, 50, width - 40);
                 buttonList.add(
-                    new GuiButton(
+                    new UiButton(
                         -2,
                         width / 2 - 40,
                         Math.min(height - 28, 50 + picker.height() + 14),
@@ -126,7 +130,7 @@ public class DecisionScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        drawDefaultBackground();
+        UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
         CardGame game = game();
         if (game == null || game.decisionFor(self.uuid) == null) {
             mc.displayGuiScreen(null);

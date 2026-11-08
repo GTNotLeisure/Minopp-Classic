@@ -107,9 +107,30 @@ public class GameSettingsScreen extends GuiScreen {
     private boolean showInfo;
 
     public GameSettingsScreen(BlockPos gamePos, GuiScreen parent) {
+        this(gamePos, parent, null);
+    }
+
+    /** Dev preview (-Dminopp.uiPreview): renders against a detached table without a world or server. */
+    private final BlockEntityMinoTable previewTable;
+    private long previewSwitch = System.currentTimeMillis();
+
+    public GameSettingsScreen(BlockPos gamePos, GuiScreen parent, BlockEntityMinoTable previewTable) {
         this.gamePos = gamePos;
         this.parent = parent;
+        this.previewTable = previewTable;
         for (Tab t : Tab.values()) scrolls.put(t, new SmoothScroll());
+    }
+
+    public static GameSettingsScreen preview() {
+        BlockEntityMinoTable te = new BlockEntityMinoTable();
+        te.config.set(GameRules.MAX_PLAYERS, 8);
+        te.config.setPackEnabled(CardPack.NO_MERCY, true);
+        te.config.setCount("weekend:wild_time_balloon", 2);
+        for (int i = 0; i < 5; i++) {
+            te.seats[i] = new com.hfstudio.minopp.game.CardPlayer(java.util.UUID.randomUUID(), "Player" + i);
+        }
+        tab = Tab.PACKS;
+        return new GameSettingsScreen(new BlockPos(0, 0, 0), null, te);
     }
 
     public static void open(BlockPos gamePos, GuiScreen parent, Tab initial) {
@@ -119,7 +140,8 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private BlockEntityMinoTable table() {
-        return ItemHandCards.getTable(mc.theWorld, gamePos);
+        if (previewTable != null) return previewTable;
+        return mc.theWorld == null ? null : ItemHandCards.getTable(mc.theWorld, gamePos);
     }
 
     private boolean editable() {
@@ -376,6 +398,10 @@ public class GameSettingsScreen extends GuiScreen {
             mc.displayGuiScreen(parent);
             return;
         }
+        if (previewTable != null && System.currentTimeMillis() - previewSwitch > 6000) {
+            previewSwitch = System.currentTimeMillis();
+            tab = Tab.values()[(tab.ordinal() + 1) % Tab.values().length];
+        }
         long now = System.nanoTime();
         float dt = Math.min(0.1f, (now - lastFrame) / 1e9f);
         lastFrame = now;
@@ -478,7 +504,7 @@ public class GameSettingsScreen extends GuiScreen {
                     hover ? 0xD0A02020 : 0xB0801414,
                     hover ? 0xD0701010 : 0xB0600C0C);
             }
-            UiDraw.icon(t.icon, x + tw / 2f - 7, y + 2, 14);
+            UiDraw.icon(t.icon, x + tw / 2f - 8, y + 1, 16);
             UiDraw.fittedCentered(
                 fontRendererObj,
                 t.label(),
@@ -507,6 +533,7 @@ public class GameSettingsScreen extends GuiScreen {
         Boolean checked = null;
         String count = null;
         boolean four = false, locked = false, dim = false;
+        customCount = false;
 
         // glow when hovered
         if (hoverA > 0.02f) {
@@ -559,15 +586,17 @@ public class GameSettingsScreen extends GuiScreen {
                 GameRules.Rule r = (GameRules.Rule) t.payload;
                 int v = cfg.getInt(r.id());
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
-                UiDraw.icon(r.id(), (x1 + x2) / 2f - 14, y1 + 5, 28);
+                // numbered rules: icon on top, value pill, label; switches: icon centered above the label
+                int iconY = r.bool() ? y1 + 2 + (t.h - 16 - 32) / 2 : y1 + 3;
+                UiDraw.icon(r.id(), (x1 + x2) / 2f - 16, iconY, 32);
                 UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
                 if (r.bool()) {
                     checked = v != 0;
                     dim = v == 0;
                 } else {
-                    count = String.valueOf(
-                        v == 0 && r.id()
-                            .equals(GameRules.DECK_COPIES) ? "A" : v);
+                    // value sits centered between the icon and the label
+                    count = v == 0 && r.id()
+                        .equals(GameRules.DECK_COPIES) ? "A" : String.valueOf(v);
                 }
                 locked = !editable;
             }
@@ -589,7 +618,7 @@ public class GameSettingsScreen extends GuiScreen {
                 count = String.valueOf(c);
                 four = !entry.isWild();
                 locked = !editable;
-                if (cfg.hasOverride(pack, entry)) count = EnumChatFormatting.YELLOW + count;
+                customCount = cfg.hasOverride(pack, entry);
             }
             case THEME -> {
                 ThemeManager.ThemeInfo theme = (ThemeManager.ThemeInfo) t.payload;
@@ -608,20 +637,43 @@ public class GameSettingsScreen extends GuiScreen {
             }
             default -> {}
         }
-        if (dim) UiDraw.roundRect(x1, y1, x2, y2, 6, 0x88000000);
+        if (dim) UiDraw.roundRect(x1, y1, x2, y2, 6, 0x5A000000);
         if (checked != null) {
             if (checked || t.kind == Kind.RULE || t.kind == Kind.PACK) {
                 UiDraw.image(checked ? "badge_check" : "badge_check_off", x2 - 10, y1 - 3, 12, 12);
             }
         }
-        if (four) UiDraw.image("badge_four", x1 + 2, y2 - 12, 10, 10);
+        if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 9, 9);
         if (count != null) {
-            GL11.glPushMatrix();
-            GL11.glTranslatef(0, 0, 50);
-            UiDraw.count(fontRendererObj, count, x2 - 2, y2 - 1);
-            GL11.glPopMatrix();
+            // centered at the bottom, above the label (rules) or at the card's foot (cards)
+            int pillY = t.kind == Kind.CARD ? y2 - 11 : y2 - 24;
+            valuePill(count, (x1 + x2) / 2, pillY);
         }
-        if (locked) UiDraw.image("badge_lock", x1 + 2, y1 + 2, 10, 10);
+        if (locked) UiDraw.image("badge_lock", x1 + 2, four ? y1 + 12 : y1 + 2, 10, 10);
+    }
+
+    /** Count of the tile being drawn differs from the pack default (pill turns white). */
+    private boolean customCount;
+
+    private void valuePill(String value, int cx, int y) {
+        int textW = fontRendererObj.getStringWidth(value) - 1;
+        int pillW = textW + 8;
+        int x1 = cx - pillW / 2;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(0, 0, 50);
+        UiDraw.roundFrame(
+            x1,
+            y,
+            x1 + pillW,
+            y + 11,
+            4,
+            1,
+            UiDraw.OUTLINE_DARK,
+            customCount ? 0xFFFFFFFF : 0xFFFFE15A,
+            customCount ? 0xFFD8D8D8 : 0xFFF0B020);
+        fontRendererObj.drawString(value, x1 + 4, y + 2, 0xFF3A1A00);
+        GL11.glPopMatrix();
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
     private void drawDeckInfo(BlockEntityMinoTable te, Tile t) {
@@ -658,11 +710,18 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static List<CardFace> packFaces(CardPack pack) {
+        // the most telling cards of a pack: colored action cards first, then one wild, numbers only as filler
         List<CardFace> faces = new ArrayList<>();
-        // prefer the special cards of a pack, they tell it apart best
-        for (int i = pack.entries.size() - 1; i >= 0 && faces.size() < 3; i--) {
-            faces.add(0, sampleFace(pack.entries.get(i), faces.size() + 1));
+        List<CardPack.Entry> actions = new ArrayList<>(), wilds = new ArrayList<>(), numbers = new ArrayList<>();
+        for (CardPack.Entry e : pack.entries) {
+            if (CardTypes.get(e.typeId()).numbered) numbers.add(e);
+            else if (e.isWild()) wilds.add(e);
+            else actions.add(e);
         }
+        for (int i = actions.size() - 1; i >= 0 && faces.size() < 2; i--) faces.add(0, sampleFace(actions.get(i), i));
+        if (!wilds.isEmpty()) faces.add(sampleFace(wilds.get(wilds.size() - 1), 0));
+        for (int i = wilds.size() - 2; i >= 0 && faces.size() < 3; i--) faces.add(0, sampleFace(wilds.get(i), 0));
+        for (int i = 0; i < numbers.size() && faces.size() < 3; i++) faces.add(0, sampleFace(numbers.get(i), 2 + i));
         return faces;
     }
 
@@ -704,7 +763,7 @@ public class GameSettingsScreen extends GuiScreen {
             drawFan(packPreview(te.config), ThemeManager.INSTANCE.selected(), cx, py + ph - 8, 30);
         } else {
             switch (t.kind) {
-                case RULE -> UiDraw.icon(((GameRules.Rule) t.payload).id(), cx - 28, py + ph / 2f - 28, 56);
+                case RULE -> UiDraw.icon(((GameRules.Rule) t.payload).id(), cx - 32, py + ph / 2f - 32, 64);
                 case CARD -> {
                     CardPack.Entry entry = (CardPack.Entry) ((Object[]) t.payload)[1];
                     List<CardFace> faces = new ArrayList<>();
@@ -892,7 +951,7 @@ public class GameSettingsScreen extends GuiScreen {
                 }
             } else if (editable()) {
                 cfg.fromTag(d.config.toTag());
-                C2SSeatControlPacket.Client.sendApplyC2S(gamePos, d.config);
+                if (previewTable == null) C2SSeatControlPacket.Client.sendApplyC2S(gamePos, d.config);
             }
             click();
             return;
@@ -904,10 +963,10 @@ public class GameSettingsScreen extends GuiScreen {
                 if (button == 1) {
                     boolean on = !cfg.isPackEnabled(pack.id);
                     cfg.setPackEnabled(pack.id, on);
-                    C2SSeatControlPacket.Client.sendPackC2S(gamePos, pack.id, on);
+                    if (previewTable == null) C2SSeatControlPacket.Client.sendPackC2S(gamePos, pack.id, on);
                 } else {
                     cfg.resetToPreset(pack.id);
-                    C2SSeatControlPacket.Client.sendPresetC2S(gamePos, pack.id);
+                    if (previewTable == null) C2SSeatControlPacket.Client.sendPresetC2S(gamePos, pack.id);
                 }
             }
             case RULE -> {
@@ -921,7 +980,7 @@ public class GameSettingsScreen extends GuiScreen {
                     nv = r.clamp(v + (button == 1 ? -step : step));
                 }
                 cfg.set(r.id(), nv);
-                C2SSeatControlPacket.Client.sendRuleC2S(gamePos, r.id(), nv);
+                if (previewTable == null) C2SSeatControlPacket.Client.sendRuleC2S(gamePos, r.id(), nv);
             }
             case CARD -> {
                 Object[] p = (Object[]) t.payload;
@@ -938,7 +997,7 @@ public class GameSettingsScreen extends GuiScreen {
                     nv = c > 0 ? 0 : Math.max(1, entry.count());
                 }
                 cfg.setCount(key, nv);
-                C2SSeatControlPacket.Client.sendCountC2S(gamePos, key, nv);
+                if (previewTable == null) C2SSeatControlPacket.Client.sendCountC2S(gamePos, key, nv);
             }
             default -> {}
         }

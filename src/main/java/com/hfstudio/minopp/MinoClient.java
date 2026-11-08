@@ -78,6 +78,10 @@ public class MinoClient {
         }
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
+            if (System.getProperty("minopp.uiPreview") != null
+                && mc.currentScreen instanceof net.minecraft.client.gui.GuiMainMenu) {
+                mc.displayGuiScreen(com.hfstudio.minopp.gui.GameSettingsScreen.preview());
+            }
             GLOWS.clear();
             if (wasInWorld) ThemeManager.INSTANCE.onDisconnect();
             wasInWorld = false;

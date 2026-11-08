@@ -11,6 +11,8 @@ import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.PlayContext;
+import com.hfstudio.minopp.gui.ui.UiButton;
+import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.render.CardRenderer;
@@ -66,17 +68,19 @@ public class PlayChoiceScreen extends GuiScreen {
             for (int i = 0; i < colors.size(); i++) {
                 CardColor c = colors.get(i);
                 buttonList.add(
-                    new GuiButton(
+                    new UiButton(
                         c.ordinal(),
                         width / 2 - total / 2 + i * (bw + gap),
                         cy + 10,
                         bw,
                         20,
-                        Chat.translatable(c.langKey())
-                            .getFormattedText()));
+                        net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
+                            Chat.translatable(c.langKey())
+                                .getFormattedText()),
+                        c.rgb));
             }
             buttonList.add(
-                new GuiButton(
+                new UiButton(
                     -1,
                     width / 2 - 40,
                     cy + 40,
@@ -99,7 +103,7 @@ public class PlayChoiceScreen extends GuiScreen {
             picker.layout(width / 2, 50, width - 40);
             int by = Math.min(height - 28, 50 + picker.height() + 14);
             buttonList.add(
-                new GuiButton(
+                new UiButton(
                     -2,
                     width / 2 - 84,
                     by,
@@ -108,7 +112,7 @@ public class PlayChoiceScreen extends GuiScreen {
                     Chat.translatable("gui.minopp.choice.confirm")
                         .getFormattedText()));
             buttonList.add(
-                new GuiButton(
+                new UiButton(
                     -1,
                     width / 2 + 4,
                     by,
@@ -160,7 +164,7 @@ public class PlayChoiceScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        drawDefaultBackground();
+        UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
         String theme = ThemeManager.INSTANCE.selected();
         if (colorStep) {
             int cy = height / 2;
@@ -176,7 +180,6 @@ public class PlayChoiceScreen extends GuiScreen {
             int bw = 60, gap = 8, total = colors.size() * bw + (colors.size() - 1) * gap;
             for (int i = 0; i < colors.size(); i++) {
                 int x = width / 2 - total / 2 + i * (bw + gap);
-                GuiDraw.fill(x - 1, cy + 9, x + bw + 1, cy + 31, colors.get(i).rgb);
             }
         } else {
             String title = Chat

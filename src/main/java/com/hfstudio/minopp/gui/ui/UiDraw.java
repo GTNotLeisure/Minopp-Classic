@@ -151,7 +151,9 @@ public final class UiDraw {
         GL11.glPushMatrix();
         GL11.glTranslatef(cx, y, 0);
         GL11.glScalef(scale, scale, 1);
-        font.drawStringWithShadow(text, -font.getStringWidth(text) / 2, 0, color);
+        // getStringWidth includes the spacing pixel after the last glyph
+        GL11.glTranslatef(-(font.getStringWidth(text) - 1) / 2f, 0, 0);
+        font.drawStringWithShadow(text, 0, 0, color);
         GL11.glPopMatrix();
         GL11.glColor4f(1, 1, 1, 1);
     }
