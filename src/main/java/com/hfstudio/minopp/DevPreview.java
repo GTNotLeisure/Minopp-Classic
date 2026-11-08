@@ -69,6 +69,20 @@ public final class DevPreview {
             case 1 -> {
                 if (ticks < 30 || table == null) return;
                 table.joinPlayerToTable(new CardPlayer(player), new Vec3d(player.posX, player.posY, player.posZ));
+                int seat = table.seatOf(
+                    player.getGameProfile()
+                        .getId());
+                if (seat >= 0) {
+                    Vec3d spot = table.botSpot(seat);
+                    double ox = spot.x - (core.x + 1.5), oz = spot.z - (core.z + 1.5);
+                    double len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
+                    player.playerNetServerHandler.setPlayerLocation(
+                        spot.x + ox / len * 0.5,
+                        core.y,
+                        spot.z + oz / len * 0.5,
+                        (float) Math.toDegrees(Math.atan2(ox, -oz)),
+                        player.rotationPitch);
+                }
                 table.addBots(BlockEntityMinoTable.MAX_SEATS);
                 stage = 2;
                 ticks = 0;

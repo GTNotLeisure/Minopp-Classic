@@ -330,6 +330,30 @@ public final class UiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
+    public static void ring(float cx, float cy, float r1, float r2, int argb) {
+        if ((argb >>> 24) == 0) return;
+        boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.setColorRGBA(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24);
+        int segments = 40;
+        for (int i = 0; i < segments; i++) {
+            double a0 = Math.PI * 2 * i / segments, a1 = Math.PI * 2 * (i + 1) / segments;
+            t.addVertex(cx + Math.cos(a0) * r1, cy + Math.sin(a0) * r1, 0);
+            t.addVertex(cx + Math.cos(a1) * r1, cy + Math.sin(a1) * r1, 0);
+            t.addVertex(cx + Math.cos(a1) * r2, cy + Math.sin(a1) * r2, 0);
+            t.addVertex(cx + Math.cos(a0) * r2, cy + Math.sin(a0) * r2, 0);
+        }
+        t.draw();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        if (cull) GL11.glEnable(GL11.GL_CULL_FACE);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
     private static void radial(Tessellator t, float cx, float cy, float r, int inner, int outer, int segments) {
         t.startDrawing(GL11.GL_TRIANGLES);
         for (int i = 0; i < segments; i++) {

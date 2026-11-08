@@ -262,13 +262,14 @@ public class EntityAutoPlayer extends EntityLiving {
             return;
         }
         homelessSeconds = 0;
-        double dx = posX - (tablePos.x + 1.5), dz = posZ - (tablePos.z + 1.5), dy = posY - tablePos.y;
-        if (dx * dx + dz * dz <= 25 && Math.abs(dy) <= 3) return;
         int seat = cardPlayer == null ? -1 : table.seatOf(cardPlayer.uuid);
         if (seat < 0) {
             if (summoned) setDead();
             return;
         }
+        double dx = posX - (tablePos.x + 1.5), dz = posZ - (tablePos.z + 1.5), dy = posY - tablePos.y;
+        boolean onTable = Math.abs(dx) < 1.5 && Math.abs(dz) < 1.5 && dy > 0.5;
+        if (dx * dx + dz * dz <= 25 && Math.abs(dy) <= 3 && !onTable) return;
         Vec3d spot = table.botSpot(seat);
         mountEntity(null);
         motionX = motionY = motionZ = 0;

@@ -558,6 +558,11 @@ public class GameOverlayLayer {
     private static final List<float[]> cardRects = new ArrayList<>();
     private float rowRaise = 0;
     private final Map<Integer, Float> rowLift = new HashMap<>();
+    private final Map<Integer, float[]> rowLast = new HashMap<>();
+    private final Map<Integer, Long> rowEnter = new HashMap<>();
+    private final List<Object[]> flyers = new ArrayList<>();
+    private Object rowGame;
+    private static final int FLY_MS = 380, ENTER_MS = 320;
     private long lastRowNanos = System.nanoTime();
 
     private static void addRect(int index, float x, float y, float w, float h) {
@@ -617,6 +622,32 @@ public class GameOverlayLayer {
             cys[i] = py - (float) Math.cos(ang) * r;
         }
 
+        long nowMs = System.currentTimeMillis();
+        if (rowGame == game) {
+            for (Map.Entry<Integer, float[]> e : rowLast.entrySet()) {
+                int uid = e.getKey();
+                boolean gone = hand.stream()
+                    .noneMatch(c -> c.uid == uid);
+                if (gone && game.topCard != null && game.topCard.uid == uid) {
+                    flyers.add(new Object[] { game.face(game.topCard), theme, e.getValue(), nowMs });
+                }
+            }
+            for (Card c : hand) if (!rowLast.containsKey(c.uid)) rowEnter.put(c.uid, nowMs);
+        }
+        rowGame = game;
+        rowLast.clear();
+        for (int i = 0; i < n; i++) rowLast.put(hand.get(i).uid, new float[] { cxs[i], cys[i], angs[i], cw, ch });
+        rowEnter.values()
+            .removeIf(t -> nowMs - t > ENTER_MS);
+        for (int i = 0; i < n; i++) {
+            Long enter = rowEnter.get(hand.get(i).uid);
+            if (enter == null) continue;
+            float k = easeOutCubic((nowMs - enter) / (float) ENTER_MS);
+            cxs[i] = width * 0.5f + (cxs[i] - width * 0.5f) * k;
+            cys[i] = -ch + (cys[i] + ch) * k;
+            angs[i] = angs[i] * k + (1 - k) * 0.6f;
+        }
+
         GL11.glEnable(GL11.GL_BLEND);
         for (int pass = 0; pass < 2; pass++) {
             for (int i = 0; i < n; i++) {
@@ -646,6 +677,8 @@ public class GameOverlayLayer {
             }
         }
 
+        drawFlyers(width, height, nowMs);
+
         if (selectedIndex >= 0 && selectedIndex < n && interactive) {
             String name = game.face(hand.get(selectedIndex))
                 .getDisplayName()
@@ -667,6 +700,44 @@ public class GameOverlayLayer {
         for (int i = n - 1; i >= 0; i--) {
             if (i != selectedIndex) cardRects.add(new float[] { i, cxs[i], cys[i], angs[i], cw, ch });
         }
+    }
+
+    // a played card leaves the hand toward the middle of the screen, with a ring where it lands
+    private void drawFlyers(int width, int height, long nowMs) {
+        flyers.removeIf(f -> nowMs - (Long) f[3] > FLY_MS + 220);
+        float tx = width * 0.5f, ty = height * 0.36f;
+        for (Object[] f : flyers) {
+            float[] from = (float[]) f[2];
+            float raw = (nowMs - (Long) f[3]) / (float) FLY_MS;
+            float k = easeOutCubic(Math.min(1f, raw));
+            float x = from[0] + (tx - from[0]) * k,
+                y = from[1] + (ty - from[1]) * k - (float) Math.sin(k * Math.PI) * 24;
+            float scale = 1f - 0.25f * k;
+            float alpha = raw < 0.7f ? 1f : Math.max(0f, 1f - (raw - 0.7f) / 0.5f);
+            float cw = from[3], ch = from[4];
+            if (alpha > 0.01f) {
+                GL11.glPushMatrix();
+                GL11.glTranslatef(x, y, 0);
+                GL11.glRotatef((float) Math.toDegrees(from[2] * (1 - k)) + k * 8, 0, 0, 1);
+                GL11.glScalef(scale, scale, 1);
+                GL11.glTranslatef(-cw / 2f, -ch / 2f, 0);
+                GL11.glColor4f(1, 1, 1, alpha);
+                CardRenderer.drawFace2D((CardFace) f[0], (String) f[1], 0, 0, cw, ch);
+                GL11.glPopMatrix();
+            }
+            if (raw > 0.6f) {
+                float rk = Math.min(1f, (raw - 0.6f) / 0.6f);
+                float r = 20 + rk * 46;
+                int a = (int) ((1 - rk) * 200);
+                UiDraw.ring(tx, ty, r - 3, r, (a << 24) | 0xFFE070);
+            }
+        }
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private static float easeOutCubic(float t) {
+        float u = 1 - Math.max(0f, Math.min(1f, t));
+        return 1 - u * u * u;
     }
 
     private void performZoomAnimation(float partialTicks) {

@@ -99,6 +99,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         if (viewer != null) ColorPicker3D.render(blockEntity.getBlockPos(), viewer.posX, viewer.posZ);
 
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
+        TableFx.render(blockEntity, game);
 
         for (BlockEntityMinoTable.HandSwapAnimation anim : BlockEntityMinoTable.activeAnimations) {
             int stackSize = Math.max(1, Math.min(anim.cardCount, 10));

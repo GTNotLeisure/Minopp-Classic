@@ -74,6 +74,11 @@ public final class ColorPicker3D {
         return best;
     }
 
+    public static float[] center(int i) {
+        float[] b = i >= 0 && i < 4 ? screenBounds[i] : null;
+        return b == null ? null : new float[] { b[4], b[5] };
+    }
+
     public static boolean visible() {
         for (int i = 0; i < 4; i++) if (screenBounds[i] == null) return false;
         return true;

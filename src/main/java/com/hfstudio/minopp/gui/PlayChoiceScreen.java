@@ -163,8 +163,79 @@ public class PlayChoiceScreen extends GuiScreen {
         HandScreen.returnFromChoice();
     }
 
+    private int keyPick = -1;
+    private int lastMouseX = Integer.MIN_VALUE, lastMouseY;
+
+    // WASD / arrows move between the pillars by where they appear on screen, so it works from any side of the table
+    private void movePick(int dx, int dy) {
+        List<CardColor> colors = CardColor.forSide(darkSide);
+        int n = Math.min(4, colors.size());
+        float ox = 0, oy = 0;
+        int found = 0;
+        for (int i = 0; i < n; i++) {
+            float[] c = ColorPicker3D.center(i);
+            if (c == null) continue;
+            ox += c[0];
+            oy += c[1];
+            found++;
+        }
+        if (found == 0) return;
+        ox /= found;
+        oy /= found;
+        float[] from = ColorPicker3D.center(keyPick);
+        if (from != null) {
+            ox = from[0];
+            oy = from[1];
+        }
+        int best = -1;
+        float bestScore = Float.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            float[] c = ColorPicker3D.center(i);
+            if (c == null || i == keyPick) continue;
+            float along = (c[0] - ox) * dx + (c[1] - oy) * dy;
+            float across = Math.abs((c[0] - ox) * dy - (c[1] - oy) * dx);
+            if (along <= 1) continue;
+            float score = along + 2 * across;
+            if (score < bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        if (best >= 0) {
+            keyPick = best;
+            mc.getSoundHandler()
+                .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.6F));
+        }
+    }
+
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
+        if (colorStep) {
+            switch (keyCode) {
+                case Keyboard.KEY_W, Keyboard.KEY_UP -> {
+                    movePick(0, -1);
+                    return;
+                }
+                case Keyboard.KEY_S, Keyboard.KEY_DOWN -> {
+                    movePick(0, 1);
+                    return;
+                }
+                case Keyboard.KEY_A, Keyboard.KEY_LEFT -> {
+                    movePick(-1, 0);
+                    return;
+                }
+                case Keyboard.KEY_D, Keyboard.KEY_RIGHT -> {
+                    movePick(1, 0);
+                    return;
+                }
+                case Keyboard.KEY_RETURN, Keyboard.KEY_NUMPADENTER, Keyboard.KEY_SPACE -> {
+                    List<CardColor> colors = CardColor.forSide(darkSide);
+                    if (keyPick >= 0 && keyPick < colors.size()) chooseColor(colors.get(keyPick));
+                    return;
+                }
+                default -> {}
+            }
+        }
         if (colorStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_4) {
             List<CardColor> colors = CardColor.forSide(darkSide);
             int i = keyCode - Keyboard.KEY_1;
@@ -239,7 +310,10 @@ public class PlayChoiceScreen extends GuiScreen {
                 22,
                 0xFFBBBBBB);
             List<CardColor> colors = CardColor.forSide(darkSide);
-            int hit = ColorPicker3D.hitTest(mouseX, mouseY);
+            if (lastMouseX != Integer.MIN_VALUE && (mouseX != lastMouseX || mouseY != lastMouseY)) keyPick = -1;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            int hit = keyPick >= 0 ? keyPick : ColorPicker3D.hitTest(mouseX, mouseY);
             if (hit < 0) {
                 for (GuiButton o : buttonList) {
                     GuiButton b = o;
@@ -258,8 +332,14 @@ public class PlayChoiceScreen extends GuiScreen {
                         .langKey())
                     .getFormattedText();
                 int w = fontRendererObj.getStringWidth(name);
-                UiDraw.roundRect(mouseX + 8, mouseY - 14, mouseX + 16 + w, mouseY - 2, 3, 0xC0000000);
-                fontRendererObj.drawStringWithShadow(name, mouseX + 12, mouseY - 12, colors.get(hit).rgb | 0xFF000000);
+                int tx = mouseX, ty = mouseY;
+                float[] c = keyPick >= 0 ? ColorPicker3D.center(keyPick) : null;
+                if (c != null) {
+                    tx = (int) c[0] - w / 2 - 12;
+                    ty = (int) c[1] - 18;
+                }
+                UiDraw.roundRect(tx + 8, ty - 14, tx + 16 + w, ty - 2, 3, 0xC0000000);
+                fontRendererObj.drawStringWithShadow(name, tx + 12, ty - 12, colors.get(hit).rgb | 0xFF000000);
             }
         } else {
             UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
