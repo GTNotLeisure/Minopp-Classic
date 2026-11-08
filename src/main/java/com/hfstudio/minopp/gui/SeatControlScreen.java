@@ -62,29 +62,62 @@ public class SeatControlScreen extends GuiScreen {
         CardPlayer me = ItemHandCards.getCardPlayer(mc.thePlayer);
         boolean seated = te.getPlayersList()
             .contains(me);
+        boolean teams = Teams.enabled(te.config);
         int sideW = Math.min(150, width / 3);
         int x = width - 10 - sideW;
-        int y = 44;
-        actions.add(new Action("settings", "Z", tr("gui.minopp.seats.settings"), x, y, sideW, 22, true, false));
-        actions.add(new Action("style", "C", tr("gui.minopp.seats.style"), x, y + 28, sideW, 22, true, false));
-        actions.add(new Action("designs", "V", tr("gui.minopp.seats.designs"), x, y + 56, sideW, 22, true, false));
+        int y = 44, h = 22, step = 28;
+        int half = (sideW - 4) / 2, third = (sideW - 8) / 3;
+        actions.add(new Action("settings", "Z", tr("gui.minopp.seats.settings"), x, y, sideW, h, true, false));
+        actions.add(new Action("style", "C", tr("gui.minopp.seats.style"), x, y + step, sideW, h, true, false));
+        actions.add(new Action("designs", "V", tr("gui.minopp.seats.designs"), x, y + step * 2, sideW, h, true, false));
+        int r = y + step * 3;
+        actions.add(new Action("reset", "R", tr("gui.minopp.seats.reset_plain"), x, r, half, h, idle && seated, false));
         actions.add(
-            new Action("reset", "R", tr("gui.minopp.seats.reset_plain"), x, y + 84, sideW, 22, idle && seated, false));
-        actions.add(new Action("stop", "S", tr("gui.minopp.seats.stop_plain"), x, y + 112, sideW, 22, !idle, false));
-        boolean teams = Teams.enabled(te.config);
+            new Action("leave", "L", tr("gui.minopp.seats.leave"), x + half + 4, r, half, h, idle && seated, false));
+        r += step;
         if (teams) {
+            actions.add(new Action("stop", "S", tr("gui.minopp.seats.stop_plain"), x, r, half, h, !idle, false));
             actions.add(
                 new Action(
                     "teams",
                     "T",
                     tr("gui.minopp.seats.auto_teams"),
-                    x,
-                    y + 140,
-                    sideW,
-                    22,
+                    x + half + 4,
+                    r,
+                    half,
+                    h,
                     idle && seated,
                     false));
+        } else {
+            actions.add(new Action("stop", "S", tr("gui.minopp.seats.stop_plain"), x, r, sideW, h, !idle, false));
         }
+        r += step;
+        boolean freeSeat = te.getPlayersList()
+            .size() < te.seatCount();
+        actions
+            .add(new Action("bot_add", null, tr("gui.minopp.seats.bot_add"), x, r, third, h, idle && freeSeat, false));
+        actions.add(
+            new Action(
+                "bot_fill",
+                null,
+                tr("gui.minopp.seats.bot_fill"),
+                x + third + 4,
+                r,
+                third,
+                h,
+                idle && freeSeat,
+                false));
+        actions.add(
+            new Action(
+                "bot_clear",
+                null,
+                tr("gui.minopp.seats.bot_clear"),
+                x + (third + 4) * 2,
+                r,
+                third,
+                h,
+                idle,
+                false));
         actions.add(
             new Action(
                 "start",
@@ -193,6 +226,17 @@ public class SeatControlScreen extends GuiScreen {
             String why = fontRendererObj.trimStringToWidth(tr("gui.minopp.seats.teams_unequal"), width - 40);
             fontRendererObj.drawStringWithShadow(why, 16, height - 49, 0xFFFF8080);
         }
+        for (Action act : actions) {
+            if (act.big || mouseX < act.x || mouseX >= act.x + act.w || mouseY < act.y || mouseY >= act.y + act.h)
+                continue;
+            List<String> tip = new ArrayList<>();
+            tip.add(
+                act.label
+                    + (actionKey(act.id) != null ? EnumChatFormatting.GRAY + "  [" + actionKey(act.id) + "]" : ""));
+            String desc = "gui.minopp.seats.tip." + act.id;
+            if (net.minecraft.util.StatCollector.canTranslate(desc)) tip.add(EnumChatFormatting.GRAY + tr(desc));
+            UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
+        }
         if (te.game == null && Teams.enabled(te.config)) {
             for (int[] r : seatRects) {
                 if (mouseX >= r[1] && mouseX < r[3] && mouseY >= r[2] && mouseY < r[4]) {
@@ -267,8 +311,7 @@ public class SeatControlScreen extends GuiScreen {
             top,
             bottom);
         GuiDraw.drawPlayerHead(PlayerPicker.skinOf(p.uuid), x1 + 3, y1 + 3, 10);
-        String name = fontRendererObj.trimStringToWidth(p.name, w - 18);
-        fontRendererObj.drawStringWithShadow(name, x1 + 16, y1 + 4, 0xFFFFFFFF);
+        UiDraw.marquee(fontRendererObj, p.name, x1 + 16, y1 + 4, w - 18, 1f, 0xFFFFFFFF);
         if (te.game != null) {
             CardPlayer gp = te.game.deAmputate(p.uuid);
             if (gp != null) {
@@ -299,29 +342,56 @@ public class SeatControlScreen extends GuiScreen {
             border,
             a.enabled ? (hover ? 0xFF4A4A4A : 0xFF2E2E2E) : 0xFF242424,
             0xFF141414);
-        int kw = fontRendererObj.getStringWidth(a.key) + 8;
-        UiDraw.roundFrame(
-            a.x + 6,
-            a.y + a.h / 2 - 7,
-            a.x + 6 + kw,
-            a.y + a.h / 2 + 7,
-            2,
-            1,
-            0xFF8A8A8A,
-            0xFF3A3A3A,
-            0xFF2A2A2A);
-        fontRendererObj.drawString(a.key, a.x + 10, a.y + a.h / 2 - 3, 0xFFE0E0E0);
+        int kw = 0;
+        if (a.key != null) {
+            kw = fontRendererObj.getStringWidth(a.key) + 8;
+            UiDraw.roundFrame(
+                a.x + 6,
+                a.y + a.h / 2 - 7,
+                a.x + 6 + kw,
+                a.y + a.h / 2 + 7,
+                2,
+                1,
+                0xFF8A8A8A,
+                0xFF3A3A3A,
+                0xFF2A2A2A);
+            fontRendererObj.drawString(a.key, a.x + 10, a.y + a.h / 2 - 3, 0xFFE0E0E0);
+        }
         int color = a.enabled ? 0xFFFFFFFF : 0xFF777777;
         if (a.big) {
             UiDraw.outlinedText(fontRendererObj, a.label, a.x + 14 + kw, a.y + a.h / 2f - 6, 1.5f, color, 0xFF000000);
         } else {
-            fontRendererObj.drawStringWithShadow(a.label, a.x + 12 + kw, a.y + a.h / 2 - 4, color);
+            int room = a.w - kw - (a.key != null ? 16 : 8);
+            int lw = fontRendererObj.getStringWidth(a.label);
+            int lx = a.key != null ? a.x + 12 + kw : a.x + (lw <= room ? (a.w - lw) / 2 : 4);
+            UiDraw.marquee(fontRendererObj, a.label, lx, a.y + a.h / 2 - 4, room, 1f, color);
         }
         GL11.glColor4f(1, 1, 1, 1);
     }
 
+    private static String actionKey(String id) {
+        return switch (id) {
+            case "settings" -> "Z";
+            case "style" -> "C";
+            case "designs" -> "V";
+            case "reset" -> "R";
+            case "leave" -> "L";
+            case "stop" -> "S";
+            case "teams" -> "T";
+            case "bot_add" -> "B";
+            case "bot_fill" -> "F";
+            case "bot_clear" -> "K";
+            case "start" -> "X";
+            default -> null;
+        };
+    }
+
     private void perform(String id) {
         switch (id) {
+            case "leave" -> C2SSeatControlPacket.Client.sendLeaveC2S(gamePos);
+            case "bot_add" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 0);
+            case "bot_fill" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 1);
+            case "bot_clear" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 2);
             case "settings" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.PACKS);
             case "style" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.STYLE);
             case "designs" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.DESIGNS);
@@ -383,6 +453,10 @@ public class SeatControlScreen extends GuiScreen {
             case Keyboard.KEY_S -> "stop";
             case Keyboard.KEY_X -> "start";
             case Keyboard.KEY_T -> "teams";
+            case Keyboard.KEY_L -> "leave";
+            case Keyboard.KEY_B -> "bot_add";
+            case Keyboard.KEY_F -> "bot_fill";
+            case Keyboard.KEY_K -> "bot_clear";
             default -> null;
         };
         if (id != null) {

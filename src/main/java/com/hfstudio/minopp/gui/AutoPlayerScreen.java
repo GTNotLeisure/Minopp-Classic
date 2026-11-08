@@ -252,11 +252,12 @@ public class AutoPlayerScreen extends GuiScreen {
         }
         if (hoverDescription != null) {
             String text = tr(hoverDescription);
-            int w = Math.min(fontRendererObj.getStringWidth(text), 300);
-            int h = fontRendererObj.listFormattedStringToWidth(text, 300)
+            int wrap = Math.min(300, width - 24);
+            int w = Math.min(fontRendererObj.getStringWidth(text), wrap);
+            int h = fontRendererObj.listFormattedStringToWidth(text, wrap)
                 .size() * 10;
             GuiDraw.fill(width / 2 - w / 2 - 4, height - h - 12, width / 2 + w / 2 + 4, height - 4, 0xC0000000);
-            fontRendererObj.drawSplitString(text, width / 2 - w / 2, height - h - 8, 300, 0xFFFFFFFF);
+            fontRendererObj.drawSplitString(text, width / 2 - w / 2, height - h - 8, wrap, 0xFFFFFFFF);
         }
     }
 

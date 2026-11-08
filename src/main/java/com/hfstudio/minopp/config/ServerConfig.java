@@ -25,5 +25,10 @@ public class ServerConfig {
             + "client. Default is false.")
         @Config.DefaultBoolean(false)
         public boolean allowPeeking = false;
+
+        @Config.Comment("Let every player add and remove bots from the table lobby. When false (default), only operators "
+            + "(and single player with cheats) can.")
+        @Config.DefaultBoolean(false)
+        public boolean everyoneCanManageBots = false;
     }
 }

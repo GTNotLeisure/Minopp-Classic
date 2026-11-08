@@ -319,7 +319,7 @@ public final class CardTypes {
             .build());
 
     public static final CardType WILD_REBOUND = register(
-        CardType.builder("wild_rebound", CardPack.HERO)
+        CardType.builder("wild_rebound", CardPack.JUNGLE)
             .wild()
             .answersDraw()
             .label("↩")
@@ -329,7 +329,7 @@ public final class CardTypes {
             .build());
 
     public static final CardType WILD_DANCE_FLOOR = register(
-        CardType.builder("wild_dance_floor", CardPack.RHYTHM)
+        CardType.builder("wild_dance_floor", CardPack.DANCE)
             .wild()
             .label("♫")
             .sort(55)
@@ -337,7 +337,7 @@ public final class CardTypes {
             .build());
 
     public static final CardType WILD_HAND_SHUFFLE = register(
-        CardType.builder("wild_hand_shuffle", CardPack.MAYHEM)
+        CardType.builder("wild_hand_shuffle", CardPack.JUNGLE)
             .wild()
             .label("☄")
             .sort(56)

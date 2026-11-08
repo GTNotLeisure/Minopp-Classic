@@ -218,7 +218,7 @@ public class GameSimulationTest {
         c.setCount("no_mercy:discard_all", 2);
         c.setCount("no_mercy:wild_draw6", 4);
         c.setCount("weekend:wild_time_balloon", 3);
-        c.setCount("hero:wild_rebound", 4);
+        c.setCount("jungle:wild_rebound", 4);
         assertTrue(c.countDeckSize() > 108);
         runMany("mixed", c, 5, 200);
     }

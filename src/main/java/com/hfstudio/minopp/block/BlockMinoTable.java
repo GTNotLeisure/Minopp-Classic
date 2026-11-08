@@ -227,12 +227,36 @@ public class BlockMinoTable extends Block {
     }
 
     @Override
-    public boolean canPlaceBlockAt(World level, int x, int y, int z) {
-        for (TablePartType part : TablePartType.values()) {
-            int px = x + part.xOff, pz = z + part.zOff;
-            Block existing = level.getBlock(px, y, pz);
-            if (!existing.isReplaceable(level, px, y, pz)) return false;
+    @SideOnly(Side.CLIENT)
+    public boolean addDestroyEffects(World world, int x, int y, int z, int meta,
+        net.minecraft.client.particle.EffectRenderer effectRenderer) {
+        for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
+            double px = x + (i + 0.5) / 4, py = y + (j + 0.5) / 4, pz = z + (k + 0.5) / 4;
+            effectRenderer.addEffect(
+                new net.minecraft.client.particle.EntityDiggingFX(
+                    world,
+                    px,
+                    py,
+                    pz,
+                    px - x - 0.5,
+                    py - y - 0.5,
+                    pz - z - 0.5,
+                    Blocks.planks,
+                    1));
         }
+        return true;
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public boolean addHitEffects(World world, net.minecraft.util.MovingObjectPosition target,
+        net.minecraft.client.particle.EffectRenderer effectRenderer) {
+        int x = target.blockX, y = target.blockY, z = target.blockZ;
+        double px = x + world.rand.nextDouble(), py = y + 0.9, pz = z + world.rand.nextDouble();
+        effectRenderer.addEffect(
+            new net.minecraft.client.particle.EntityDiggingFX(world, px, py, pz, 0, 0, 0, Blocks.planks, 1)
+                .multiplyVelocity(0.2F)
+                .multipleParticleScaleBy(0.6F));
         return true;
     }
 

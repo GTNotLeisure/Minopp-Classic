@@ -25,7 +25,7 @@ public class C2SSeatControlPacket {
     public static final String ID = "minopp:seat_control";
 
     private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5, APPLY = 6,
-        TEAM = 7, AUTO_TEAMS = 8;
+        TEAM = 7, AUTO_TEAMS = 8, ADD_BOT = 9, FILL_BOTS = 10, CLEAR_BOTS = 11, LEAVE = 12;
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
@@ -117,6 +117,25 @@ public class C2SSeatControlPacket {
                 if (self || bot) tableEntity.setTeam(target, value);
             }
             case AUTO_TEAMS -> tableEntity.autoTeams();
+            case ADD_BOT, FILL_BOTS, CLEAR_BOTS -> {
+                net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+                boolean owner = server.isSinglePlayer() && player.getCommandSenderName()
+                    .equals(server.getServerOwner());
+                if (!com.hfstudio.minopp.config.ServerConfig.gameplay.everyoneCanManageBots && !owner
+                    && !player.canCommandSenderUseCommand(2, "minopp")) {
+                    player.addChatComponentMessage(Chat.translatable("game.minopp.play.bot_permission"));
+                    return;
+                }
+                if (tableEntity.game != null) return;
+                if (action == CLEAR_BOTS) {
+                    int n = tableEntity.removeBots();
+                    player.addChatComponentMessage(Chat.translatable("game.minopp.play.bots_removed", n));
+                } else {
+                    int n = tableEntity.addBots(action == ADD_BOT ? 1 : BlockEntityMinoTable.MAX_SEATS);
+                    if (n == 0) player.addChatComponentMessage(Chat.translatable("game.minopp.play.table_full"));
+                }
+            }
+            case LEAVE -> tableEntity.leaveSeat(cardPlayer.uuid);
             default -> {}
         }
     }
@@ -139,6 +158,15 @@ public class C2SSeatControlPacket {
             Buf.writeString(packet, player.toString());
             packet.writeInt(team);
             MinoNetwork.sendPacketToServer(ID, packet);
+        }
+
+        public static void sendBotsC2S(BlockPos gamePos, int mode) {
+            MinoNetwork
+                .sendPacketToServer(ID, header(gamePos, mode == 0 ? ADD_BOT : mode == 1 ? FILL_BOTS : CLEAR_BOTS));
+        }
+
+        public static void sendLeaveC2S(BlockPos gamePos) {
+            MinoNetwork.sendPacketToServer(ID, header(gamePos, LEAVE));
         }
 
         public static void sendAutoTeamsC2S(BlockPos gamePos) {

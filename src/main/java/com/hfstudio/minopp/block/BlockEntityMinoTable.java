@@ -29,6 +29,7 @@ import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.effect.EffectEvent;
 import com.hfstudio.minopp.effect.EffectEvents;
 import com.hfstudio.minopp.effect.SeatActionTakenEffectEvent;
+import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionMessage;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.AutoPlayer;
@@ -345,6 +346,63 @@ public class BlockEntityMinoTable extends TileEntity {
         seats[chosen] = cardPlayer;
         Teams.normalize(getPlayersList(), Teams.count(config));
         sync();
+    }
+
+    private static final String[] BOT_NAMES = { "Pudding", "Luna", "Dusty", "Pepper", "Mochi", "Biscuit", "Nova",
+        "Ziggy", "Clover", "Maple", "Pixel", "Sprout", "Tofu", "Juniper", "Waffle", "Comet", "Hazel", "Noodle", "Bean",
+        "Pebble" };
+
+    private String freeBotName() {
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (CardPlayer p : getPlayersList()) used.add(p.name);
+        for (String n : BOT_NAMES) if (!used.contains(n)) return n;
+        return "MinoBot #" + (100 + worldObj.rand.nextInt(900));
+    }
+
+    public int addBots(int max) {
+        if (game != null || worldObj == null || worldObj.isRemote) return 0;
+        int n = seatCount(), added = 0;
+        for (int i = 0; i < n && added < max; i++) {
+            if (seats[i] != null) continue;
+            Vec3d seat = getSeatLocalPos(i, n);
+            double ox = seat.x - 1.5, oz = seat.z - 1.5;
+            double len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
+            EntityAutoPlayer bot = new EntityAutoPlayer(worldObj);
+            bot.setPosition(xCoord + seat.x + ox / len * 0.45, yCoord, zCoord + seat.z + oz / len * 0.45);
+            bot.rotationYaw = (float) Math.toDegrees(Math.atan2(-ox, oz)) + 180;
+            worldObj.spawnEntityInWorld(bot);
+            bot.seatAt(this, freeBotName());
+            added++;
+        }
+        return added;
+    }
+
+    public int removeBots() {
+        if (game != null || worldObj == null || worldObj.isRemote) return 0;
+        int removed = 0;
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (seats[i] == null) continue;
+            Entity e = WorldUtil.getEntityByUUID(worldObj, seats[i].uuid);
+            if (e instanceof EntityAutoPlayer) {
+                e.setDead();
+                seats[i] = null;
+                removed++;
+            }
+        }
+        if (removed > 0) sync();
+        return removed;
+    }
+
+    public boolean leaveSeat(java.util.UUID uuid) {
+        if (game != null) return false;
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (seats[i] != null && seats[i].uuid.equals(uuid)) {
+                seats[i] = null;
+                sync();
+                return true;
+            }
+        }
+        return false;
     }
 
     public void onSeatCountChanged() {

@@ -89,7 +89,7 @@ public final class Mino {
         CardPack.init();
 
         BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(MinoCreativeTab.INSTANCE);
-        GameRegistry.registerBlock(BLOCK_MINO_TABLE, "mino_table");
+        GameRegistry.registerBlock(BLOCK_MINO_TABLE, com.hfstudio.minopp.block.ItemMinoTable.class, "mino_table");
         GameRegistry.registerTileEntity(BlockEntityMinoTable.class, "minopp:mino_table");
         BlockPropertyRegistry.registerProperty(
             BLOCK_MINO_TABLE,

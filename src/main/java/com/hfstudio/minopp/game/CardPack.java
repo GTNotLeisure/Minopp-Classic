@@ -57,12 +57,30 @@ public final class CardPack {
     public final boolean backSideOnly;
     public final List<Entry> entries;
     public final Map<String, Integer> presetRules;
+    public final int minPlayers, maxPlayers;
 
-    private CardPack(String id, boolean backSideOnly, List<Entry> entries, Map<String, Integer> presetRules) {
+    private CardPack(String id, boolean backSideOnly, List<Entry> entries, Map<String, Integer> presetRules,
+        int minPlayers, int maxPlayers) {
         this.id = id;
         this.backSideOnly = backSideOnly;
         this.entries = Collections.unmodifiableList(entries);
         this.presetRules = Collections.unmodifiableMap(presetRules);
+        this.minPlayers = minPlayers;
+        this.maxPlayers = maxPlayers;
+    }
+
+    public boolean isAddon() {
+        if (backSideOnly) return false;
+        for (Entry e : entries) if (CardTypes.get(e.typeId).numbered) return false;
+        return true;
+    }
+
+    public static String alias(String id) {
+        return switch (id) {
+            case HERO, MAYHEM -> JUNGLE;
+            case RHYTHM -> DANCE;
+            default -> id;
+        };
     }
 
     public String langKey() {
@@ -111,6 +129,7 @@ public final class CardPack {
         private boolean backSideOnly;
         private final List<Entry> entries = new ArrayList<>();
         private final Map<String, Integer> rules = new LinkedHashMap<>();
+        private int minPlayers = 2, maxPlayers = 10;
 
         Builder(String id) {
             this.id = id;
@@ -131,6 +150,12 @@ public final class CardPack {
             return this;
         }
 
+        Builder players(int min, int max) {
+            minPlayers = min;
+            maxPlayers = max;
+            return this;
+        }
+
         Builder rule(String rule, int value) {
             rules.put(rule, value);
             return this;
@@ -142,7 +167,7 @@ public final class CardPack {
         }
 
         CardPack build() {
-            return register(new CardPack(id, backSideOnly, entries, rules));
+            return register(new CardPack(id, backSideOnly, entries, rules, minPlayers, maxPlayers));
         }
     }
 
@@ -153,6 +178,7 @@ public final class CardPack {
         .entry("draw2", 2)
         .entry("wild", 4)
         .entry("wild_draw4", 4)
+        .players(2, 10)
         .build();
 
     public static final CardPack PACK_NO_MERCY = new Builder(NO_MERCY).numbers("numbers", ZERO_TO_NINE, 2)
@@ -171,6 +197,7 @@ public final class CardPack {
         .rule(GameRules.STACK_ANY_DRAW, 1)
         .rule(GameRules.SEVEN_ZERO, 1)
         .rule(GameRules.DRAW_TO_MATCH, 1)
+        .players(2, 6)
         .build();
 
     public static final CardPack PACK_FLIP = new Builder(FLIP).numbers("numbers", ONE_TO_NINE, 2)
@@ -181,6 +208,7 @@ public final class CardPack {
         .entry("wild", 4)
         .entry("wild_draw2", 4)
         .rule(GameRules.FLIP_MODE, 1)
+        .players(2, 10)
         .build();
 
     public static final CardPack PACK_FLIP_DARK = new Builder(FLIP_DARK)
@@ -208,6 +236,7 @@ public final class CardPack {
         .entry("flex_wild_target_draw2", 2)
         .entry("flex_wild_draw4", 4)
         .rule(GameRules.FLEX_POWER, 1)
+        .players(2, 6)
         .build();
 
     public static final CardPack PACK_ALL_WILD = new Builder(ALL_WILD).entry("aw_wild", 26)
@@ -218,6 +247,7 @@ public final class CardPack {
         .entry("aw_draw4", 8)
         .entry("aw_targeted_draw2", 14)
         .entry("aw_forced_swap", 14)
+        .players(2, 10)
         .build();
 
     public static final CardPack PACK_PARTY = new Builder(PARTY).entry("point_taken", 1)
@@ -225,58 +255,64 @@ public final class CardPack {
         .entry("wild_pile_up", 4)
         .rule(GameRules.JUMP_IN, 1)
         .rule(GameRules.MAX_PLAYERS, 16)
+        .players(6, 16)
         .build();
 
-    public static final CardPack PACK_HERO = new Builder(HERO).entry("wild_rebound", 4)
-        .build();
-    public static final CardPack PACK_RHYTHM = new Builder(RHYTHM).entry("wild_dance_floor", 4)
-        .build();
-    public static final CardPack PACK_MAYHEM = new Builder(MAYHEM).entry("wild_hand_shuffle", 4)
-        .build();
     public static final CardPack PACK_LEGEND = new Builder(LEGEND).entry("wild_trial", 4)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_ANNIVERSARY = new Builder(ANNIVERSARY).entry("wild_fifty_fifty", 4)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_WEEKEND = new Builder(WEEKEND).entry("wild_plus6", 4)
         .entry("wild_reverse_plus6", 4)
         .entry("double_discard_all", 1)
         .entry("wild_time_balloon", 2)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_BLASTER = new Builder(BLASTER).entry("blaster", 2)
         .entry("trade_hands", 1)
         .entry("discard_all", 1)
         .entry("wild_blast_all", 4)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_MODERN = new Builder(MODERN).entry("gift", 1)
         .entry("bonus_turn", 1)
         .entry("wild_swap_hands", 2)
         .entry("wild_hand_shuffle", 1)
+        .players(2, 10)
         .build();
     public static final CardPack PACK_JUNGLE = new Builder(JUNGLE).entry("wild_hand_shuffle", 2)
         .entry("wild_rebound", 2)
         .entry("wild_smoke", 2)
         .entry("wild_echo", 2)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_DANCE = new Builder(DANCE).entry("wild_crossfade", 2)
         .entry("wild_dance_floor", 2)
         .entry("wild_even_out", 2)
         .entry("wild_surprise", 2)
+        .players(3, 10)
         .build();
     public static final CardPack PACK_RASCAL = new Builder(RASCAL).entry("wild_card_storm", 2)
         .entry("wild_booby_trap", 2)
         .entry("wild_hurry_up", 2)
         .entry("wild_shield", 2)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_MYTH = new Builder(MYTH).entry("wild_trickster", 3)
         .entry("wild_surge", 3)
+        .players(2, 8)
         .build();
     public static final CardPack PACK_TEAMS = new Builder(TEAMS).entry("wild_team_play", 8)
         .entry("wild_team_draw4", 4)
         .rule(GameRules.TEAM_MODE, 1)
         .rule(GameRules.TEAM_RELAY, 1)
+        .players(4, 20)
         .build();
     public static final CardPack PACK_WHIRLWIND = new Builder(WHIRLWIND).entry("wild_cyclone", 2)
         .entry("wild_thief", 2)
+        .players(3, 8)
         .build();
 
     public static void init() {

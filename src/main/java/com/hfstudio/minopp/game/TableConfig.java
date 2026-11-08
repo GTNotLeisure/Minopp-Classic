@@ -74,7 +74,10 @@ public class TableConfig {
     }
 
     public void setCount(String key, int count) {
-        if (key == null || !CardPack.isEntryKey(key)) return;
+        if (key == null) return;
+        int colon = key.indexOf(':');
+        if (colon > 0) key = CardPack.alias(key.substring(0, colon)) + key.substring(colon);
+        if (!CardPack.isEntryKey(key)) return;
         if (count < 0) {
             counts.remove(key);
         } else {
@@ -86,41 +89,44 @@ public class TableConfig {
         rules.clear();
         packs.clear();
         counts.clear();
-        if (presetPack.equals(CardPack.PARTY) || presetPack.equals(CardPack.HERO)
-            || presetPack.equals(CardPack.RHYTHM)
-            || presetPack.equals(CardPack.MAYHEM)
-            || presetPack.equals(CardPack.LEGEND)
-            || presetPack.equals(CardPack.ANNIVERSARY)
-            || presetPack.equals(CardPack.WEEKEND)) {
-            setPackEnabled(CardPack.CLASSIC, true);
-        }
+        presetPack = CardPack.alias(presetPack);
+        CardPack pack = CardPack.get(presetPack);
+        if (pack != null && pack.isAddon()) setPackEnabled(CardPack.CLASSIC, true);
         setPackEnabled(presetPack, true);
     }
 
     public List<CardFace> buildFaces(boolean backSide) {
-        List<CardFace> faces = new ArrayList<>();
+        Map<CardFace, Integer> defaults = new java.util.LinkedHashMap<>();
+        Map<CardFace, Integer> overridden = new java.util.LinkedHashMap<>();
         for (CardPack pack : CardPack.all()) {
             if (pack.backSideOnly != backSide) continue;
             for (CardPack.Entry entry : pack.entries) {
+                boolean override = hasOverride(pack, entry);
                 int count = getCount(pack, entry);
-                if (count <= 0) continue;
-                CardType type = CardTypes.get(entry.typeId());
-                int[] numbers = entry.numbers().length == 0 ? new int[] { -1 } : entry.numbers();
-                for (int number : numbers) {
-                    if (type.wild) {
-                        for (int i = 0; i < count; i++) faces.add(new CardFace(type.id, CardColor.WILD, number));
-                    } else {
-                        for (CardColor color : CardColor.forSide(entry.dark())) {
-                            for (int i = 0; i < count; i++) {
-                                faces.add(
-                                    new CardFace(
-                                        type.id,
-                                        color,
-                                        number,
-                                        entry.flexColor() ? color.flexPartner() : null));
-                            }
-                        }
-                    }
+                if (count <= 0 && !override) continue;
+                Map<CardFace, Integer> target = override ? overridden : defaults;
+                for (CardFace face : entryFaces(entry)) target.merge(face, count, Math::max);
+            }
+        }
+        Map<CardFace, Integer> merged = new java.util.LinkedHashMap<>(defaults);
+        merged.putAll(overridden);
+        List<CardFace> faces = new ArrayList<>();
+        for (Map.Entry<CardFace, Integer> e : merged.entrySet()) {
+            for (int i = 0; i < e.getValue(); i++) faces.add(e.getKey());
+        }
+        return faces;
+    }
+
+    public static List<CardFace> entryFaces(CardPack.Entry entry) {
+        List<CardFace> faces = new ArrayList<>();
+        CardType type = CardTypes.get(entry.typeId());
+        int[] numbers = entry.numbers().length == 0 ? new int[] { -1 } : entry.numbers();
+        for (int number : numbers) {
+            if (type.wild) {
+                faces.add(new CardFace(type.id, CardColor.WILD, number));
+            } else {
+                for (CardColor color : CardColor.forSide(entry.dark())) {
+                    faces.add(new CardFace(type.id, color, number, entry.flexColor() ? color.flexPartner() : null));
                 }
             }
         }
@@ -217,7 +223,7 @@ public class TableConfig {
         if (tag.hasKey("packs")) {
             NBTTagList packsTag = tag.getTagList("packs", 8);
             for (int i = 0; i < packsTag.tagCount(); i++) {
-                CardPack pack = CardPack.get(packsTag.getStringTagAt(i));
+                CardPack pack = CardPack.get(CardPack.alias(packsTag.getStringTagAt(i)));
                 if (pack != null && !pack.backSideOnly) packs.add(pack.id);
             }
         } else {

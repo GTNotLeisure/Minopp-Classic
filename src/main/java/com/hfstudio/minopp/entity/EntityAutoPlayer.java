@@ -250,6 +250,17 @@ public class EntityAutoPlayer extends EntityLiving {
         return new ItemStack[5];
     }
 
+    public void seatAt(BlockEntityMinoTable table, String name) {
+        setCustomNameTag(name);
+        setActive(true);
+        cardPlayer = new CardPlayer(getUniqueID(), name);
+        table.joinPlayerToTable(cardPlayer, new Vec3d(posX, posY, posZ));
+        tablePos = table.getBlockPos();
+        ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
+        ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);
+        setHandStack(handStack);
+    }
+
     private void setHandStack(ItemStack stack) {
         dataWatcher.updateObject(DW_HAND_STACK, stack);
         dataWatcher.setObjectWatched(DW_HAND_STACK);

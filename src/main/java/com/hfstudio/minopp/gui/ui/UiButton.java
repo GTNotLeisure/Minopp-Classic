@@ -44,10 +44,15 @@ public class UiButton extends GuiButton {
         }
         UiDraw.roundFrame(xPosition, y, xPosition + width, y + height, Math.min(8, height / 2), 2, border, top, bottom);
         int color = enabled ? 0xFFFFFFFF : 0xFF777777;
-        mc.fontRenderer.drawStringWithShadow(
+        int room = width - 10;
+        int lw = mc.fontRenderer.getStringWidth(displayString);
+        UiDraw.marquee(
+            mc.fontRenderer,
             displayString,
-            xPosition + width / 2 - mc.fontRenderer.getStringWidth(displayString) / 2,
+            lw <= room ? xPosition + width / 2 - lw / 2 : xPosition + 5,
             y + (height - 8) / 2,
+            room,
+            1f,
             color);
         GL11.glColor4f(1, 1, 1, 1);
     }

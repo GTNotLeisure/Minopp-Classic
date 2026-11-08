@@ -3,13 +3,17 @@ package com.hfstudio.minopp.gui;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StatCollector;
@@ -28,6 +32,7 @@ import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.CardTypes;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.TableConfig;
+import com.hfstudio.minopp.gui.ui.SearchMatch;
 import com.hfstudio.minopp.gui.ui.SmoothScroll;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -81,6 +86,7 @@ public class GameSettingsScreen extends GuiScreen {
         final Object payload;
         int x, y, w, h;
         String title = "";
+        String searchExtra = "";
         final List<String> desc = new ArrayList<>();
         final List<String> controls = new ArrayList<>();
 
@@ -105,6 +111,17 @@ public class GameSettingsScreen extends GuiScreen {
 
     private int contentX, contentY, contentW, contentH, infoX, infoW;
     private boolean showInfo;
+
+    private static String query = "";
+    private final Map<String, Boolean> matchCache = new HashMap<>();
+    private GuiTextField search, numberField;
+    private String editingId;
+    private Tile mouseTile;
+    private String navId;
+    private boolean navTabs;
+    private int lastMouseX = Integer.MIN_VALUE, lastMouseY;
+    private Map<CardFace, Integer> effective = new HashMap<>();
+    private int[] keyQ = new int[4], keyE = new int[4];
 
     public GameSettingsScreen(BlockPos gamePos, GuiScreen parent) {
         this(gamePos, parent, null);
@@ -169,6 +186,11 @@ public class GameSettingsScreen extends GuiScreen {
         contentY = 62;
         contentW = (showInfo ? infoX - 6 : width - margin) - contentX;
         contentH = height - 30 - contentY;
+        search = new GuiTextField(fontRendererObj, 10, height - 21, Math.min(150, width / 3), 14);
+        search.setMaxStringLength(40);
+        search.setText(query);
+        numberField = null;
+        editingId = null;
     }
 
     private int viewX() {
@@ -246,8 +268,7 @@ public class GameSettingsScreen extends GuiScreen {
                     }
                     list.add(t);
                 }
-                tiles.addAll(list);
-                grid(list, y, 112, 72, 8);
+                place(list, y, 112, 72, 8);
             }
             case PACKS -> {
                 List<Tile> list = new ArrayList<>();
@@ -256,69 +277,91 @@ public class GameSettingsScreen extends GuiScreen {
                     Tile t = new Tile("pack:" + pack.id, Kind.PACK, pack);
                     t.title = tr(pack.langKey());
                     t.desc.add(tr(pack.langKey() + ".desc"));
+                    t.desc.add(tr("gui.minopp.pack.players", pack.minPlayers, pack.maxPlayers));
                     t.controls.add(tr("gui.minopp.controls.pack_left"));
                     t.controls.add(tr("gui.minopp.controls.pack_right"));
                     list.add(t);
                 }
-                tiles.addAll(list);
-                grid(list, y, 64, 70, 8);
+                place(list, y, 64, 70, 8);
             }
             case RULES -> {
                 for (GameRules.Category cat : new GameRules.Category[] { GameRules.Category.HOUSE,
                     GameRules.Category.BASIC, GameRules.Category.NO_MERCY, GameRules.Category.MODES }) {
-                    y = header(
-                        tr(
-                            "gui.minopp.rule_category." + cat.name()
-                                .toLowerCase()),
-                        y);
-                    y = grid(ruleTiles(cat), y, 58, 62, 8) + 2;
+                    String name = tr(
+                        "gui.minopp.rule_category." + cat.name()
+                            .toLowerCase());
+                    List<Tile> list = filter(ruleTiles(cat), name);
+                    if (list.isEmpty()) continue;
+                    y = header(name, y);
+                    tiles.addAll(list);
+                    y = grid(list, y, 58, 62, 8) + 2;
                 }
             }
             case CARDS -> {
+                effective = new HashMap<>();
+                for (CardFace f : cfg.buildFaces(false)) effective.merge(f, 1, Integer::sum);
+                for (CardFace f : cfg.buildFaces(true)) effective.merge(f, 1, Integer::sum);
+                Set<CardFace> shown = new HashSet<>();
                 for (CardPack pack : CardPack.all()) {
-                    y = header(tr(pack.langKey()), y);
+                    String packName = tr(pack.langKey());
                     List<Tile> list = new ArrayList<>();
                     for (CardPack.Entry entry : pack.entries) {
+                        List<CardFace> faces = TableConfig.entryFaces(entry);
+                        if (shown.containsAll(faces)) continue;
+                        shown.addAll(faces);
                         Tile t = new Tile(
                             "card:" + TableConfig.countKey(pack, entry),
                             Kind.CARD,
                             new Object[] { pack, entry });
+                        t.searchExtra = packName;
                         CardType type = CardTypes.get(entry.typeId());
                         t.title = type.numbered ? tr("gui.minopp.cards.numbers", numbers(entry.numbers()))
                             : tr("game.minopp.card.type." + entry.typeId());
                         String descKey = "game.minopp.card.type." + entry.typeId() + ".desc";
                         if (hasTr(descKey)) t.desc.add(tr(descKey));
                         int def = entry.count();
+                        int c = effectiveCount(entry);
                         if (entry.isWild()) {
-                            t.desc.add(tr("gui.minopp.cards.count_wild", cfg.getCount(pack, entry), def));
+                            t.desc.add(tr("gui.minopp.cards.count_wild", c, def));
                         } else {
-                            int perColor = cfg.getCount(pack, entry);
                             t.desc.add(
                                 tr(
                                     "gui.minopp.cards.count_color",
-                                    perColor,
-                                    perColor * 4 * Math.max(1, entry.numbers().length),
+                                    c,
+                                    c * 4 * Math.max(1, entry.numbers().length),
                                     def));
                         }
+                        String others = sharedWith(pack, faces);
+                        if (!others.isEmpty()) t.desc.add(tr("gui.minopp.cards.shared", others));
                         t.controls.add(tr("gui.minopp.controls.card_left"));
                         t.controls.add(tr("gui.minopp.controls.card_right"));
                         t.controls.add(tr("gui.minopp.controls.card_ctrl"));
                         list.add(t);
                     }
+                    list = filter(list, packName);
+                    if (list.isEmpty()) continue;
+                    y = header(packName, y);
                     tiles.addAll(list);
                     y = grid(list, y, 34, 52, 6) + 2;
                 }
             }
             case TABLE -> {
-                y = header(tr("gui.minopp.rule_category.table"), y);
-                y = grid(ruleTiles(GameRules.Category.TABLE), y, 58, 62, 8) + 2;
-                Tile info = new Tile("deckinfo", Kind.INFO, null);
-                info.title = tr("gui.minopp.table.deck_title");
-                tiles.add(info);
-                info.x = 0;
-                info.y = y;
-                info.w = viewW();
-                info.h = 40;
+                String name = tr("gui.minopp.rule_category.table");
+                List<Tile> list = filter(ruleTiles(GameRules.Category.TABLE), name);
+                if (!list.isEmpty()) {
+                    y = header(name, y);
+                    tiles.addAll(list);
+                    y = grid(list, y, 58, 62, 8) + 2;
+                }
+                if (query.isEmpty()) {
+                    Tile info = new Tile("deckinfo", Kind.INFO, null);
+                    info.title = tr("gui.minopp.table.deck_title");
+                    tiles.add(info);
+                    info.x = 0;
+                    info.y = y;
+                    info.w = viewW();
+                    info.h = 40;
+                }
             }
             case STYLE -> {
                 List<Tile> list = new ArrayList<>();
@@ -329,10 +372,59 @@ public class GameSettingsScreen extends GuiScreen {
                     t.controls.add(tr("gui.minopp.controls.theme"));
                     list.add(t);
                 }
-                tiles.addAll(list);
-                grid(list, y, 112, 72, 8);
+                place(list, y, 112, 72, 8);
             }
         }
+    }
+
+    private void place(List<Tile> list, int y, int tileW, int tileH, int gap) {
+        list = filter(list, "");
+        tiles.addAll(list);
+        grid(list, y, tileW, tileH, gap);
+    }
+
+    private List<Tile> filter(List<Tile> list, String groupName) {
+        if (query.isEmpty()) return list;
+        if (!groupName.isEmpty() && cachedMatch("group:" + groupName, groupName)) return list;
+        List<Tile> out = new ArrayList<>();
+        for (Tile t : list) {
+            StringBuilder sb = new StringBuilder(t.title).append('\n')
+                .append(t.searchExtra);
+            for (String d : t.desc) sb.append('\n')
+                .append(d);
+            if (cachedMatch(t.id, sb.toString())) out.add(t);
+        }
+        return out;
+    }
+
+    private boolean cachedMatch(String id, String text) {
+        Boolean b = matchCache.get(id);
+        if (b == null) {
+            b = SearchMatch.matches(text, query);
+            matchCache.put(id, b);
+        }
+        return b;
+    }
+
+    private int effectiveCount(CardPack.Entry entry) {
+        int c = 0;
+        for (CardFace f : TableConfig.entryFaces(entry)) c = Math.max(c, effective.getOrDefault(f, 0));
+        return c;
+    }
+
+    private static Map<CardFace, Set<CardPack>> facePacks;
+
+    private static String sharedWith(CardPack owner, List<CardFace> faces) {
+        if (facePacks == null) {
+            facePacks = new HashMap<>();
+            for (CardPack pack : CardPack.all()) for (CardPack.Entry e : pack.entries)
+                for (CardFace f : TableConfig.entryFaces(e)) facePacks.computeIfAbsent(f, k -> new LinkedHashSet<>())
+                    .add(pack);
+        }
+        Set<String> names = new LinkedHashSet<>();
+        for (CardFace f : faces)
+            for (CardPack pack : facePacks.getOrDefault(f, Set.of())) if (pack != owner) names.add(tr(pack.langKey()));
+        return String.join(", ", names);
     }
 
     private List<Tile> ruleTiles(GameRules.Category cat) {
@@ -346,10 +438,10 @@ public class GameSettingsScreen extends GuiScreen {
             } else {
                 t.desc.add(tr("gui.minopp.rule.range", r.min(), r.max()));
                 t.controls.add(tr("gui.minopp.controls.rule_int"));
+                t.controls.add(tr("gui.minopp.controls.rule_input"));
             }
             list.add(t);
         }
-        tiles.addAll(list);
         return list;
     }
 
@@ -427,22 +519,33 @@ public class GameSettingsScreen extends GuiScreen {
         drawTabs(mouseX, mouseY, dt);
 
         UiDraw.panel(contentX, contentY, contentX + contentW, contentY + contentH);
+        if (lastMouseX != Integer.MIN_VALUE && (mouseX != lastMouseX || mouseY != lastMouseY)) {
+            navId = null;
+            navTabs = false;
+        }
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
         hovered = null;
+        mouseTile = null;
         boolean inView = mouseX >= viewX() && mouseX < viewX() + viewW()
             && mouseY >= viewY()
             && mouseY < viewY() + viewH();
         UiDraw.scissor(viewX() - 5, viewY() - 4, viewW() + 10, viewH() + 4);
         GL11.glPushMatrix();
         GL11.glTranslatef(viewX(), viewY() - offset, 0);
+        Tile editing = null;
         for (Tile t : tiles) {
+            if (t.id.equals(editingId)) editing = t;
             int sx = viewX() + t.x, sy = (int) (viewY() + t.y - offset);
             if (sy + t.h < viewY() - 10 || sy > viewY() + viewH() + 10) continue;
-            boolean hover = inView && !scroll.isDragging()
+            boolean mouseOver = inView && !scroll.isDragging()
                 && t.kind != Kind.HEADER
                 && mouseX >= sx
                 && mouseX < sx + t.w
                 && mouseY >= sy
                 && mouseY < sy + t.h;
+            if (mouseOver) mouseTile = t;
+            boolean hover = navId != null ? t.id.equals(navId) : mouseOver;
             if (hover) hovered = t;
             float a = hoverAnim.getOrDefault(t.id, 0f);
             a += ((hover ? 1f : 0f) - a) * Math.min(1, dt * 16);
@@ -451,6 +554,21 @@ public class GameSettingsScreen extends GuiScreen {
         }
         GL11.glPopMatrix();
         UiDraw.endScissor();
+        if (editingId != null) {
+            if (editing == null || !editable()) {
+                closeEditor(editing != null);
+            } else {
+                int sy = (int) (viewY() + editing.y - offset);
+                numberField.xPosition = viewX() + editing.x + editing.w / 2 - 16;
+                numberField.yPosition = sy + editing.h - (editing.kind == Kind.CARD ? 12 : 25);
+                if (numberField.yPosition > viewY() - 8 && numberField.yPosition < viewY() + viewH()) {
+                    GL11.glPushMatrix();
+                    GL11.glTranslatef(0, 0, 120);
+                    numberField.drawTextBox();
+                    GL11.glPopMatrix();
+                }
+            }
+        }
         int barX = contentX + contentW - 9;
         boolean barHover = mouseX >= barX - 3 && mouseX <= barX + 7 && mouseY >= viewY() && mouseY <= viewY() + viewH();
         scroll.drawBar(barX, viewY(), viewH(), barHover);
@@ -462,13 +580,18 @@ public class GameSettingsScreen extends GuiScreen {
         if (showInfo) drawInfoPanel(te);
         drawBottomBar(mouseX, mouseY);
 
-        if (hovered != null && System.currentTimeMillis() - hoverStart > 350) {
+        if (hovered != null && (navId == null || !showInfo) && System.currentTimeMillis() - hoverStart > 350) {
             List<String> lines = new ArrayList<>();
             lines.add(hovered.title);
             for (String d : hovered.desc)
                 for (String l : fontRendererObj.listFormattedStringToWidth(d, 200)) lines.add(l);
             for (String c : hovered.controls) lines.add(EnumChatFormatting.GRAY + c);
-            UiDraw.tooltip(fontRendererObj, lines, mouseX, mouseY, width, height);
+            int tx = mouseX, ty = mouseY;
+            if (navId != null) {
+                tx = viewX() + hovered.x + hovered.w;
+                ty = (int) (viewY() + hovered.y - offset);
+            }
+            UiDraw.tooltip(fontRendererObj, lines, tx, ty, width, height);
         }
     }
 
@@ -482,12 +605,22 @@ public class GameSettingsScreen extends GuiScreen {
 
     private void drawTabs(int mouseX, int mouseY, float dt) {
         int tw = tabWidth();
-        fontRendererObj.drawStringWithShadow("Q", contentX + 2, 42, 0xFFBBBBBB);
-        fontRendererObj.drawStringWithShadow("E", tabX(Tab.values().length) + 2, 42, 0xFFBBBBBB);
+        keyQ = keyCap("Q", contentX, 39, mouseX, mouseY);
+        keyE = keyCap("E", tabX(Tab.values().length), 39, mouseX, mouseY);
         for (Tab t : Tab.values()) {
             int x = tabX(t.ordinal()), y = 32;
             boolean sel = t == tab;
             boolean hover = mouseX >= x && mouseX < x + tw && mouseY >= y && mouseY < y + 28;
+            if (sel && navTabs) {
+                float pulse = 0.6f + 0.4f * (float) Math.sin(System.currentTimeMillis() % 100000L / 160.0);
+                UiDraw.roundRect(
+                    x - 4,
+                    y - 4,
+                    x + tw + 4,
+                    y + 32,
+                    8,
+                    ((int) (pulse * 220) << 24) | (UiDraw.GLOW & 0xFFFFFF));
+            }
             if (sel) {
                 UiDraw.roundFrame(x - 1, y - 1, x + tw + 1, y + 29, 5, 2, UiDraw.GLOW, 0xFFE0402A, 0xFFA01A14);
             } else {
@@ -509,6 +642,28 @@ public class GameSettingsScreen extends GuiScreen {
                 tw - 4,
                 sel ? UiDraw.TITLE_YELLOW : 0xFFFFFFFF);
         }
+    }
+
+    private int[] keyCap(String key, int x, int y, int mouseX, int mouseY) {
+        int w = 11, h = 13;
+        boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        UiDraw.roundFrame(
+            x,
+            y,
+            x + w,
+            y + h,
+            2,
+            1,
+            hover ? UiDraw.GLOW : 0xFF8A8A8A,
+            hover ? 0xFF5A5A5A : 0xFF3A3A3A,
+            0xFF2A2A2A);
+        fontRendererObj.drawString(key, x + 3, y + 3, hover ? 0xFFFFFFFF : 0xFFE0E0E0);
+        GL11.glColor4f(1, 1, 1, 1);
+        return new int[] { x, y, w, h };
+    }
+
+    private static boolean inside(int[] r, int mx, int my) {
+        return mx >= r[0] && mx < r[0] + r[2] && my >= r[1] && my < r[1] + r[3];
     }
 
     private void drawTile(BlockEntityMinoTable te, Tile t, float hoverA) {
@@ -597,7 +752,7 @@ public class GameSettingsScreen extends GuiScreen {
                 Object[] p = (Object[]) t.payload;
                 CardPack pack = (CardPack) p[0];
                 CardPack.Entry entry = (CardPack.Entry) p[1];
-                int c = cfg.getCount(pack, entry);
+                int c = effectiveCount(entry);
                 UiDraw.roundRect(x1, y1, x2, y2, 4, 0x80000000);
                 CardRenderer.drawFace2D(
                     sampleFace(entry, 0),
@@ -637,7 +792,7 @@ public class GameSettingsScreen extends GuiScreen {
             }
         }
         if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 10, 10);
-        if (count != null) {
+        if (count != null && !t.id.equals(editingId)) {
             int pillY = t.kind == Kind.CARD ? y2 - 11 : y2 - 24;
             valuePill(count, (x1 + x2) / 2, pillY);
         }
@@ -731,7 +886,7 @@ public class GameSettingsScreen extends GuiScreen {
         float cardH = cardW * 1.5625f;
         int n = faces.size();
         for (int i = 0; i < n; i++) {
-            float angle = n == 1 ? 0 : -24 + 48f * i / (n - 1);
+            float angle = fanAngle(i, n);
             GL11.glPushMatrix();
             GL11.glTranslatef(cx, bottom, 0);
             GL11.glRotatef(angle, 0, 0, 1);
@@ -740,33 +895,86 @@ public class GameSettingsScreen extends GuiScreen {
         }
     }
 
+    private static float fanAngle(int i, int n) {
+        return n == 1 ? 0 : -24 + 48f * i / (n - 1);
+    }
+
+    private static void drawFanCentered(List<CardFace> faces, String theme, float cx, float top, float boxH,
+        float cardW) {
+        cardW = Math.min(cardW, (boxH - 12) / 1.5625f / 1.1f);
+        float cardH = cardW * 1.5625f;
+        int n = faces.size();
+        float minY = 0, maxY = 0;
+        for (int i = 0; i < n; i++) {
+            double a = Math.toRadians(fanAngle(i, n));
+            for (float[] c : new float[][] { { -cardW / 2, -cardH }, { cardW / 2, -cardH }, { -cardW / 2, 0 },
+                { cardW / 2, 0 } }) {
+                float y = (float) (c[0] * Math.sin(a) + c[1] * Math.cos(a));
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
+        }
+        drawFan(faces, theme, cx, top + boxH / 2f - (minY + maxY) / 2f, cardW);
+    }
+
     private void drawInfoPanel(BlockEntityMinoTable te) {
         int x1 = infoX, y1 = contentY, x2 = infoX + infoW, y2 = contentY + contentH;
         UiDraw.panel(x1, y1, x2, y2);
         Tile t = infoTile;
+        List<String> texts = new ArrayList<>();
+        List<Integer> textColors = new ArrayList<>();
+        if (t == null) {
+            texts.add(describePacks(te.config));
+            textColors.add(0xFFFFFFFF);
+            texts.add(tr("gui.minopp.design.summary", te.config.countDeckSize(), te.seatCount()));
+            textColors.add(0xFFFFFFFF);
+        } else {
+            for (String d : t.desc) {
+                texts.add(d);
+                textColors.add(0xFFFFFFFF);
+            }
+            for (String c : t.controls) {
+                texts.add(c);
+                textColors.add(0xFFBBBBBB);
+            }
+        }
         int py = y1 + 8, ph = Math.min(90, (y2 - y1) / 2);
+        float textScale = 1f;
+        int controlStart = t == null ? texts.size() : t.desc.size();
+        int needed = wrappedHeight(texts, controlStart, infoW - 16, 1f);
+        int avail = y2 - 6 - (py + ph + 32);
+        if (needed > avail) {
+            ph = Math.max(36, ph - (needed - avail));
+            avail = y2 - 6 - (py + ph + 32);
+            if (needed > avail) textScale = 0.75f;
+            if (t != null && t.kind == Kind.RULE) ph = Math.max(ph, 40);
+        }
         UiDraw.roundRect(x1 + 6, py, x2 - 6, py + ph, 5, 0x50000000);
         float cx = (x1 + x2) / 2f;
         if (t == null) {
-            drawFan(packPreview(te.config), ThemeManager.INSTANCE.selected(), cx, py + ph - 8, 30);
+            drawFanCentered(packPreview(te.config), ThemeManager.INSTANCE.selected(), cx, py, ph, 30);
         } else {
             switch (t.kind) {
-                case RULE -> UiDraw.icon(((GameRules.Rule) t.payload).id(), cx - 32, py + ph / 2f - 32, 64);
+                case RULE -> {
+                    float size = Math.min(64, ph - 8);
+                    UiDraw.icon(((GameRules.Rule) t.payload).id(), cx - size / 2f, py + (ph - size) / 2f, size);
+                }
                 case CARD -> {
                     CardPack.Entry entry = (CardPack.Entry) ((Object[]) t.payload)[1];
                     List<CardFace> faces = new ArrayList<>();
                     for (int i = 0; i < (entry.isWild() ? 1 : 4); i++) faces.add(sampleFace(entry, i));
-                    drawFan(faces, ThemeManager.INSTANCE.selected(), cx, py + ph - 6, 34);
+                    drawFanCentered(faces, ThemeManager.INSTANCE.selected(), cx, py, ph, 34);
                 }
-                case PACK -> drawFan(
+                case PACK -> drawFanCentered(
                     packFaces((CardPack) t.payload),
                     ThemeManager.INSTANCE.selected(),
                     cx,
-                    py + ph - 6,
+                    py,
+                    ph,
                     32);
                 case THEME -> {
                     String id = ((ThemeManager.ThemeInfo) t.payload).id();
-                    drawFan(
+                    drawFanCentered(
                         List.of(
                             new CardFace("number", CardColor.RED, 5),
                             new CardFace("number", CardColor.BLUE, 3),
@@ -774,14 +982,15 @@ public class GameSettingsScreen extends GuiScreen {
                             new CardFace("wild", CardColor.WILD, -1)),
                         id,
                         cx - 8,
-                        py + ph - 6,
+                        py,
+                        ph,
                         30);
                     CardRenderer.drawBack2D(id, false, x2 - 40, py + 8, 28, 44);
                 }
                 case DESIGN -> {
                     DesignStore.Design d = DesignStore.get((Integer) t.payload);
                     if (d != null)
-                        drawFan(packPreview(d.config), ThemeManager.INSTANCE.selected(), cx, py + ph - 6, 30);
+                        drawFanCentered(packPreview(d.config), ThemeManager.INSTANCE.selected(), cx, py, ph, 30);
                     else UiDraw.image("plus", cx - 24, py + ph / 2f - 24, 48, 48);
                 }
                 default -> {}
@@ -791,31 +1000,51 @@ public class GameSettingsScreen extends GuiScreen {
         UiDraw.roundRect(x1 + 4, hy, x2 - 4, hy + 18, 4, 0xE0180404, 0xE0281010);
         String title = t == null ? tr("gui.minopp.settings.current") : t.title;
         UiDraw.fittedCentered(fontRendererObj, title, cx, hy + 5, infoW - 14, UiDraw.TITLE_YELLOW);
-        int ty = hy + 24;
-        List<String> lines = new ArrayList<>();
-        if (t == null) {
-            lines.add(describePacks(te.config));
-            lines.add(tr("gui.minopp.design.summary", te.config.countDeckSize(), te.seatCount()));
-        } else {
-            lines.addAll(t.desc);
-        }
-        for (String line : lines) {
-            for (String l : fontRendererObj.listFormattedStringToWidth(line, infoW - 16)) {
-                if (ty > y2 - 12) break;
-                UiDraw.scaledCentered(fontRendererObj, l, cx, ty, 1f, 0xFFFFFFFF);
-                ty += 10;
-            }
-            ty += 3;
-        }
-        if (t != null) {
-            for (String c : t.controls) {
-                for (String l : fontRendererObj.listFormattedStringToWidth(c, infoW - 16)) {
-                    if (ty > y2 - 12) break;
-                    UiDraw.scaledCentered(fontRendererObj, l, cx, ty, 1f, 0xFFBBBBBB);
-                    ty += 10;
+        float ty = hy + 24;
+        float lineH = 10 * textScale;
+        int wrapW = (int) ((infoW - 16) / textScale);
+        for (int i = 0; i < texts.size(); i++) {
+            String text = texts.get(i);
+            float fit = i >= controlStart ? fitScale(text, wrapW) : 0;
+            if (fit > 0) {
+                if (ty + lineH > y2 - 4) break;
+                UiDraw.scaledCentered(
+                    fontRendererObj,
+                    text,
+                    cx,
+                    ty + lineH * (1 - fit) / 2f,
+                    textScale * fit,
+                    textColors.get(i));
+                ty += lineH;
+            } else {
+                for (Object o : fontRendererObj.listFormattedStringToWidth(text, wrapW)) {
+                    if (ty + lineH > y2 - 4) break;
+                    UiDraw.scaledCentered(fontRendererObj, (String) o, cx, ty, textScale, textColors.get(i));
+                    ty += lineH;
                 }
             }
+            ty += 3 * textScale;
         }
+    }
+
+    // short control hints are shrunk onto one line instead of wrapping mid-phrase (CJK has no spaces to break on)
+    private float fitScale(String text, int width) {
+        int w = fontRendererObj.getStringWidth(text);
+        if (w <= width) return 1f;
+        float s = width / (float) w;
+        return s >= 0.62f ? s : 0;
+    }
+
+    private int wrappedHeight(List<String> texts, int controlStart, int width, float scale) {
+        int lines = 0;
+        int w = (int) (width / scale);
+        for (int i = 0; i < texts.size(); i++) {
+            String t = texts.get(i);
+            lines += i >= controlStart && fitScale(t, w) > 0 ? 1
+                : fontRendererObj.listFormattedStringToWidth(t, w)
+                    .size();
+        }
+        return (int) Math.ceil((lines * 10 + texts.size() * 3) * scale);
     }
 
     private int[] pillBack = new int[4];
@@ -829,13 +1058,52 @@ public class GameSettingsScreen extends GuiScreen {
         UiDraw.pill(fontRendererObj, bx, y, "Esc", back, hb);
         pillBack = new int[] { bx, y, bw, 18 };
         int x = bx - 6;
+        int searchRight = search.xPosition + search.width + 8;
         String hint = tr(tab == Tab.DESIGNS ? "gui.minopp.settings.hint_designs" : "gui.minopp.settings.hint");
         int hw = UiDraw.pillWidth(fontRendererObj, "Q/E", hint);
-        if (x - hw > 8) UiDraw.pill(fontRendererObj, x - hw, y, "Q/E", hint, false);
+        if (x - hw > searchRight) {
+            UiDraw.pill(fontRendererObj, x - hw, y, "Q/E", hint, false);
+            x -= hw + 6;
+            String nav = tr("gui.minopp.settings.hint_nav");
+            int nw = UiDraw.pillWidth(fontRendererObj, "WASD", nav);
+            if (x - nw > searchRight) UiDraw.pill(fontRendererObj, x - nw, y, "WASD", nav, false);
+        }
+        search.drawTextBox();
+        if (search.getText()
+            .isEmpty() && !search.isFocused()) {
+            fontRendererObj
+                .drawString(tr("gui.minopp.settings.search"), search.xPosition + 4, search.yPosition + 3, 0xFF808080);
+        }
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        if (editingId != null) {
+            if (mouseX >= numberField.xPosition && mouseX < numberField.xPosition + numberField.width
+                && mouseY >= numberField.yPosition
+                && mouseY < numberField.yPosition + numberField.height) {
+                numberField.mouseClicked(mouseX, mouseY, button);
+                return;
+            }
+            closeEditor(true);
+        }
+        search.mouseClicked(mouseX, mouseY, button);
+        if (search.isFocused()) {
+            if (button == 1) {
+                search.setText("");
+                updateQuery();
+            }
+            return;
+        }
+        if (inside(keyQ, mouseX, mouseY)) {
+            switchTab(Tab.values()[(tab.ordinal() + Tab.values().length - 1) % Tab.values().length]);
+            return;
+        }
+        if (inside(keyE, mouseX, mouseY)) {
+            switchTab(Tab.values()[(tab.ordinal() + 1) % Tab.values().length]);
+            return;
+        }
         for (Tab t : Tab.values()) {
             int x = tabX(t.ordinal());
             if (mouseX >= x && mouseX < x + tabWidth() && mouseY >= 32 && mouseY < 60) {
@@ -843,16 +1111,16 @@ public class GameSettingsScreen extends GuiScreen {
                 return;
             }
         }
-        if (mouseX >= pillBack[0] && mouseX < pillBack[0] + pillBack[2]
-            && mouseY >= pillBack[1]
-            && mouseY < pillBack[1] + pillBack[3]) {
+        if (inside(pillBack, mouseX, mouseY)) {
             mc.displayGuiScreen(parent);
             return;
         }
         SmoothScroll scroll = scrolls.get(tab);
         if (scroll.mousePressed(mouseX, mouseY, contentX + contentW - 9, viewY(), viewH())) return;
-        if (hovered != null) {
-            onTileClicked(hovered, button);
+        if (mouseTile != null) {
+            navId = null;
+            navTabs = false;
+            onTileClicked(mouseTile, button);
             return;
         }
         super.mouseClicked(mouseX, mouseY, button);
@@ -881,25 +1149,182 @@ public class GameSettingsScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
-        if (key == Keyboard.KEY_Q) {
-            switchTab(Tab.values()[(tab.ordinal() + Tab.values().length - 1) % Tab.values().length]);
-        } else if (key == Keyboard.KEY_E) {
-            switchTab(Tab.values()[(tab.ordinal() + 1) % Tab.values().length]);
-        } else if ((key == Keyboard.KEY_DELETE || key == Keyboard.KEY_X) && hovered != null
-            && hovered.kind == Kind.DESIGN) {
-                DesignStore.delete((Integer) hovered.payload);
+        if (editingId != null) {
+            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+                closeEditor(true);
             } else if (key == Keyboard.KEY_ESCAPE) {
-                mc.displayGuiScreen(parent);
-            } else {
-                super.keyTyped(c, key);
+                closeEditor(false);
+            } else if (Character.isDigit(c) || c < 32 || key == Keyboard.KEY_DELETE) {
+                numberField.textboxKeyTyped(c, key);
+                String digits = numberField.getText()
+                    .replaceAll("[^0-9]", "");
+                if (!digits.equals(numberField.getText())) numberField.setText(digits);
             }
+            return;
+        }
+        if (search.isFocused()) {
+            if (key == Keyboard.KEY_ESCAPE || key == Keyboard.KEY_RETURN
+                || key == Keyboard.KEY_NUMPADENTER
+                || key == Keyboard.KEY_TAB) {
+                search.setFocused(false);
+            } else if (search.textboxKeyTyped(c, key)) {
+                updateQuery();
+            }
+            return;
+        }
+        Tile focus = navId != null ? hovered : null;
+        switch (key) {
+            case Keyboard.KEY_Q -> switchTab(
+                Tab.values()[(tab.ordinal() + Tab.values().length - 1) % Tab.values().length]);
+            case Keyboard.KEY_E -> switchTab(Tab.values()[(tab.ordinal() + 1) % Tab.values().length]);
+            case Keyboard.KEY_W, Keyboard.KEY_UP -> navigate(0, -1);
+            case Keyboard.KEY_S, Keyboard.KEY_DOWN -> navigate(0, 1);
+            case Keyboard.KEY_A, Keyboard.KEY_LEFT -> navigate(-1, 0);
+            case Keyboard.KEY_D, Keyboard.KEY_RIGHT -> navigate(1, 0);
+            case Keyboard.KEY_RETURN, Keyboard.KEY_NUMPADENTER, Keyboard.KEY_SPACE -> {
+                if (navTabs) navigate(0, 1);
+                else if (focus != null) onTileClicked(focus, 0);
+            }
+            case Keyboard.KEY_R -> {
+                if (focus != null) onTileClicked(focus, 1);
+            }
+            case Keyboard.KEY_SLASH -> search.setFocused(true);
+            case Keyboard.KEY_F -> {
+                if (isCtrlKeyDown()) search.setFocused(true);
+            }
+            case Keyboard.KEY_DELETE, Keyboard.KEY_X -> {
+                Tile t = focus != null ? focus : mouseTile;
+                if (t != null && t.kind == Kind.DESIGN) DesignStore.delete((Integer) t.payload);
+            }
+            case Keyboard.KEY_ESCAPE -> mc.displayGuiScreen(parent);
+            default -> super.keyTyped(c, key);
+        }
+    }
+
+    private void updateQuery() {
+        String q = search.getText()
+            .trim();
+        if (q.equals(query)) return;
+        query = q;
+        matchCache.clear();
+        navId = null;
+        for (SmoothScroll sc : scrolls.values()) sc.scrollTo(0);
+    }
+
+    private void navigate(int dx, int dy) {
+        List<Tile> candidates = new ArrayList<>();
+        for (Tile t : tiles) if (t.kind != Kind.HEADER && t.kind != Kind.INFO) candidates.add(t);
+        Tile cur = null;
+        for (Tile t : candidates) if (t.id.equals(navId)) cur = t;
+        if (navTabs || cur == null) {
+            if (navTabs && dx != 0) {
+                switchTab(Tab.values()[(tab.ordinal() + Tab.values().length + dx) % Tab.values().length]);
+                navTabs = true;
+            } else if (dy < 0) {
+                navTabs = true;
+                navId = null;
+            } else if (!candidates.isEmpty()) {
+                navTabs = false;
+                focusTile(candidates.get(0));
+            }
+            return;
+        }
+        float cx = cur.x + cur.w / 2f, cy = cur.y + cur.h / 2f;
+        Tile best = null;
+        float bestScore = Float.MAX_VALUE;
+        for (Tile t : candidates) {
+            if (t == cur) continue;
+            float ddx = t.x + t.w / 2f - cx, ddy = t.y + t.h / 2f - cy;
+            float score;
+            if (dx != 0) {
+                if (ddx * dx <= 0 || Math.abs(ddy) > cur.h / 2f) continue;
+                score = Math.abs(ddx);
+            } else {
+                if (ddy * dy < cur.h / 2f) continue;
+                score = Math.abs(ddy) + 2 * Math.abs(ddx);
+            }
+            if (score < bestScore) {
+                bestScore = score;
+                best = t;
+            }
+        }
+        if (best != null) {
+            focusTile(best);
+        } else if (dy < 0) {
+            navTabs = true;
+            navId = null;
+        }
+    }
+
+    private void focusTile(Tile t) {
+        navId = t.id;
+        SmoothScroll scroll = scrolls.get(tab);
+        float off = scroll.offset();
+        if (t.y - 22 < off) scroll.scrollTo(Math.max(0, t.y - 22));
+        else if (t.y + t.h + 8 > off + viewH()) scroll.scrollTo(t.y + t.h + 8 - viewH());
+        mc.getSoundHandler()
+            .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.8f));
+    }
+
+    private void openEditor(Tile t, int value) {
+        editingId = t.id;
+        numberField = new GuiTextField(fontRendererObj, 0, -100, 32, 12);
+        numberField.setMaxStringLength(3);
+        numberField.setText(String.valueOf(value));
+        numberField.setFocused(true);
+        numberField.setCursorPositionEnd();
+        numberField.setSelectionPos(0);
+        click();
+    }
+
+    private void closeEditor(boolean commit) {
+        String id = editingId;
+        GuiTextField field = numberField;
+        editingId = null;
+        numberField = null;
+        if (!commit || id == null
+            || field == null
+            || field.getText()
+                .isEmpty()
+            || !editable()) return;
+        int v;
+        try {
+            v = Integer.parseInt(field.getText());
+        } catch (NumberFormatException e) {
+            return;
+        }
+        for (Tile t : tiles) if (t.id.equals(id)) {
+            setValue(t, v);
+            click();
+            return;
+        }
+    }
+
+    private void setValue(Tile t, int v) {
+        BlockEntityMinoTable te = table();
+        if (te == null) return;
+        TableConfig cfg = te.config;
+        if (t.kind == Kind.CARD) {
+            Object[] p = (Object[]) t.payload;
+            String key = TableConfig.countKey((CardPack) p[0], (CardPack.Entry) p[1]);
+            int nv = v < 0 ? -1 : Math.min(64, v);
+            cfg.setCount(key, nv);
+            if (previewTable == null) C2SSeatControlPacket.Client.sendCountC2S(gamePos, key, nv);
+        } else if (t.kind == Kind.RULE) {
+            GameRules.Rule r = (GameRules.Rule) t.payload;
+            int nv = r.clamp(v);
+            cfg.set(r.id(), nv);
+            if (previewTable == null) C2SSeatControlPacket.Client.sendRuleC2S(gamePos, r.id(), nv);
+        }
     }
 
     private void switchTab(Tab t) {
         if (t == tab) return;
+        if (editingId != null) closeEditor(true);
         tab = t;
         infoTile = null;
         hovered = null;
+        navId = null;
         mc.getSoundHandler()
             .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.2f));
     }
@@ -956,9 +1381,15 @@ public class GameSettingsScreen extends GuiScreen {
                 int nv;
                 if (r.bool()) {
                     nv = v == 0 ? 1 : 0;
+                } else if (shift && button == 1) {
+                    openEditor(t, v);
+                    return;
+                } else if (ctrl) {
+                    nv = r.defaultValue();
+                } else if (shift) {
+                    nv = r.min();
                 } else {
-                    int step = shift ? 5 : 1;
-                    nv = r.clamp(v + (button == 1 ? -step : step));
+                    nv = r.clamp(v + (button == 1 ? 1 : -1));
                 }
                 cfg.set(r.id(), nv);
                 if (previewTable == null) C2SSeatControlPacket.Client.sendRuleC2S(gamePos, r.id(), nv);
@@ -968,14 +1399,17 @@ public class GameSettingsScreen extends GuiScreen {
                 CardPack pack = (CardPack) p[0];
                 CardPack.Entry entry = (CardPack.Entry) p[1];
                 String key = TableConfig.countKey(pack, entry);
-                int c = cfg.getCount(pack, entry);
+                int c = effectiveCount(entry);
                 int nv;
-                if (ctrl) {
+                if (shift && button == 1) {
+                    openEditor(t, c);
+                    return;
+                } else if (ctrl) {
                     nv = -1;
-                } else if (button == 1) {
-                    nv = Math.max(0, c + (shift ? -1 : 1));
+                } else if (shift) {
+                    nv = 0;
                 } else {
-                    nv = c > 0 ? 0 : Math.max(1, entry.count());
+                    nv = Math.max(0, Math.min(64, c + (button == 1 ? 1 : -1)));
                 }
                 cfg.setCount(key, nv);
                 if (previewTable == null) C2SSeatControlPacket.Client.sendCountC2S(gamePos, key, nv);

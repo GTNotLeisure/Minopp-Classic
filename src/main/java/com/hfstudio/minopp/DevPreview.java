@@ -8,7 +8,6 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
-import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.AutoPlayer;
 import com.hfstudio.minopp.game.CardPack;
@@ -43,9 +42,6 @@ public final class DevPreview {
 
     private static final String[] MODES = { CardPack.CLASSIC, CardPack.NO_MERCY, CardPack.FLIP, CardPack.FLEX,
         CardPack.ALL_WILD, CardPack.PARTY };
-    private static final String[] NAMES = { "Pudding", "Luna", "Dusty", "Pepper", "Mochi", "Biscuit", "Nova", "Ziggy",
-        "Clover", "Maple", "Pixel", "Sprout", "Tofu", "Juniper", "Waffle", "Comet", "Hazel", "Noodle", "Bean" };
-
     private int ticks;
     private boolean teamsConfigured;
     private int stage;
@@ -73,6 +69,7 @@ public final class DevPreview {
             case 1 -> {
                 if (ticks < 30 || table == null) return;
                 table.joinPlayerToTable(new CardPlayer(player), new Vec3d(player.posX, player.posY, player.posZ));
+                table.addBots(BlockEntityMinoTable.MAX_SEATS);
                 stage = 2;
                 ticks = 0;
             }
@@ -135,7 +132,7 @@ public final class DevPreview {
         if (MODES[mode].equals(CardPack.CLASSIC)) {
             config.setCount("no_mercy:discard_all", 2);
             config.setCount("weekend:wild_time_balloon", 2);
-            config.setCount("hero:wild_rebound", 2);
+            config.setCount("jungle:wild_rebound", 2);
         }
     }
 
@@ -153,19 +150,6 @@ public final class DevPreview {
         BlockEntityMinoTable table = ItemHandCards.getTable(world, core);
         table.config.set(GameRules.MAX_PLAYERS, n);
         int playerSeat = n / 2;
-        int bot = 0;
-        for (int i = 0; i < n; i++) {
-            if (i == playerSeat) continue;
-            Vec3d seat = BlockEntityMinoTable.getSeatLocalPos(i, n);
-            double ox = seat.x - 1.5, oz = seat.z - 1.5;
-            double len = Math.sqrt(ox * ox + oz * oz);
-            EntityAutoPlayer e = new EntityAutoPlayer(world);
-            e.setPosition(core.x + seat.x + ox / len * 0.45, core.y, core.z + seat.z + oz / len * 0.45);
-            e.setCustomNameTag(NAMES[bot++ % NAMES.length]);
-            e.autoPlayer.aiNoDelay = 1;
-            e.setActive(true);
-            world.spawnEntityInWorld(e);
-        }
         Vec3d mySeat = BlockEntityMinoTable.getSeatLocalPos(playerSeat, n);
         player.playerNetServerHandler.setPlayerLocation(
             core.x + mySeat.x,
