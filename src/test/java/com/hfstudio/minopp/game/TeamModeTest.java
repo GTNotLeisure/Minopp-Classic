@@ -11,7 +11,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Team mode: team assignment, the equal-size start condition, and teams carried into the game. */
 public class TeamModeTest {
 
     private static List<CardPlayer> seated(int... teams) {
@@ -36,9 +35,7 @@ public class TeamModeTest {
     public void unequalTeamsCannotStart() {
         assertNotNull(Teams.problem(seated(0, 0, 0, 1), 2));
         assertNotNull(Teams.problem(seated(0, 0, 1, 1, 2), 3));
-        // an empty team is not "equal"
         assertNotNull(Teams.problem(seated(0, 0, 1, 1), 3));
-        // fewer players than teams
         assertNotNull(Teams.problem(seated(0, 1), 3));
     }
 
@@ -49,7 +46,6 @@ public class TeamModeTest {
         int[] sizes = Teams.sizes(list, 2);
         assertEquals(5, sizes[0] + sizes[1]);
         assertTrue(Math.abs(sizes[0] - sizes[1]) <= 1);
-        // shrinking the team count moves players of removed teams
         List<CardPlayer> three = seated(0, 1, 2, 2);
         Teams.normalize(three, 2);
         for (CardPlayer p : three) assertTrue(p.team == 0 || p.team == 1);

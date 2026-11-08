@@ -1,24 +1,14 @@
 package com.hfstudio.minopp.game;
 
-/**
- * Definition of one kind of card. Card types are registered in {@link CardTypes}; which of them end up in a deck (and
- * how many) is decided by the {@link CardPack}s and per-table overrides in {@link TableConfig}.
- */
 public final class CardType {
 
-    /** What the player playing this card must choose on the client. */
     public enum Choice {
 
         NONE,
-        /** Choose the next color. */
         COLOR,
-        /** Choose another player. */
         TARGET,
-        /** Choose the next color, then another player. */
         COLOR_AND_TARGET,
-        /** Choose two other players. */
         TWO_TARGETS,
-        /** Choose the next color, then two other players. */
         COLOR_AND_TWO_TARGETS;
 
         public boolean needsColor() {
@@ -50,24 +40,17 @@ public final class CardType {
     public final String packId;
     public final boolean wild;
     public final boolean numbered;
-    /** Cards with the same match key match each other by symbol (e.g. Flex Skip on Skip). */
     public final String matchKey;
     public final String shortLabel;
-    /** Texture symbol id. */
     public final String symbol;
     public final int sortOrder;
-    /** Amount drawn by the victim; > 0 makes this a stackable draw card. */
     public final int drawValue;
-    /** All-wild cards keep the current color instead of choosing a new one. */
     public final boolean keepsColor;
     public final Choice choice;
     public final Choice flexChoice;
     public final Effect effect;
-    /** Effect of the flex side (Flex cards only), null otherwise. */
     public final Effect flexEffect;
-    /** Extra condition to be playable at all (e.g. Rebound only answers a pending draw). */
     public final Condition condition;
-    /** Whether this card may be played while a draw penalty is pending (besides draw cards). */
     public final boolean answersDraw;
     public final int points;
 

@@ -21,7 +21,6 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/** Answers a {@link PendingDecision}: challenge a Wild +4, pick a Color Roulette color, or point at someone. */
 @SideOnly(Side.CLIENT)
 public class DecisionScreen extends GuiScreen {
 

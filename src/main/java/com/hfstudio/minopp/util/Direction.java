@@ -1,8 +1,5 @@
 package com.hfstudio.minopp.util;
 
-/**
- * Horizontal direction, matching the semantics of 1.20.1's Direction for seat placement.
- */
 public enum Direction {
 
     NORTH(0, -1, 2),

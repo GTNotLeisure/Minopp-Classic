@@ -18,7 +18,7 @@ public class C2SAutoPlayerConfigPacket {
         boolean shouldDelete = packet.readBoolean();
         NBTTagCompound config = shouldDelete ? null : Buf.readNbt(packet);
 
-        if (!player.canCommandSenderUseCommand(2, "")) return; // Re-check permission on server side
+        if (!player.canCommandSenderUseCommand(2, "")) return;
         Entity entity = player.worldObj.getEntityByID(entityId);
         if (entity instanceof EntityAutoPlayer autoPlayer) {
             if (shouldDelete) {
@@ -34,7 +34,7 @@ public class C2SAutoPlayerConfigPacket {
         public static void sendC2S(EntityAutoPlayer autoPlayer) {
             ByteBuf packet = MinoNetwork.buffer();
             packet.writeInt(autoPlayer.getEntityId());
-            packet.writeBoolean(false); // Not deleting
+            packet.writeBoolean(false);
             Buf.writeNbt(packet, autoPlayer.writeConfigToTag());
             MinoNetwork.sendPacketToServer(ID, packet);
         }
@@ -42,7 +42,7 @@ public class C2SAutoPlayerConfigPacket {
         public static void sendDeleteC2S(EntityAutoPlayer autoPlayer) {
             ByteBuf packet = MinoNetwork.buffer();
             packet.writeInt(autoPlayer.getEntityId());
-            packet.writeBoolean(true); // Deleting
+            packet.writeBoolean(true);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
     }

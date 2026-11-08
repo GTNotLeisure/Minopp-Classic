@@ -92,7 +92,6 @@ public class ActionReport {
         return this;
     }
 
-    /** Latest start time (ms) of a sound everyone hears; cues like the turn notice are queued after it. */
     public int soundTail() {
         return soundTail;
     }

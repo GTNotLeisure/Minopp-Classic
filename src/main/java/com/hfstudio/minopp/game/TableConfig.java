@@ -13,16 +13,10 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
 
-/**
- * Per-table configuration: rules, enabled packs and per-card count overrides. Card counts work like this: an entry of
- * an enabled pack uses its default count unless overridden; an entry of a disabled pack is only included when it has
- * an override, which lets single cards of a pack (e.g. Discard All) be mixed into any game.
- */
 public class TableConfig {
 
     public final Map<String, Integer> rules = new HashMap<>();
     public final Set<String> packs = new LinkedHashSet<>();
-    /** "packId:entryKey" -> count */
     public final Map<String, Integer> counts = new HashMap<>();
 
     public TableConfig() {
@@ -80,6 +74,7 @@ public class TableConfig {
     }
 
     public void setCount(String key, int count) {
+        if (key == null || !CardPack.isEntryKey(key)) return;
         if (count < 0) {
             counts.remove(key);
         } else {
@@ -102,7 +97,6 @@ public class TableConfig {
         setPackEnabled(presetPack, true);
     }
 
-    /** Light-side faces of the deck, before copies are applied. */
     public List<CardFace> buildFaces(boolean backSide) {
         List<CardFace> faces = new ArrayList<>();
         for (CardPack pack : CardPack.all()) {
@@ -137,10 +131,6 @@ public class TableConfig {
         return buildFaces(false).size();
     }
 
-    /**
-     * Copies of the configured deck shuffled together. "Auto" (0) adds a copy for every 4 players beyond the first 4
-     * and makes sure the opening hands plus a healthy draw pile fit, so 20-player games never run dry.
-     */
     public int effectiveCopies(int playerCount, int deckSize) {
         int copies = getInt(GameRules.DECK_COPIES);
         if (copies > 0) return copies;
@@ -162,12 +152,10 @@ public class TableConfig {
         return true;
     }
 
-    /** Short human summary such as "classic + no_mercy" (pack ids, translated by the caller). */
     public List<String> enabledPackIds() {
         return new ArrayList<>(packs);
     }
 
-    /** Builds and shuffles the physical deck for a game with the given number of players. */
     public List<Card> buildDeck(int playerCount, Random random) {
         List<CardFace> lightFaces = buildFaces(false);
         if (lightFaces.isEmpty()) lightFaces = new TableConfig().buildFaces(false);
@@ -219,18 +207,26 @@ public class TableConfig {
         NBTTagCompound rulesTag = tag.getCompoundTag("rules");
         for (Object k : rulesTag.func_150296_c()) {
             String key = (String) k;
+            GameRules.Rule def = GameRules.get(key);
+            if (def == null) continue;
             // Rules of the original mod were stored as booleans
-            rules.put(
-                key,
-                rulesTag.func_150299_b(key) == 1 ? (rulesTag.getBoolean(key) ? 1 : 0) : rulesTag.getInteger(key));
+            int value = rulesTag.func_150299_b(key) == 1 ? (rulesTag.getBoolean(key) ? 1 : 0)
+                : rulesTag.getInteger(key);
+            rules.put(key, def.clamp(value));
         }
         if (tag.hasKey("packs")) {
             NBTTagList packsTag = tag.getTagList("packs", 8);
-            for (int i = 0; i < packsTag.tagCount(); i++) packs.add(packsTag.getStringTagAt(i));
+            for (int i = 0; i < packsTag.tagCount(); i++) {
+                CardPack pack = CardPack.get(packsTag.getStringTagAt(i));
+                if (pack != null && !pack.backSideOnly) packs.add(pack.id);
+            }
         } else {
             packs.add(CardPack.CLASSIC);
         }
         NBTTagCompound countsTag = tag.getCompoundTag("counts");
-        for (Object k : countsTag.func_150296_c()) counts.put((String) k, countsTag.getInteger((String) k));
+        for (Object k : countsTag.func_150296_c()) {
+            if (counts.size() >= 512) break;
+            setCount((String) k, countsTag.getInteger((String) k));
+        }
     }
 }

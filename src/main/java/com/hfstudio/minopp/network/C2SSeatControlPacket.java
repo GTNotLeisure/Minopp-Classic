@@ -15,10 +15,6 @@ import com.hfstudio.minopp.util.Chat;
 
 import io.netty.buffer.ByteBuf;
 
-/**
- * Seat and table setup actions: start / stop / reset seats, and editing the table config (rules, packs, card counts,
- * presets). Config edits are only accepted while no game is running.
- */
 public class C2SSeatControlPacket {
 
     public static final String ID = "minopp:seat_control";
@@ -36,6 +32,7 @@ public class C2SSeatControlPacket {
         int value = (action == RULE || action == PACK || action == COUNT || action == TEAM) ? packet.readInt() : 0;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null) return;
+        if (player.getDistanceSq(gamePos.x + 1.5, gamePos.y + 0.5, gamePos.z + 1.5) > 16 * 16) return;
         List<CardPlayer> playersList = tableEntity.getPlayersList();
         CardPlayer cardPlayer = ItemHandCards.getCardPlayer(player);
         if (tableEntity.demo) {
@@ -99,7 +96,6 @@ public class C2SSeatControlPacket {
                 }
             }
             case TEAM -> {
-                // players pick their own team; bots (no online player behind the seat) can be moved by anyone
                 java.util.UUID target;
                 try {
                     target = java.util.UUID.fromString(key);
@@ -166,7 +162,6 @@ public class C2SSeatControlPacket {
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
-        /** Count of -1 removes the override. */
         public static void sendCountC2S(BlockPos gamePos, String countKey, int count) {
             ByteBuf packet = header(gamePos, COUNT);
             Buf.writeString(packet, countKey);

@@ -39,12 +39,11 @@ public class MinoClient {
 
     public static KeyBinding KEY_SHOUT_MODIFIER;
     public static KeyBinding KEY_FLEX_MODIFIER;
+    public static KeyBinding KEY_HAND;
 
-    // For interfacing with platform codes
     public static double globalFovModifier = 1;
     public static boolean handCardOverlayActive = false;
 
-    /** Winner sparkle effect (replacement for the Glowing effect): entity id -> remaining ticks. */
     private static final Map<UUID, Integer> GLOWS = new HashMap<>();
     private static final Random RANDOM = new Random();
     private static boolean wasInWorld = false;
@@ -60,6 +59,8 @@ public class MinoClient {
         KEY_FLEX_MODIFIER = new KeyBinding("key.minopp.flex_modifier", Keyboard.KEY_LMENU, "key.categories.minopp");
         ClientRegistry.registerKeyBinding(KEY_SHOUT_MODIFIER);
         ClientRegistry.registerKeyBinding(KEY_FLEX_MODIFIER);
+        KEY_HAND = new KeyBinding("key.minopp.hand", Keyboard.KEY_R, "key.categories.minopp");
+        ClientRegistry.registerKeyBinding(KEY_HAND);
         MinoNetwork.registerClientReceiver(S2CActionEphemeralPacket.ID, S2CActionEphemeralPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CEffectListPacket.ID, S2CEffectListPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CAutoPlayerScreenPacket.ID, S2CAutoPlayerScreenPacket.Client::handleS2C);
@@ -101,13 +102,16 @@ public class MinoClient {
             wasInWorld = false;
             return;
         }
+        while (KEY_HAND.isPressed()) {
+            if (mc.currentScreen == null && com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc) != null) {
+                mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
+            }
+        }
         if (System.getProperty("minopp.previewHandScreen") != null && mc.currentScreen == null
             && com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc) != null) {
-            // dev only: keep interaction mode open so screenshots show it
             mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
         }
         if (System.getProperty("minopp.previewTeams") != null && mc.currentScreen == null) {
-            // dev only: show the lobby of the preview table
             for (Object te : level.loadedTileEntityList) {
                 if (te instanceof com.hfstudio.minopp.block.BlockEntityMinoTable table && table.getPlayersList()
                     .size() >= 3) {
@@ -117,7 +121,6 @@ public class MinoClient {
             }
         }
         if (System.getProperty("minopp.previewColorPicker") != null && mc.currentScreen == null) {
-            // dev only: keep a wild color choice open (nothing is sent unless a color is clicked)
             com.hfstudio.minopp.gui.HandScreen.Context ctx = com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc);
             if (ctx != null) mc.displayGuiScreen(
                 new com.hfstudio.minopp.gui.PlayChoiceScreen(
@@ -138,7 +141,6 @@ public class MinoClient {
         tickDecisionPrompt(mc);
     }
 
-    /** Opens the decision prompt when the game asks us something (challenge, roulette color, point taken). */
     private static void tickDecisionPrompt(Minecraft mc) {
         BlockPos gamePos = ItemHandCards.getHandCardGamePos(mc.thePlayer);
         BlockEntityMinoTable table = gamePos == null ? null : ItemHandCards.getTable(mc.theWorld, gamePos);
@@ -176,7 +178,6 @@ public class MinoClient {
             entry.setValue(remaining);
             Entity entity = WorldUtil.getEntityByUUID(level, entry.getKey());
             if (entity == null) continue;
-            // our own glow in first person would just fill the screen with particles
             Minecraft mc = Minecraft.getMinecraft();
             if (entity == mc.thePlayer && mc.gameSettings.thirdPersonView == 0) continue;
             for (int i = 0; i < 2; i++) {

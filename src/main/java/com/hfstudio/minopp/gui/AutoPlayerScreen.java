@@ -18,17 +18,12 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * MinoBot preferences. The 1.20.1 version built this screen with YetAnotherConfigLib; as the options are bound to a
- * single entity rather than a static config class, it is a plain GuiScreen here.
- */
 @SideOnly(Side.CLIENT)
 public class AutoPlayerScreen extends GuiScreen {
 
     private final EntityAutoPlayer target;
     private final GuiScreen parent;
 
-    // Pending values (applied on save)
     private boolean active, noPush, noWin, noPlayerDraw, startGame;
     private float forgetChance;
     private int noDelay;
@@ -269,7 +264,6 @@ public class AutoPlayerScreen extends GuiScreen {
         return false;
     }
 
-    /** Simple float slider (0..1, step 0.05). */
     private static class Slider extends GuiButton {
 
         private final java.util.function.Supplier<Float> getter;

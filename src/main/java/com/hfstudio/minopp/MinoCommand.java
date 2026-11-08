@@ -21,9 +21,6 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 
-/**
- * /minopp shout | force_discard | force_draw [n] | set_table_award | set_table_demo &lt;bool&gt;
- */
 public class MinoCommand extends CommandBase {
 
     @Override
@@ -71,7 +68,7 @@ public class MinoCommand extends CommandBase {
             }
             case "force_draw" -> {
                 requireOp(sender);
-                int count = args.length >= 2 ? parseIntWithMin(sender, args[1], 1) : 1;
+                int count = args.length >= 2 ? parseIntBounded(sender, args[1], 1, 100) : 1;
                 withPlayerAndGame(player, (game, cardPlayer) -> {
                     ActionReport report = ActionReport.builder(game, cardPlayer);
                     game.doDrawCard(cardPlayer, count, report);

@@ -7,11 +7,6 @@ import net.minecraft.nbt.NBTTagList;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-/**
- * Hides hidden information from the table data sent to a client: the active face of other players' cards and of the
- * deck. The inactive face (the back of a Flip card) stays, as it is printed on the back for everyone to see; card
- * counts and uids are kept so hands, piles and animations render the same.
- */
 public final class HandMask {
 
     private HandMask() {}
@@ -20,10 +15,6 @@ public final class HandMask {
 
     private static final NBTTagCompound HIDDEN_FACE = new CardFace(HIDDEN_TYPE, CardColor.WILD, -1).toTag();
 
-    /**
-     * Returns a masked copy of a table tag for {@code viewer} (null: nobody's hand is revealed). The original tag is
-     * left untouched.
-     */
     public static NBTTagCompound maskTableTag(NBTTagCompound tableTag, UUID viewer) {
         if (!tableTag.hasKey("game", 10)) return tableTag;
         NBTTagCompound copy = (NBTTagCompound) tableTag.copy();

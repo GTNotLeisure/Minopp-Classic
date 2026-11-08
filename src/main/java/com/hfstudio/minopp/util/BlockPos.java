@@ -2,9 +2,6 @@ package com.hfstudio.minopp.util;
 
 import net.minecraft.tileentity.TileEntity;
 
-/**
- * Minimal immutable block position, standing in for the 1.8+ BlockPos class.
- */
 public final class BlockPos {
 
     public final int x, y, z;

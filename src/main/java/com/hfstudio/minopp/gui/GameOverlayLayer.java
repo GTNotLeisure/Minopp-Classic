@@ -44,7 +44,6 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class GameOverlayLayer {
 
-    // Some animation related stuff
     private double zoomAnimationProgress = 0;
     private double zoomAnimationTarget = 0;
     private final Map<Integer, Float> handCardCurrentXOff = new HashMap<>();
@@ -73,7 +72,6 @@ public class GameOverlayLayer {
             TurnDeadMan.tick(tableEntity.game, partialTicks);
             if (handCardGamePos == null || hitResultGamePos == null
                 || Objects.equals(handCardGamePos, hitResultGamePos)) {
-                // Only render active view when the player is looking at the same table as the hand cards
                 renderGameActive(tableEntity);
             } else {
                 zoomAnimationTarget = 0;
@@ -123,15 +121,14 @@ public class GameOverlayLayer {
         CardGame game = tableEntity.game;
         CardPlayer currentPlayer = game.currentPlayer();
         CardPlayer me = game.deAmputate(cardPlayer);
-        // Zoom effect target
         if (currentPlayer.equals(cardPlayer) && !game.awaitingCutIn) {
             if (game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_HAND) {
                 zoomAnimationTarget = 1;
             } else {
                 if (zoomAnimationTarget < 1.01) {
-                    zoomAnimationTarget = 1.5; // Zoom in first
-                } else if (zoomAnimationProgress >= 1.5) { // Already zoomed in
-                    zoomAnimationTarget = 1.05; // Zoom out, but not trigger zoom in again
+                    zoomAnimationTarget = 1.5;
+                } else if (zoomAnimationProgress >= 1.5) {
+                    zoomAnimationTarget = 1.05;
                 }
             }
         } else {
@@ -260,7 +257,6 @@ public class GameOverlayLayer {
         drawStringWithBackdrop(font, topCardInfo.getFormattedText(), x, y, 0xFFFFFFDD);
         y += lh;
 
-        // Other players' hand sizes (useful with many players)
         StringBuilder counts = new StringBuilder();
         for (CardPlayer p : game.players) {
             if (counts.length() > 0) counts.append("  ");
@@ -323,7 +319,6 @@ public class GameOverlayLayer {
             && !(mc.currentScreen instanceof PlayChoiceScreen)
             && !HandScreen.isOpen()) {
             boolean classic = ClientConfig.display.classicInteraction;
-            // modern layout: right click on the table opens interaction mode instead of playing / drawing
             boolean isPass = classic && BlockMinoTable.Client.isCursorHittingPile();
             String cursorMessage = switch (game.currentPlayerPhase) {
                 case DISCARD_HAND -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass_draw")
@@ -354,7 +349,6 @@ public class GameOverlayLayer {
                     isShouting ? font.getStringWidth(shoutMessage) : 0,
                     isFlexing ? font.getStringWidth(flexMessage) : 0));
             int msgHeight = lh * lines;
-            // calm, steady hint box; aiming at the deck tints it warm instead of flickering
             com.hfstudio.minopp.gui.ui.UiDraw.roundFrame(
                 width / 2 + 8,
                 height / 2 - msgHeight / 2 - 3,
@@ -376,7 +370,6 @@ public class GameOverlayLayer {
             String deadManMessage = Chat.translatable("gui.minopp.play.cursor.dead_man")
                 .getFormattedText();
             int msgWidth = font.getStringWidth(deadManMessage);
-            // gentle breathing glow instead of a black/white blink
             float p = slowPulse();
             int glow = (int) (60 + 120 * p) << 24 | 0xFFC21E;
             GL11.glPushMatrix();
@@ -395,11 +388,6 @@ public class GameOverlayLayer {
         GuiDraw.drawString(font, text, x, y, color);
     }
 
-    /**
-     * Render hand cards on the screen
-     *
-     * @return whether the hand cards are rendered
-     */
     private boolean renderHandCards(float partialTicks) {
         Minecraft mc = Minecraft.getMinecraft();
         cardRects.clear();
@@ -453,12 +441,10 @@ public class GameOverlayLayer {
             handCardCurrentXOff.put(card.uid, (float) Mth.lerp(8 * 0.05 * partialTicks, currentXOff, targetXOff));
             ys[i] = height - ((CARD_HEIGHT / 2) + CARD_V_SPACING * (handSize - i)) + cardDrawOffset;
         }
-        // hit areas, topmost first: the selected card, then the fan from the bottom (drawn last) up
         addRect(clientHandIndex, xs[clientHandIndex], ys[clientHandIndex], CARD_WIDTH, CARD_HEIGHT);
         for (int i = handSize - 1; i >= 0; i--) {
             if (i != clientHandIndex) addRect(i, xs[i], ys[i], CARD_WIDTH, CARD_HEIGHT);
         }
-        // every card in fan order, then the selected card again on top so its whole face is visible
         for (int pass = 0; pass < 2; pass++) {
             for (int i = 0; i < handSize; i++) {
                 boolean selected = i == clientHandIndex;
@@ -472,7 +458,6 @@ public class GameOverlayLayer {
                     GuiDraw.drawString(font, cardName, x - font.getStringWidth(cardName) - 10, y + 10, 0xFFFFFFDD);
                 }
                 if (selected) {
-                    // soft drop shadow lifts the selected card off the fan
                     com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
                         x + 3,
                         y + 3,
@@ -482,7 +467,6 @@ public class GameOverlayLayer {
                         0x60000000);
                 }
                 if (isMyTurn && game.canPlay(realPlayer, card)) {
-                    // playable cards: softly pulsing gold rim behind the card (as in the modern layout)
                     int rim = 0xA0 + (int) (0x5F * slowPulse());
                     com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
                         x - 2,
@@ -494,7 +478,6 @@ public class GameOverlayLayer {
                 }
                 CardRenderer.drawFace2D(face, theme, x, y, CARD_WIDTH, CARD_HEIGHT);
                 if (!selected) {
-                    // the fan only shows the top strip of a card: repeat its symbol there
                     int mini = Math.max(8, CARD_V_SPACING - 4);
                     CardRenderer.drawCornerSymbol(face, theme, x + 3, y + 2, mini);
                 }
@@ -502,7 +485,6 @@ public class GameOverlayLayer {
                 boolean playable = isMyTurn && game.canPlay(realPlayer, card);
                 float shadowAlpha = !isMyTurn ? 0.5f : (playable ? 0f : 0.3f);
                 if (shadowAlpha > 0) {
-                    // dim with the card's own rounded shape so the transparent corners stay transparent
                     int corner = Math.max(1, CARD_WIDTH * 3 / 32);
                     com.hfstudio.minopp.gui.ui.UiDraw.roundRect(
                         x,
@@ -529,11 +511,8 @@ public class GameOverlayLayer {
         return true;
     }
 
-    // ===================================================================================== modern hand row
-
     /** Card hit areas of the last frame, topmost first: {index, centerX, centerY, angle (rad), w, h}. */
     private static final List<float[]> cardRects = new java.util.ArrayList<>();
-    /** 0: resting at the bottom edge (free movement), 1: raised (interaction mode). */
     private float rowRaise = 0;
     private final Map<Integer, Float> rowLift = new HashMap<>();
     private long lastRowNanos = System.nanoTime();
@@ -542,7 +521,6 @@ public class GameOverlayLayer {
         cardRects.add(new float[] { index, x + w / 2, y + h / 2, 0, w, h });
     }
 
-    /** Index of the hand card under the given GUI position, or -1. Cards may be rotated (the fanned row). */
     public static int hitTest(int mouseX, int mouseY) {
         for (float[] r : cardRects) {
             double dx = mouseX - r[1], dy = mouseY - r[2];
@@ -553,11 +531,6 @@ public class GameOverlayLayer {
         return -1;
     }
 
-    /**
-     * The hand fanned out along the bottom of the screen like cards held in a hand: every card turns around a pivot
-     * far below the screen. While moving freely only the top of the cards shows; in interaction mode the fan slides
-     * up and the pointed card lifts out of it and shows its name.
-     */
     private void renderHandRow(FontRenderer font, CardGame game, CardPlayer me, List<Card> hand, int selectedIndex,
         boolean isMyTurn, int myPlayerIndex, String theme, int width, int height) {
         long now = System.nanoTime();
@@ -575,15 +548,12 @@ public class GameOverlayLayer {
         int cw = Mth.clamp(width / 9, 40, 60);
         int ch = Math.round(cw * 8.9f / 5.6f);
         int corner = Math.max(1, cw * 3 / 32);
-        // spacing along the arc, shrinking when the hand gets long
         int maxRow = Math.max(cw, Math.min(width - 150, (int) (width * 0.62)));
         float step = n <= 1 ? 0 : Math.min(cw * 0.62f, (maxRow - cw) / (float) (n - 1));
         float radius = ch * 4.2f;
-        // total turn of the fan is capped so huge hands do not curl up
         float anglePer = n <= 1 ? 0 : Math.min(step / radius, (float) Math.toRadians(40) / (n - 1));
         float yRest = height + ch * 0.12f;
         float yUp = height - ch * 0.5f - 8;
-        // center of the middle card; the pivot sits {radius} below it
         float cy = yRest + (yUp - yRest) * rowRaise;
         float px = width / 2f, py = cy + radius;
 
@@ -592,7 +562,6 @@ public class GameOverlayLayer {
         for (int i = 0; i < n; i++) {
             Card card = hand.get(i);
             playables[i] = isMyTurn && game.canPlay(me, card);
-            // on our turn every playable card rises a little out of the fan; the pointed one rises further
             float target = i == selectedIndex ? (interactive ? 16 : 8) : (playables[i] ? 5 : 0);
             Float cur = rowLift.get(card.uid);
             float lift = cur == null ? 0 : cur;
@@ -619,12 +588,10 @@ public class GameOverlayLayer {
                 GL11.glTranslatef(-cw / 2f, -ch / 2f, 0);
                 if (selected) UiDraw.roundRect(2, 3, cw + 2, ch + 3, corner, 0x60000000);
                 if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && game.isIdenticalToTop(card)) {
-                    // jump-in candidate: a pulsing glow around (behind) the card
                     int glow = 0x60 + (int) (0x9F * slowPulse());
                     UiDraw.roundRect(-3, -3, cw + 3, ch + 3, corner + 3, (glow << 24) | 0xFFD700);
                 }
                 if (playable) {
-                    // on our turn every playable card gets a softly pulsing gold rim (drawn behind the card)
                     int rim = 0xA0 + (int) (0x5F * slowPulse());
                     UiDraw.roundRect(-2, -2, cw + 2, ch + 2, corner + 2, (rim << 24) | 0xFFD43A);
                 }
@@ -640,7 +607,6 @@ public class GameOverlayLayer {
             String name = game.face(hand.get(selectedIndex))
                 .getDisplayName()
                 .getFormattedText();
-            // just above the top edge of the (rotated) selected card
             float a = angs[selectedIndex];
             int nw = font.getStringWidth(name);
             int nx = Math.round(cxs[selectedIndex] + (float) Math.sin(a) * (ch / 2f + 8));
@@ -651,7 +617,6 @@ public class GameOverlayLayer {
         }
         GL11.glDisable(GL11.GL_BLEND);
 
-        // hit areas, topmost first: the selected card, then later cards overlap earlier ones
         if (selectedIndex >= 0 && selectedIndex < n) {
             cardRects.add(
                 new float[] { selectedIndex, cxs[selectedIndex], cys[selectedIndex], angs[selectedIndex], cw, ch });
@@ -670,7 +635,6 @@ public class GameOverlayLayer {
         MinoClient.globalFovModifier = Mth.lerp(Mth.clamp(zoomAnimationProgress, 0, 1), 1.0, 0.97);
     }
 
-    /** 0..1 sine with a slow 1.6s period, used for calm pulsing highlights. */
     private static float slowPulse() {
         return (float) (0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 1600.0 * Math.PI * 2));
     }

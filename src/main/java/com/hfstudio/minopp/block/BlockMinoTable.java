@@ -48,13 +48,8 @@ import com.hfstudio.minopp.util.Vec3d;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * The 3x3 card table. Each block of the table stores its part (see {@link TablePartType}) in the metadata;
- * the tile entity only lives at the X_LESS_Z_LESS ("core") part.
- */
 public class BlockMinoTable extends Block {
 
-    /** Exposes the part metadata as the "part" blockstate property for GTNHLib's JSON model pipeline. */
     public static final List<String> PART_NAMES = Arrays.stream(TablePartType.values())
         .map(TablePartType::getSerializedName)
         .collect(Collectors.toList());
@@ -125,11 +120,9 @@ public class BlockMinoTable extends Block {
 
         public static void displayActionBar(String text) {
             Minecraft.getMinecraft().ingameGUI.func_110326_a(text, false);
-            // the raised hand covers the action bar in interaction mode: show it there too
             com.hfstudio.minopp.gui.HandScreen.notice(text);
         }
 
-        /** Works out which choices the selected card needs and either plays it or asks for them first. */
         public static void playCard(BlockPos corePos, BlockEntityMinoTable tableEntity, CardPlayer realPlayer,
             Card card) {
             CardGame game = tableEntity.game;
@@ -138,8 +131,6 @@ public class BlockMinoTable extends Block {
             boolean useFlex = isFlexModifierHeld() && tableEntity.config.getBool(GameRules.FLEX_POWER)
                 && realPlayer.powerOn
                 && (type.hasFlex() || face.flexColor != null);
-            // Refuse locally what the server would refuse (not our turn, wrong card, waiting for a decision...),
-            // so no color / target choice is ever opened for a play that cannot happen
             String reason = game.whyCannotPlay(realPlayer, card, useFlex);
             if (reason != null) {
                 displayActionBar(
@@ -149,8 +140,6 @@ public class BlockMinoTable extends Block {
             }
             PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
             choices.useFlex = useFlex;
-            // Ctrl while playing shouts MINO with the card (only on our turn with 2 cards or fewer, checked again
-            // by the server)
             choices.shout = isShoutModifierHeld() && realPlayer.hand.size() <= 2;
 
             CardType.Choice choice = type.choiceFor(useFlex);

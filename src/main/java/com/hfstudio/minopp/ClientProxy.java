@@ -40,7 +40,6 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
-        // Lets GTNHLib pick up assets/minopp/blockstates + models for the table
         ModelRegistry.registerModid(Mino.MOD_ID);
     }
 
@@ -63,7 +62,6 @@ public class ClientProxy extends CommonProxy {
 
         @SubscribeEvent
         public void onRenderOverlayPre(RenderGameOverlayEvent.Pre event) {
-            // the raised hand row covers the hotbar in interaction mode
             if (event.type == RenderGameOverlayEvent.ElementType.HOTBAR && HandScreen.isOpen()
                 && !ClientConfig.display.classicInteraction) event.setCanceled(true);
         }
@@ -84,7 +82,6 @@ public class ClientProxy extends CommonProxy {
             if (event.phase == TickEvent.Phase.START) MinoClient.tick();
         }
 
-        /** Replaces the Inventory#swapPaint mixin: scrolling selects a card instead of a hotbar slot. */
         @SubscribeEvent(priority = EventPriority.HIGH)
         public void onMouse(MouseEvent event) {
             if (event.button == 1 && event.buttonstate) {
@@ -119,10 +116,6 @@ public class ClientProxy extends CommonProxy {
             event.setCanceled(true);
         }
 
-        /**
-         * Right click with hand cards opens interaction mode. With the classic interaction a right click on the table
-         * still plays the selected card, so only clicks elsewhere open it.
-         */
         private void onRightClick(MouseEvent event) {
             Minecraft mc = Minecraft.getMinecraft();
             if (mc.currentScreen != null || HandScreen.Context.resolve(mc) == null) return;

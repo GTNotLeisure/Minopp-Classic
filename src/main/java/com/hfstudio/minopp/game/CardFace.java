@@ -8,24 +8,21 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.Chat;
 
-/**
- * One printed side of a card: its type, its color and (for number cards) its number. Flex cards additionally carry
- * a second color usable through the Flex power.
- */
 public final class CardFace implements Comparable<CardFace> {
 
     public final String typeId;
     public final CardColor color;
-    /** Printed number for number cards, -1 otherwise. */
     public final int number;
-    /** Second color of two-colored Flex cards; null otherwise. */
     public final CardColor flexColor;
+
+    private final int hash;
 
     public CardFace(String typeId, CardColor color, int number, CardColor flexColor) {
         this.typeId = typeId;
         this.color = color;
         this.number = number;
         this.flexColor = flexColor;
+        this.hash = Objects.hash(typeId, color, number, flexColor);
     }
 
     public CardFace(String typeId, CardColor color, int number) {
@@ -36,7 +33,6 @@ public final class CardFace implements Comparable<CardFace> {
         return CardTypes.get(typeId);
     }
 
-    /** A face the server did not reveal to this client (another player's card, peeking disabled). */
     public boolean isHidden() {
         return HandMask.HIDDEN_TYPE.equals(typeId);
     }
@@ -49,14 +45,12 @@ public final class CardFace implements Comparable<CardFace> {
         return type().numbered;
     }
 
-    /** Key identifying "the same symbol" for matching (e.g. number 5, or skip). */
     public String symbolKey() {
         return type().numbered ? "n" + number : type().matchKey;
     }
 
     public IChatComponent getDisplayName() {
         if (isWild()) {
-            // "Wild +4", not "Wild Wild +4": the type name already says it is wild
             IChatComponent c = Chat.translatable("game.minopp.card.wild_prefix");
             c.appendSibling(getFaceName());
             return c;
@@ -77,7 +71,6 @@ public final class CardFace implements Comparable<CardFace> {
         return Chat.translatable("game.minopp.card.type." + typeId);
     }
 
-    /** Short label printed in the corner of the card in the HUD. */
     public String shortLabel() {
         CardType type = type();
         if (type.numbered) return String.valueOf(number);
@@ -111,7 +104,7 @@ public final class CardFace implements Comparable<CardFace> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(typeId, color, number, flexColor);
+        return hash;
     }
 
     @Override

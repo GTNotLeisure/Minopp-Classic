@@ -50,7 +50,6 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public static final int MAX_SEATS = 20;
 
-    /** Seats around the table; index 0 is north, increasing clockwise. Only the first {@link #seatCount()} are used. */
     public final CardPlayer[] seats = new CardPlayer[MAX_SEATS];
     public CardGame game = null;
     public ActionMessage state = ActionMessage.NO_GAME;
@@ -64,7 +63,6 @@ public class BlockEntityMinoTable extends TileEntity {
     public Map<UUID, Integer> lastHandSizes = new HashMap<>();
     private int lastHandMoveCounter = 0;
 
-    /** Rules, packs and card counts of this table. */
     public final TableConfig config = new TableConfig();
 
     public boolean getRule(String name, boolean defaultValue) {
@@ -124,7 +122,6 @@ public class BlockEntityMinoTable extends TileEntity {
         return seat * Math.PI * 2 / Math.max(1, seatCount);
     }
 
-    /** Position of a seat on the edge of the 3x3 table, relative to the core block. */
     public static Vec3d getSeatLocalPos(int seat, int seatCount) {
         double a = seatAngle(seat, seatCount);
         double dx = Math.sin(a), dz = -Math.cos(a);
@@ -202,11 +199,9 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         gameEnd = compoundTag.getBoolean("gameEnd");
 
-        // used for animation tracking
         lastPlayedByUuid = NbtUtil.hasUUID(compoundTag, "lastPlayedBy") ? NbtUtil.getUUID(compoundTag, "lastPlayedBy")
             : null;
 
-        // intialise tracking values
         if (game != null && previousGame == null) {
             lastDiscardSize = game.discardDeck.size();
             lastHandMoveCounter = game.handMoveCounter;
@@ -214,12 +209,10 @@ public class BlockEntityMinoTable extends TileEntity {
             for (CardPlayer p : game.players) lastHandSizes.put(p.uuid, p.hand.size());
         }
 
-        // Animation detection
         if (worldObj != null && worldObj.isRemote && game != null && previousGame != null) {
             detectAnimations();
         }
 
-        // Reset tracking values
         if (game == null) {
             lastDiscardSize = 0;
             lastPlayedByUuid = null;
@@ -233,7 +226,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (handsMoved) {
             List<CardPlayer> active = game.activePlayers();
             switch (game.handMoveKind) {
-                case 0 -> { // 0 card: everyone passes their hand on
+                case 0 -> {
                     int n = active.size();
                     for (int i = 0; i < n; i++) {
                         CardPlayer from = active.get(i);
@@ -242,7 +235,7 @@ public class BlockEntityMinoTable extends TileEntity {
                             .add(new HandSwapAnimation(getSeatLocalPos(from.seat), getSeatLocalPos(to.seat), 5));
                     }
                 }
-                case 7 -> { // 7 card / forced swap
+                case 7 -> {
                     CardPlayer fromP = game.deAmputate(game.lastSwapFromUuid);
                     CardPlayer toP = game.deAmputate(game.lastSwapToUuid);
                     if (fromP != null && toP != null) {
@@ -258,7 +251,7 @@ public class BlockEntityMinoTable extends TileEntity {
                                 fromP.hand.size()));
                     }
                 }
-                case 1 -> { // shuffle: everything goes to the middle
+                case 1 -> {
                     for (CardPlayer p : active) {
                         activeAnimations
                             .add(new HandSwapAnimation(getSeatLocalPos(p.seat), new Vec3d(1.5, 0.94, 1.5), 4));
@@ -267,7 +260,6 @@ public class BlockEntityMinoTable extends TileEntity {
                 default -> {}
             }
         } else {
-            // Draw animation - skip entirely if hands just moved
             for (CardPlayer p : game.players) {
                 if (p.uuid.equals(lastPlayedByUuid)) continue;
                 Integer prevBoxed = lastHandSizes.get(p.uuid);
@@ -296,7 +288,6 @@ public class BlockEntityMinoTable extends TileEntity {
 
     private static final int PLAYER_RANGE = 20;
 
-    /** Seats a player at the free seat closest to where they stand. */
     public void joinPlayerToTable(CardPlayer cardPlayer, Vec3d playerPos) {
         if (game != null) return;
         int n = seatCount();
@@ -305,7 +296,6 @@ public class BlockEntityMinoTable extends TileEntity {
         if (angle < 0) angle += Math.PI * 2;
         int preferred = (int) Math.round(angle / (Math.PI * 2 / n)) % n;
 
-        // moving to another seat keeps the team
         int previousTeam = -1;
         for (int i = 0; i < MAX_SEATS; i++) {
             if (cardPlayer.equals(seats[i])) {
@@ -324,25 +314,21 @@ public class BlockEntityMinoTable extends TileEntity {
             }
         }
         if (chosen < 0) {
-            // Table full: take the preferred seat like the original did (replacing its occupant)
             chosen = preferred;
         }
         cardPlayer.seat = chosen;
         cardPlayer.team = previousTeam;
         seats[chosen] = cardPlayer;
-        // newcomers join the smallest team
         Teams.normalize(getPlayersList(), Teams.count(config));
         sync();
     }
 
-    /** Applies a seat count change, removing players from seats that no longer exist. */
     public void onSeatCountChanged() {
         int n = seatCount();
         for (int i = n; i < MAX_SEATS; i++) seats[i] = null;
         Teams.normalize(getPlayersList(), Teams.count(config));
     }
 
-    /** Why a game cannot start right now (team sizes), or null. */
     public net.minecraft.util.IChatComponent startProblem() {
         if (!Teams.enabled(config)) return null;
         List<CardPlayer> seated = getPlayersList();
@@ -350,7 +336,6 @@ public class BlockEntityMinoTable extends TileEntity {
         return Teams.problem(seated, Teams.count(config));
     }
 
-    /** Moves a seated player to a team (lobby only). */
     public boolean setTeam(java.util.UUID uuid, int team) {
         if (game != null || !Teams.enabled(config) || team < 0 || team >= Teams.count(config)) return false;
         for (CardPlayer p : getPlayersList()) {
@@ -363,7 +348,6 @@ public class BlockEntityMinoTable extends TileEntity {
         return false;
     }
 
-    /** Spreads the seated players evenly over the teams, alternating around the table. */
     public void autoTeams() {
         if (game != null || !Teams.enabled(config)) return;
         Teams.autoAssign(getPlayersList(), Teams.count(config));
@@ -562,7 +546,6 @@ public class BlockEntityMinoTable extends TileEntity {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
             return;
         }
-        // Without peeking every viewer gets their own copy, revealing only their own hand
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
         double range = Math.max(
@@ -578,7 +561,6 @@ public class BlockEntityMinoTable extends TileEntity {
         }
     }
 
-    /** Sends this table's state to one player, with other players' cards hidden unless peeking is allowed. */
     public void sendTo(EntityPlayerMP player) {
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
@@ -610,7 +592,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     @Override
     public AxisAlignedBB getRenderBoundingBox() {
-        return INFINITE_EXTENT_AABB;
+        return AxisAlignedBB.getBoundingBox(xCoord - 2, yCoord, zCoord - 2, xCoord + 5, yCoord + 3, zCoord + 5);
     }
 
     @Override

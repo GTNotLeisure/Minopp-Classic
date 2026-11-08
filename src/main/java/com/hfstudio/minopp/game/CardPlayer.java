@@ -20,13 +20,9 @@ public class CardPlayer {
 
     public boolean hasShoutedMino = false;
 
-    /** Seat index at the table (0 = north, clockwise). */
     public int seat = -1;
-    /** Knocked out by the mercy rule. */
     public boolean eliminated = false;
-    /** Flex power card side (true = on/green). */
     public boolean powerOn = true;
-    /** Team index in 2v2 mode, -1 otherwise. */
     public int team = -1;
 
     public CardPlayer(EntityPlayer mcPlayer) {
@@ -69,7 +65,6 @@ public class CardPlayer {
         return tag;
     }
 
-    /** Copy without hand, for seat bookkeeping. */
     public CardPlayer seatCopy() {
         CardPlayer p = new CardPlayer(uuid, name);
         p.seat = seat;

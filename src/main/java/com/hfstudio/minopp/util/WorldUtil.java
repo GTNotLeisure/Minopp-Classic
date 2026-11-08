@@ -22,7 +22,6 @@ public final class WorldUtil {
         return null;
     }
 
-    /** Finds an entity by its UUID. Players are matched by their profile id. */
     public static Entity getEntityByUUID(World world, UUID uuid) {
         if (world == null || uuid == null) return null;
         EntityPlayer player = getPlayerByUUID(world, uuid);

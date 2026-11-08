@@ -19,10 +19,6 @@ import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Resolves a player name or UUID into a skin texture asynchronously (the 1.7.10 counterpart of
- * SkullBlockEntity.updateGameprofile used by the 1.20.1 version).
- */
 @SideOnly(Side.CLIENT)
 public final class SkinResolver {
 

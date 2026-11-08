@@ -25,12 +25,10 @@ import com.hfstudio.minopp.util.BlockPos;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Third-person card fan in the bearer's theme (Flip cards show their other side), nothing in first person (the HUD
- * overlay shows the hand instead), and the plain sprite elsewhere.
- */
 @SideOnly(Side.CLIENT)
 public class HandCardsItemRenderer implements IItemRenderer {
+
+    private static final CardBatch BATCH = new CardBatch();
 
     private static final ResourceLocation ARROW = Mino.id("textures/gui/arrow_down.png");
 
@@ -66,25 +64,20 @@ public class HandCardsItemRenderer implements IItemRenderer {
         GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glTranslated(0.5, 0.5, 0.18);
         int n = realPlayer.hand.size();
+        float step = (float) Math.min(0.08, 1.2 / Math.max(1, n));
+        boolean dark = tableEntity.game.darkSide;
         for (int k = 0; k < n; k++) {
             Card card = realPlayer.hand.get(k);
-            // a little thickness so the held fan reads as real cards
-            CardRenderer.renderSlabSides(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
-            CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF);
-            CardFace face = card.face(tableEntity.game.darkSide);
-            if (face.isHidden()) {
-                CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF);
-            } else {
-                // The server sent the real face (peeking allowed, or our own hand): print it on the holder's side
-                GL11.glPushMatrix();
-                GL11.glRotatef(180, 0, 1, 0);
-                CardRenderer.renderFace3D(face, theme, 0.32f, 0.5f, 0.036f, 0xFFFFFF);
-                GL11.glPopMatrix();
-            }
-            GL11.glTranslated(0, 0.02, Math.min(0.08, 1.2 / Math.max(1, n)));
+            BATCH.at(0, 0.02f * k, step * k, 0);
+            BATCH.slab(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
+            BATCH.back(card, dark, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
+            CardFace face = card.face(dark);
+            if (face.isHidden()) BATCH.back(card, dark, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
+            else BATCH.face(face, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
         }
+        BATCH.flush();
+        GL11.glTranslated(0, 0.02 * n, step * n);
 
-        // Render arrow texture above the cards of the current player
         if (tableEntity.game.currentPlayerIndex == tableEntity.game.players.indexOf(realPlayer)) {
             Minecraft.getMinecraft()
                 .getTextureManager()

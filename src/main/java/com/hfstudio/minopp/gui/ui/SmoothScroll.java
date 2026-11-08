@@ -3,9 +3,6 @@ package com.hfstudio.minopp.gui.ui;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Smoothly animated vertical scroll offset with a draggable scrollbar.
- */
 @SideOnly(Side.CLIENT)
 public class SmoothScroll {
 
@@ -33,7 +30,6 @@ public class SmoothScroll {
         current = Math.max(0, Math.min(max(), current));
     }
 
-    /** Advances the animation; call once per frame. */
     public float update() {
         long now = System.nanoTime();
         float dt = Math.min(0.1f, (now - lastFrame) / 1e9f);
@@ -62,8 +58,6 @@ public class SmoothScroll {
         clamp();
     }
 
-    // ---------------------------------------------------------------- scrollbar (track x, y, height)
-
     public boolean hasBar() {
         return max() > 0;
     }
@@ -86,7 +80,6 @@ public class SmoothScroll {
         UiDraw.roundRect(x, ty, x + 4, ty + th, 2, color);
     }
 
-    /** Starts dragging when the track was clicked; clicking the track outside the thumb jumps there. */
     public boolean mousePressed(int mouseX, int mouseY, int x, int y, int height) {
         if (!hasBar() || mouseX < x - 3 || mouseX > x + 7 || mouseY < y || mouseY > y + height) return false;
         int th = thumbHeight(height), ty = thumbY(y, height);

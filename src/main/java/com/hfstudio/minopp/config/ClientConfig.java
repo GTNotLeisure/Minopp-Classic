@@ -5,9 +5,6 @@ import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 import com.hfstudio.minopp.Mino;
 
-/**
- * Client configuration, using GTNHLib's config framework (the 1.20.1 version used ForgeConfigSpec + YACL).
- */
 @Config(modid = Mino.MOD_ID, filename = "minopp-client", configSubDirectory = "minopp")
 @Config.LangKeyPattern(pattern = "minopp.gui.config.%cat.%field", fullyQualified = true)
 @Config.Comment("Mino++: Classic client configuration")

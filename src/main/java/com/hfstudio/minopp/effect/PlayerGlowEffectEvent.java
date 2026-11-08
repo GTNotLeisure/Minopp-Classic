@@ -13,9 +13,6 @@ import com.hfstudio.minopp.util.Buf;
 
 import io.netty.buffer.ByteBuf;
 
-/**
- * 1.7.10 has no Glowing potion effect; the winner is instead surrounded by sparkle particles on every client nearby.
- */
 public record PlayerGlowEffectEvent(UUID targetPlayer, int duration) implements EffectEvent {
 
     @Override

@@ -28,17 +28,6 @@ import com.hfstudio.minopp.network.ThemeSyncPackets;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Client-only card themes. A theme is a folder of card layers in {@code assets/minopp/textures/cards/<id>/}, declared
- * in {@code assets/minopp/themes.json} of any resource pack:
- *
- * <pre>
- * { "themes": [ { "id": "my_theme", "name": "My Theme", "fallback": "classic" } ] }
- * </pre>
- *
- * Every pack's themes.json is merged, so any number of theme packs can be active at once. Layers a theme does not
- * provide are taken from its fallback theme (and finally from "classic").
- */
 @SideOnly(Side.CLIENT)
 public final class ThemeManager implements IResourceManagerReloadListener {
 
@@ -50,7 +39,6 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     private final Map<String, ThemeInfo> themes = new LinkedHashMap<>();
     private final Map<ResourceLocation, Boolean> existsCache = new HashMap<>();
     private final Map<String, ResourceLocation> textureCache = new HashMap<>();
-    /** Themes chosen by other players, as relayed by the server. */
     public final Map<UUID, String> playerThemes = new HashMap<>();
     private String lastSentTheme = null;
 
@@ -63,6 +51,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         themes.clear();
         existsCache.clear();
         textureCache.clear();
+        CardBatch.clearCache();
         themes.put(DEFAULT, new ThemeInfo(DEFAULT, "Classic", null));
         try {
             List<?> resources = rm.getAllResources(new ResourceLocation(Mino.MOD_ID, "themes.json"));
@@ -85,9 +74,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
                     Mino.LOGGER.warn("Invalid minopp themes.json in a resource pack: {}", e.toString());
                 }
             }
-        } catch (Exception ignored) {
-            // no themes.json anywhere besides built-ins
-        }
+        } catch (Exception ignored) {}
     }
 
     public List<ThemeInfo> getThemes() {
@@ -107,7 +94,6 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         return themes.get(selected());
     }
 
-    /** Theme to draw cards owned by (last held / played by) the given player. */
     public String themeFor(UUID owner) {
         Minecraft mc = Minecraft.getMinecraft();
         if (owner == null || mc.thePlayer == null) return selected();
@@ -143,11 +129,10 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         return next;
     }
 
-    /** Tells the server which theme we use (once per connection, or when it changes). */
     public void sendSelection(boolean force) {
         String current = selected();
         if (Minecraft.getMinecraft()
-            .getNetHandler() == null) return; // not connected (main menu)
+            .getNetHandler() == null) return;
         if (!force && current.equals(lastSentTheme)) return;
         lastSentTheme = current;
         ThemeSyncPackets.sendSelectionC2S(current);
@@ -158,7 +143,6 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         playerThemes.clear();
     }
 
-    /** Texture of a card layer in a theme, resolving fallbacks. Null if no theme provides it. */
     public ResourceLocation texture(String theme, String layer) {
         String cacheKey = theme + "/" + layer;
         if (textureCache.containsKey(cacheKey)) return textureCache.get(cacheKey);

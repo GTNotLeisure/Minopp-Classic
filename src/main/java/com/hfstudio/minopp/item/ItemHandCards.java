@@ -35,7 +35,6 @@ public class ItemHandCards extends Item {
                     p -> p.uuid.equals(
                         player.getGameProfile()
                             .getId()))) {
-                // Card is valid
                 return stack;
             }
         }
@@ -68,7 +67,6 @@ public class ItemHandCards extends Item {
         return te instanceof BlockEntityMinoTable ? (BlockEntityMinoTable) te : null;
     }
 
-    /** The hand in display order (also the order the scroll index refers to). */
     public static java.util.List<com.hfstudio.minopp.game.Card> sortedHand(com.hfstudio.minopp.game.CardGame game,
         CardPlayer player) {
         java.util.List<com.hfstudio.minopp.game.Card> hand = new java.util.ArrayList<>(player.hand);

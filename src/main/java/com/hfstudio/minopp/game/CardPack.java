@@ -7,10 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A card pack: a named set of deck entries (card type + how many copies) plus the rules the original game mode turns
- * on. Packs can be enabled whole, or individual entries can be mixed into any game with custom counts.
- */
 public final class CardPack {
 
     public static final String CLASSIC = "classic";
@@ -43,7 +39,6 @@ public final class CardPack {
             return CardTypes.get(typeId).wild;
         }
 
-        /** Number of physical cards this entry contributes with the given count. */
         public int totalCards(int count) {
             int perVariant = isWild() ? count : count * 4;
             return perVariant * Math.max(1, numbers.length);
@@ -51,10 +46,8 @@ public final class CardPack {
     }
 
     public final String id;
-    /** Packs that are a "side" of another game (Flip dark side) are only used for back faces. */
     public final boolean backSideOnly;
     public final List<Entry> entries;
-    /** Rules switched on by the "enable whole pack" preset. */
     public final Map<String, Integer> presetRules;
 
     private CardPack(String id, boolean backSideOnly, List<Entry> entries, Map<String, Integer> presetRules) {
@@ -73,12 +66,22 @@ public final class CardPack {
         return null;
     }
 
-    // ------------------------------------------------------------------ registry
-
     private static final Map<String, CardPack> REGISTRY = new LinkedHashMap<>();
 
     public static CardPack get(String id) {
         return REGISTRY.get(id);
+    }
+
+    /** True for a "packId:entryKey" key of a registered entry. */
+    public static boolean isEntryKey(String countKey) {
+        int colon = countKey.indexOf(':');
+        if (colon < 0) return false;
+        CardPack pack = get(countKey.substring(0, colon));
+        if (pack == null) return false;
+        String key = countKey.substring(colon + 1);
+        for (Entry e : pack.entries) if (e.key()
+            .equals(key)) return true;
+        return false;
     }
 
     public static Collection<CardPack> all() {
@@ -136,7 +139,6 @@ public final class CardPack {
         }
     }
 
-    // 108 cards: 0 x1, 1-9 x2, Skip/Reverse/+2 x2 per color, Wild x4, Wild +4 x4
     public static final CardPack PACK_CLASSIC = new Builder(CLASSIC).numbers("zero", ZERO, 1)
         .numbers("numbers", ONE_TO_NINE, 2)
         .entry("skip", 2)
@@ -146,7 +148,6 @@ public final class CardPack {
         .entry("wild_draw4", 4)
         .build();
 
-    // 168 cards. Show 'Em No Mercy style deck; counts are adjustable per table.
     public static final CardPack PACK_NO_MERCY = new Builder(NO_MERCY).numbers("numbers", ZERO_TO_NINE, 2)
         .entry("skip", 3)
         .entry("reverse", 4)
@@ -165,7 +166,6 @@ public final class CardPack {
         .rule(GameRules.DRAW_TO_MATCH, 1)
         .build();
 
-    // Light side of the double-sided deck (112 cards)
     public static final CardPack PACK_FLIP = new Builder(FLIP).numbers("numbers", ONE_TO_NINE, 2)
         .entry("draw1", 2)
         .entry("reverse", 2)
@@ -176,7 +176,6 @@ public final class CardPack {
         .rule(GameRules.FLIP_MODE, 1)
         .build();
 
-    // Dark side faces, paired with every physical card while Flip mode is on
     public static final CardPack PACK_FLIP_DARK = new Builder(FLIP_DARK)
         .entry("numbers", "number", ONE_TO_NINE, 2, true, false)
         .entry("draw5", "draw5", NONE, 2, true, false)
@@ -188,7 +187,6 @@ public final class CardPack {
         .backSideOnly()
         .build();
 
-    // Two-colored Flex cards and Power cards (112 cards)
     public static final CardPack PACK_FLEX = new Builder(FLEX).numbers("zero", ZERO, 1)
         .numbers("numbers", new int[] { 1, 2, 3, 4, 6, 7, 8 }, 2)
         .entry("power_numbers", "power_number", new int[] { 5, 9 }, 2, false, false)
@@ -205,7 +203,6 @@ public final class CardPack {
         .rule(GameRules.FLEX_POWER, 1)
         .build();
 
-    // 112 cards, every card is wild
     public static final CardPack PACK_ALL_WILD = new Builder(ALL_WILD).entry("aw_wild", 26)
         .entry("aw_reverse", 14)
         .entry("aw_skip", 14)
@@ -216,7 +213,6 @@ public final class CardPack {
         .entry("aw_forced_swap", 14)
         .build();
 
-    // Large group game: classic deck plus party cards
     public static final CardPack PACK_PARTY = new Builder(PARTY).entry("point_taken", 1)
         .entry("wild_drawn_together", 4)
         .entry("wild_pile_up", 4)

@@ -7,16 +7,11 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-/**
- * A physical card. Every card has a light face; cards of a Flip deck also have a dark face on the back.
- * Identity is the per-game unique id, as several physical cards may print the same face.
- */
 public final class Card implements Comparable<Card> {
 
     public final int uid;
     public final CardFace light;
     public final CardFace dark;
-    /** Player who last held/played this card; used to pick the card theme on other clients. Not game relevant. */
     public UUID owner;
 
     public Card(int uid, CardFace light, CardFace dark) {
@@ -29,7 +24,6 @@ public final class Card implements Comparable<Card> {
         return darkSide && dark != null ? dark : light;
     }
 
-    /** The face that is not currently active (shown on the back). */
     public CardFace backFace(boolean darkSide) {
         if (dark == null) return null;
         return darkSide ? light : dark;

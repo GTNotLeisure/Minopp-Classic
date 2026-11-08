@@ -21,19 +21,13 @@ import com.hfstudio.minopp.effect.PlayerGlowEffectEvent;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
 
-/**
- * Server-authoritative game state and rules engine. Card behaviour lives in {@link CardTypes}; switches live in
- * {@link TableConfig} / {@link GameRules}.
- */
 public class CardGame {
 
     private static final long DECISION_TIMEOUT_MS = 15000;
 
-    /** Turn order (sorted by seat). Eliminated players stay in the list but are skipped. */
     public List<CardPlayer> players;
     public int currentPlayerIndex;
 
-    /** Accumulated draw penalty for the current player. */
     public int pendingDraw;
     public int lastDrawValue;
     public UUID pendingDrawSource;
@@ -45,7 +39,6 @@ public class CardGame {
 
     public UUID lastSwapFromUuid;
     public UUID lastSwapToUuid;
-    /** Incremented whenever hands move between players, so clients can animate it. */
     public int handMoveCounter;
     public int handMoveKind;
 
@@ -55,7 +48,6 @@ public class CardGame {
     public CardColor currentColor = CardColor.WILD;
     public boolean darkSide;
 
-    // Special mechanics state
     public UUID challengeable;
     public boolean challengeableHadColor;
     public final List<PendingDecision> decisions = new ArrayList<>();
@@ -65,7 +57,6 @@ public class CardGame {
     public int balloonFuse;
     public UUID forcedNext;
 
-    // Per-turn transient state
     private int skipCount;
     private boolean extraTurn;
     private boolean deferAdvance;
@@ -78,7 +69,6 @@ public class CardGame {
         this.players = players;
     }
 
-    /** Config used when the game is not attached to a table (tests / simulations). */
     public TableConfig detachedConfig;
 
     public TableConfig config() {
@@ -127,8 +117,6 @@ public class CardGame {
         return players.get(nextActiveIndex(currentPlayerIndex));
     }
 
-    // ===================================================================================== setup
-
     public ActionReport initiate(CardPlayer cardPlayer, int initialCardCount) {
         if (players.size() < 2) return ActionReport.NO_GAME;
         TableConfig config = config();
@@ -139,7 +127,6 @@ public class CardGame {
         isAntiClockwise = false;
         darkSide = false;
 
-        // Team mode: players keep the teams chosen in the lobby (copied from their seats); otherwise no teams
         if (!Teams.enabled(config)) {
             for (CardPlayer p : players) p.team = -1;
         } else {
@@ -153,7 +140,6 @@ public class CardGame {
                 player.hand.add(deck.remove(deck.size() - 1));
             }
         }
-        // Start with a plain number card when the deck has any
         boolean hasNumber = deck.stream()
             .anyMatch(c -> c.light.isNumber() && !c.light.isWild());
         Card tobeTopCard = deck.remove(deck.size() - 1);
@@ -171,9 +157,6 @@ public class CardGame {
         return report.gameStarted();
     }
 
-    // ===================================================================================== validation
-
-    /** Returns null if the card may be played, else the lang key of the reason. */
     public String checkPlayable(CardPlayer player, Card card, boolean useFlex) {
         CardFace face = face(card);
         CardType type = face.type();
@@ -261,8 +244,6 @@ public class CardGame {
         return false;
     }
 
-    // ===================================================================================== actions
-
     public ActionReport playCard(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
         int playerIndex = players.indexOf(cardPlayer);
@@ -275,7 +256,6 @@ public class CardGame {
         if (card == null) return report.fail(Chat.translatable("game.minopp.play.not_your_card"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
 
-        // early check for jump in to stop players playing during the cut-in window
         if (awaitingCutIn && !(isIdenticalToTop(card) && rule(GameRules.JUMP_IN))) {
             return report.fail(Chat.translatable("game.minopp.play.not_match_cut"));
         }
@@ -336,20 +316,18 @@ public class CardGame {
         doDiscardCard(cardPlayer, card, report);
         GameSounds.cardPlayed(report, type, useFlex);
 
-        // New color
-        if (type.keepsColor) {
-            // unchanged
-        } else if (face.isWild()) {
-            currentColor = choices.color != null ? choices.color : currentColor;
-        } else {
-            currentColor = useFlex && face.flexColor != null ? face.flexColor : face.color;
+        if (!type.keepsColor) {
+            if (face.isWild()) {
+                if (choices.color != null) currentColor = choices.color;
+            } else {
+                currentColor = useFlex && face.flexColor != null ? face.flexColor : face.color;
+            }
         }
         if (useFlex) {
             cardPlayer.powerOn = false;
             normalizePower();
         }
         if (type.drawValue == 0 || useFlex) {
-            // a non-draw card ends any challenge window of a previous Wild +4
             if (pendingDraw == 0) challengeable = null;
         }
 
@@ -361,14 +339,12 @@ public class CardGame {
         CardType.Effect effect = useFlex ? type.flexEffect : type.effect;
         if (effect != null) effect.apply(ctx);
 
-        // Dance floor: only number cards until the turn comes back to whoever started it
         if (danceOwner != null && !cardPlayer.uuid.equals(danceOwner) && !face.isNumber()) {
             drawCards(cardPlayer, 2, report);
             report.messageAll(Chat.translatable("game.minopp.play.dance_penalty", cardPlayer.name));
         }
 
         if (choices.shout && cardPlayer.hand.size() < 2 && !cardPlayer.hasShoutedMino) {
-            // shouted together with this card (we had 2 or fewer before playing it, and it is our play)
             cardPlayer.hasShoutedMino = true;
             report.sound(Mino.id("game.mino_shout"), 0);
             report.messageAll(Chat.translatable("game.minopp.play.mino_shout", cardPlayer.name));
@@ -401,7 +377,6 @@ public class CardGame {
         return isCut ? report.cut() : report.played();
     }
 
-    /** Win / elimination checks after any action. Returns the final report when the game ended. */
     private ActionReport checkEndConditions(CardPlayer actor, ActionReport report) {
         for (CardPlayer p : players) {
             if (!p.eliminated && p.hand.isEmpty()) return win(p, report);
@@ -493,14 +468,13 @@ public class CardGame {
             drawnCardUid = last.uid;
             return report.drew(drawn);
         }
-        advanceTurn(report); // immediately advance, no play after draw
+        advanceTurn(report);
         return report.drew(drawn);
     }
 
     public ActionReport shoutMino(CardPlayer realPlayer) {
         ActionReport report = ActionReport.builder(this, realPlayer);
         if (!realPlayer.hasShoutedMino) {
-            // MINO can only be shouted on our own turn with 2 cards or fewer; anything else is simply refused
             int idx = players.indexOf(realPlayer);
             if (idx != currentPlayerIndex || awaitingCutIn) {
                 return report.fail(Chat.translatable("game.minopp.play.mino_shout_not_turn"));
@@ -537,8 +511,6 @@ public class CardGame {
         }
     }
 
-    // ===================================================================================== decisions
-
     public ActionReport answerDecision(CardPlayer player, int answer, UUID target) {
         ActionReport report = ActionReport.builder(this, player);
         for (PendingDecision d : decisions) {
@@ -557,7 +529,6 @@ public class CardGame {
         return report.fail(Chat.translatable("game.minopp.play.no_decision"));
     }
 
-    /** Called every server tick; answers for bots and timed out players. */
     public ActionReport tickDecisions(long now, java.util.function.Predicate<UUID> isHuman) {
         if (decisions.isEmpty()) return null;
         boolean changed = false;
@@ -602,8 +573,8 @@ public class CardGame {
             case ROULETTE_COLOR -> {
                 CardPlayer victim = deAmputate(first.player);
                 CardColor color = CardColor.values()[Math.min(first.answer, CardColor.values().length - 1)];
-                if (color.isWild()) color = CardColor.forSide(darkSide)
-                    .get(0);
+                if (!CardColor.forSide(darkSide)
+                    .contains(color)) color = mostCommonColor(victim);
                 int count = drawUntilColor(victim, color, report);
                 currentColor = color;
                 report.messageAll(
@@ -612,7 +583,6 @@ public class CardGame {
                         victim.name,
                         Chat.translatable(color.langKey()),
                         count));
-                // the roulette victim loses their turn
                 currentPlayerIndex = players.indexOf(victim);
                 ActionReport end = checkEndConditions(victim, report);
                 if (end != null) return end;
@@ -645,7 +615,6 @@ public class CardGame {
         challengeable = null;
         if (d.answer == 1 && source != null) {
             if (challengeableHadColor) {
-                // Bluff caught: the source draws instead, the victim plays normally
                 report.messageAll(Chat.translatable("game.minopp.play.challenge_success", victim.name, source.name));
                 drawCards(source, pendingDraw, report);
                 pendingDraw = 0;
@@ -662,8 +631,6 @@ public class CardGame {
         if (checkEndConditions(victim, report) != null) return;
         advanceTurn(report);
     }
-
-    // ===================================================================================== turn flow
 
     public void advanceTurn(ActionReport report) {
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
@@ -698,7 +665,6 @@ public class CardGame {
             }
         }
 
-        // trigger for jump-in, if true then it locks for a few seconds to allow jump-ins
         if (anyOtherPlayerCanCutIn()) {
             awaitingCutIn = true;
             final CardGame self = this;
@@ -715,7 +681,6 @@ public class CardGame {
         resolvePenaltyFor(current, report);
     }
 
-    /** Called once a jump-in window closes. */
     public ActionReport resolveStuckPenalty() {
         ActionReport report = ActionReport.builder(this, currentPlayer());
         CardPlayer current = currentPlayer();
@@ -725,7 +690,6 @@ public class CardGame {
         return report;
     }
 
-    /** If the current player owes a draw penalty and cannot answer it, draw it (or offer a challenge). */
     private void resolvePenaltyFor(CardPlayer current, ActionReport report) {
         if (pendingDraw <= 0) return;
         boolean canAnswer = current.hand.stream()
@@ -744,7 +708,6 @@ public class CardGame {
         takePendingDraw(current, report);
         if (checkEndConditions(current, report) != null) return;
         report.state(Chat.translatable("game.minopp.play.drew", current.name, penalty));
-        // Now advance again since their turn is forfeit
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         CardPlayer nextPlayer = players.get(currentPlayerIndex);
@@ -760,8 +723,6 @@ public class CardGame {
         challengeable = null;
         drawCards(victim, amount, report);
     }
-
-    // ===================================================================================== effect API
 
     public void skipNext(int count) {
         skipCount += count;
@@ -990,8 +951,6 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.balloon", player.name));
     }
 
-    // ===================================================================================== hand movement
-
     public void swapHands(CardPlayer initiator, CardPlayer target, ActionReport report) {
         if (initiator == null || target == null) return;
         List<Card> a = new ArrayList<>(initiator.hand);
@@ -1005,7 +964,6 @@ public class CardGame {
         handMoveCounter++;
     }
 
-    /** 1:1 API of the original mod. */
     public void swapHands(CardPlayer initiator, CardPlayer target) {
         swapHands(initiator, target, null);
     }
@@ -1027,8 +985,6 @@ public class CardGame {
         handMoveCounter++;
     }
 
-    // ===================================================================================== deck
-
     public void doDiscardCard(CardPlayer player, Card card, ActionReport report) {
         discardDeck.add(topCard);
         topCard = card;
@@ -1044,7 +1000,6 @@ public class CardGame {
         discardDeck.clear();
     }
 
-    /** Draws up to {@code count} cards (Drawn Together partners draw too). Returns the cards drawn. */
     public List<Card> drawCards(CardPlayer cardPlayer, int count, ActionReport report) {
         List<Card> drawn = drawCardsRaw(cardPlayer, count, report);
         UUID partner = links.get(cardPlayer.uuid);
@@ -1066,12 +1021,10 @@ public class CardGame {
             drawn.add(c);
         }
         GameSounds.draws(report, drawn.size(), 0);
-        // a shout only protects a last card: drawing more takes it back
         if (!drawn.isEmpty() && cardPlayer.hand.size() > 1) cardPlayer.hasShoutedMino = false;
         return drawn;
     }
 
-    /** Original API: returns false when not every card could be drawn. */
     public boolean doDrawCard(CardPlayer cardPlayer, int drawCount, ActionReport report) {
         return drawCards(cardPlayer, drawCount, report).size() == drawCount;
     }
@@ -1091,8 +1044,6 @@ public class CardGame {
             GameSounds.elimination(report);
         }
     }
-
-    // ===================================================================================== helpers
 
     public CardColor mostCommonColor(CardPlayer player) {
         List<CardColor> colors = CardColor.forSide(darkSide);
@@ -1127,8 +1078,6 @@ public class CardGame {
         DISCARD_HAND,
         DISCARD_DRAWN,
     }
-
-    // ===================================================================================== NBT
 
     private static List<Card> readCards(NBTTagList list) {
         List<Card> cards = new ArrayList<>();

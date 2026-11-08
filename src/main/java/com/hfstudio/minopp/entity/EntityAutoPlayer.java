@@ -28,10 +28,6 @@ import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Vec3d;
 
-/**
- * MinoBot. Extends EntityLiving (rather than LivingEntity in 1.20.1) so it can reuse RenderBiped and the held item
- * pipeline; all vanilla AI is disabled.
- */
 public class EntityAutoPlayer extends EntityLiving {
 
     private static final int DW_HAND_STACK = 20;
@@ -55,7 +51,6 @@ public class EntityAutoPlayer extends EntityLiving {
 
     public final AutoPlayer autoPlayer = new AutoPlayer();
 
-    /** Client only: resolved skin texture, null for the default skin. */
     public ResourceLocation clientSkinLocation = null;
     public String clientSkinValidFor = "";
 
@@ -79,9 +74,7 @@ public class EntityAutoPlayer extends EntityLiving {
     }
 
     @Override
-    protected void updateEntityActionState() {
-        // No vanilla AI
-    }
+    protected void updateEntityActionState() {}
 
     @Override
     protected boolean canDespawn() {
@@ -105,7 +98,6 @@ public class EntityAutoPlayer extends EntityLiving {
             return;
         }
 
-        // Rate limiting
         if (!getActive()) {
             tablePos = null;
             heal(10);
@@ -117,7 +109,6 @@ public class EntityAutoPlayer extends EntityLiving {
         lastTickGameTime = worldObj.getTotalWorldTime();
 
         if (tablePos == null) {
-            // Search for a table and join it
             boolean tableFound = false;
             int bx = MathHelper.floor_double(posX), by = MathHelper.floor_double(posY),
                 bz = MathHelper.floor_double(posZ);
@@ -152,7 +143,6 @@ public class EntityAutoPlayer extends EntityLiving {
             }
         }
 
-        // In-game logic
         lookAt(tablePos.x + 1.5, tablePos.y + 1, tablePos.z + 1.5);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(worldObj, tablePos);
         if (tableEntity != null) {
@@ -201,14 +191,12 @@ public class EntityAutoPlayer extends EntityLiving {
                 if (tableEntity.getPlayersList()
                     .stream()
                     .noneMatch(p -> p.equals(cardPlayer))) {
-                    // It is not on the table
                     cardPlayer = null;
                     setHandStack(null);
                     tablePos = null;
                 }
             }
         } else {
-            // Table is gone
             cardPlayer = null;
             setHandStack(null);
             tablePos = null;
@@ -284,7 +272,7 @@ public class EntityAutoPlayer extends EntityLiving {
         if (tablePos != null) compound.setLong("TablePos", tablePos.asLong());
         if (cardPlayer != null) compound.setTag("CardPlayer", cardPlayer.toTag());
         if (getHeldItem() != null) compound.setTag("HandStack", getHeldItem().writeToNBT(new NBTTagCompound()));
-        writeConfigToTag(compound); // Write config values directly to maintain backward compatibility
+        writeConfigToTag(compound);
     }
 
     @Override
@@ -300,9 +288,8 @@ public class EntityAutoPlayer extends EntityLiving {
         } else {
             cardPlayer = null;
         }
-        readConfigFromTag(compound); // Read config values directly from root tag
+        readConfigFromTag(compound);
 
-        // Try fix hand stack
         if (tablePos != null && cardPlayer != null) {
             ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
             ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);

@@ -7,9 +7,6 @@ import java.util.List;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 
-/**
- * Server tick based task scheduler (merged interface + Forge implementation of the 1.20.1 version).
- */
 public interface TaskScheduler {
 
     void schedule(int ticks, Runnable task);

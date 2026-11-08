@@ -6,10 +6,6 @@ import net.minecraft.nbt.NBTTagCompound;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-/**
- * A question the game asks a player who is not necessarily the current player (challenge a Wild +4, pick a color for
- * Color Roulette, point at someone for Point Taken). Unanswered decisions resolve to their default on timeout.
- */
 public final class PendingDecision {
 
     public enum Type {
@@ -25,7 +21,6 @@ public final class PendingDecision {
     public final UUID player;
     public final UUID source;
     public final long deadline;
-    /** Answer value, set when answered. */
     public int answer = -1;
     public UUID answerTarget;
 

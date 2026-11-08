@@ -8,7 +8,6 @@ import org.lwjgl.opengl.GL11;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/** Rounded pill button in the settings UI style; optional color accent (e.g. for color choices). */
 @SideOnly(Side.CLIENT)
 public class UiButton extends GuiButton {
 

@@ -25,10 +25,6 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Collects the choices a card needs before it is played: a color (wilds) and/or one or two target players (7 swap,
- * targeted draws, Drawn Together...). Replaces the wild selection and hand swap screens of the original mod.
- */
 @SideOnly(Side.CLIENT)
 public class PlayChoiceScreen extends GuiScreen {
 
@@ -67,7 +63,6 @@ public class PlayChoiceScreen extends GuiScreen {
         if (colorStep) {
             List<CardColor> colors = CardColor.forSide(darkSide);
             ColorPicker3D.open(gamePos, colors);
-            // the pillars on the table are the main way to pick; these buttons (and keys 1-4) are the fallback
             int bw = 56, gap = 6, total = colors.size() * bw + (colors.size() - 1) * gap;
             for (int i = 0; i < colors.size(); i++) {
                 CardColor c = colors.get(i);
@@ -157,7 +152,6 @@ public class PlayChoiceScreen extends GuiScreen {
     private void send() {
         BlockEntityMinoTable table = table();
         if (table != null && targetCount > 0 && card.light.isNumber() && card.face(darkSide).number == 7) {
-            // Hide our own hand during the swap animation (as the original swap screen did)
             BlockEntityMinoTable.hideHandUntil
                 .put(player.uuid, System.currentTimeMillis() + BlockEntityMinoTable.HandSwapAnimation.DURATION_MS);
         }
@@ -203,10 +197,6 @@ public class PlayChoiceScreen extends GuiScreen {
         ColorPicker3D.close();
     }
 
-    /**
-     * The game moves on while the choice is open (turn passed, jump-in window closed, game ended, card taken away by
-     * a swap...). Close instead of leaving a choice that can no longer be sent.
-     */
     @Override
     public void updateScreen() {
         BlockEntityMinoTable table = table();
@@ -229,7 +219,6 @@ public class PlayChoiceScreen extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         String theme = ThemeManager.INSTANCE.selected();
         if (colorStep) {
-            // keep the table visible: the color pillars stand on it
             UiDraw.gradient(0, 0, width, 40, 0xA0300606, 0x00300606);
             UiDraw.gradient(0, height - 60, width, height, 0x00300606, 0xA0300606);
             CardRenderer.drawFace2D(card.face(darkSide), theme, 10, 8, 26, 40);
@@ -250,7 +239,6 @@ public class PlayChoiceScreen extends GuiScreen {
             List<CardColor> colors = CardColor.forSide(darkSide);
             int hit = ColorPicker3D.hitTest(mouseX, mouseY);
             if (hit < 0) {
-                // pointing at a fallback button raises its pillar too
                 for (Object o : buttonList) {
                     GuiButton b = (GuiButton) o;
                     if (b.id >= 0 && mouseX >= b.xPosition

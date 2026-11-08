@@ -4,7 +4,6 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IChatComponent;
 
-/** Small helpers mirroring 1.20's Component factory methods. */
 public final class Chat {
 
     private Chat() {}

@@ -5,9 +5,6 @@ import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 import com.hfstudio.minopp.Mino;
 
-/**
- * Server configuration. Only the server's value matters: it decides what card data clients receive.
- */
 @Config(modid = Mino.MOD_ID, filename = "minopp-server", configSubDirectory = "minopp")
 @Config.LangKeyPattern(pattern = "minopp.gui.config.%cat.%field", fullyQualified = true)
 @Config.Comment("Mino++: Classic server configuration")

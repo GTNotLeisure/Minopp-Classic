@@ -8,7 +8,6 @@ import net.minecraft.util.ResourceLocation;
 import cpw.mods.fml.common.network.ByteBufUtils;
 import io.netty.buffer.ByteBuf;
 
-/** FriendlyByteBuf-like helpers for 1.7.10 ByteBufs. */
 public final class Buf {
 
     private Buf() {}

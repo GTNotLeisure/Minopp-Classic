@@ -14,10 +14,6 @@ import com.hfstudio.minopp.util.Buf;
 
 import io.netty.buffer.ByteBuf;
 
-/**
- * A sound played at the table after a delay. Targeted sounds (e.g. "it's your turn") are only heard by that player;
- * the target is now sent over the network (the 1.20.1 version dropped it, so everyone heard them).
- */
 public record SoundEffectEvent(int timeOffset, Optional<UUID> target, ResourceLocation soundId, float volume,
     float pitch) implements EffectEvent {
 
@@ -51,8 +47,6 @@ public record SoundEffectEvent(int timeOffset, Optional<UUID> target, ResourceLo
     public void summonClient(World level, BlockPos origin, boolean selfPartOfSourceGame) {
         level.playSound(origin.x + 0.5, origin.y + 0.5, origin.z + 0.5, soundId.toString(), volume, pitch, false);
         if (selfPartOfSourceGame) {
-            // Something's happening, so reset the idle timer
-            // This is chosen as most actions have a sound effect associated with them
             TurnDeadMan.pedal();
         }
     }

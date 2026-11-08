@@ -4,9 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Everything a card effect needs: the game, who played what, and the choices made on the client.
- */
 public final class PlayContext {
 
     public final CardGame game;
@@ -32,7 +29,6 @@ public final class PlayContext {
         return p != null && !p.equals(player) && !p.eliminated ? p : null;
     }
 
-    /** Client-side choices sent along with a played card. */
     public static final class PlayChoices {
 
         public CardColor color;

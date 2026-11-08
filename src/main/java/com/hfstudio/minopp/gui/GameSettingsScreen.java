@@ -34,11 +34,6 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Table setup in one place: saved designs, card packs, house rules, single cards, table options and card style.
- * Every option is a tile: left click toggles / applies, right click adjusts counts or toggles single packs, the hovered
- * tile is explained in the info panel and in a tooltip.
- */
 @SideOnly(Side.CLIENT)
 public class GameSettingsScreen extends GuiScreen {
 
@@ -102,7 +97,6 @@ public class GameSettingsScreen extends GuiScreen {
     private long hoverStart;
     private long lastFrame = System.nanoTime();
 
-    // layout
     private int contentX, contentY, contentW, contentH, infoX, infoW;
     private boolean showInfo;
 
@@ -110,7 +104,6 @@ public class GameSettingsScreen extends GuiScreen {
         this(gamePos, parent, null);
     }
 
-    /** Dev preview (-Dminopp.uiPreview): renders against a detached table without a world or server. */
     private final BlockEntityMinoTable previewTable;
     private long previewSwitch = System.currentTimeMillis();
 
@@ -159,8 +152,6 @@ public class GameSettingsScreen extends GuiScreen {
             .equals(key);
     }
 
-    // =================================================================== layout
-
     @Override
     public void initGui() {
         Keyboard.enableRepeatEvents(true);
@@ -190,7 +181,6 @@ public class GameSettingsScreen extends GuiScreen {
         return contentH - 12;
     }
 
-    /** Lays tiles of one size out in rows; returns the y after the last row. */
     private int grid(List<Tile> list, int startY, int tileW, int tileH, int gap) {
         int cols = Math.max(1, (viewW() + gap) / (tileW + gap));
         int used = cols * tileW + (cols - 1) * gap;
@@ -390,8 +380,6 @@ public class GameSettingsScreen extends GuiScreen {
         return max + 6;
     }
 
-    // =================================================================== rendering
-
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         BlockEntityMinoTable te = table();
@@ -536,7 +524,6 @@ public class GameSettingsScreen extends GuiScreen {
         boolean four = false, locked = false, dim = false;
         customCount = false;
 
-        // glow when hovered
         if (hoverA > 0.02f) {
             int glowA = (int) (hoverA * 200);
             UiDraw.roundRect(x1 - 3, y1 - 3, x2 + 3, y2 + 3, 7, (glowA << 24) | (UiDraw.GLOW & 0xFFFFFF));
@@ -587,7 +574,6 @@ public class GameSettingsScreen extends GuiScreen {
                 GameRules.Rule r = (GameRules.Rule) t.payload;
                 int v = cfg.getInt(r.id());
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
-                // numbered rules: icon on top, value pill, label; switches: icon centered above the label
                 int iconY = r.bool() ? y1 + 2 + (t.h - 16 - 32) / 2 : y1 + 3;
                 UiDraw.icon(r.id(), (x1 + x2) / 2f - 16, iconY, 32);
                 UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
@@ -595,7 +581,6 @@ public class GameSettingsScreen extends GuiScreen {
                     checked = v != 0;
                     dim = v == 0;
                 } else {
-                    // value sits centered between the icon and the label
                     count = v == 0 && r.id()
                         .equals(GameRules.DECK_COPIES) ? "A" : String.valueOf(v);
                 }
@@ -646,14 +631,12 @@ public class GameSettingsScreen extends GuiScreen {
         }
         if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 10, 10);
         if (count != null) {
-            // centered at the bottom, above the label (rules) or at the card's foot (cards)
             int pillY = t.kind == Kind.CARD ? y2 - 11 : y2 - 24;
             valuePill(count, (x1 + x2) / 2, pillY);
         }
         if (locked) UiDraw.image("badge_lock", x1 + 2, four ? y1 + 12 : y1 + 2, 10, 10);
     }
 
-    /** Count of the tile being drawn differs from the pack default (pill turns white). */
     private boolean customCount;
 
     private void valuePill(String value, int cx, int y) {
@@ -711,7 +694,6 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static List<CardFace> packFaces(CardPack pack) {
-        // the most telling cards of a pack: colored action cards first, then one wild, numbers only as filler
         List<CardFace> faces = new ArrayList<>();
         List<CardPack.Entry> actions = new ArrayList<>(), wilds = new ArrayList<>(), numbers = new ArrayList<>();
         for (CardPack.Entry e : pack.entries) {
@@ -738,7 +720,6 @@ public class GameSettingsScreen extends GuiScreen {
         return faces;
     }
 
-    /** Fan of cards pivoting around (cx, bottom). */
     private static void drawFan(List<CardFace> faces, String theme, float cx, float bottom, float cardW) {
         float cardH = cardW * 1.5625f;
         int n = faces.size();
@@ -756,7 +737,6 @@ public class GameSettingsScreen extends GuiScreen {
         int x1 = infoX, y1 = contentY, x2 = infoX + infoW, y2 = contentY + contentH;
         UiDraw.panel(x1, y1, x2, y2);
         Tile t = infoTile;
-        // preview area
         int py = y1 + 8, ph = Math.min(90, (y2 - y1) / 2);
         UiDraw.roundRect(x1 + 6, py, x2 - 6, py + ph, 5, 0x50000000);
         float cx = (x1 + x2) / 2f;
@@ -847,11 +827,8 @@ public class GameSettingsScreen extends GuiScreen {
         if (x - hw > 8) UiDraw.pill(fontRendererObj, x - hw, y, "Q/E", hint, false);
     }
 
-    // =================================================================== input
-
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
-        // tabs
         for (Tab t : Tab.values()) {
             int x = tabX(t.ordinal());
             if (mouseX >= x && mouseX < x + tabWidth() && mouseY >= 32 && mouseY < 60) {
@@ -991,7 +968,7 @@ public class GameSettingsScreen extends GuiScreen {
                 int c = cfg.getCount(pack, entry);
                 int nv;
                 if (ctrl) {
-                    nv = -1; // reset to the pack default
+                    nv = -1;
                 } else if (button == 1) {
                     nv = Math.max(0, c + (shift ? -1 : 1));
                 } else {

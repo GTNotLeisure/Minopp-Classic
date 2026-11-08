@@ -18,7 +18,6 @@ import com.hfstudio.minopp.gui.GuiDraw;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/** Drawing helpers for the red, rounded "party game" UI style. */
 @SideOnly(Side.CLIENT)
 public final class UiDraw {
 
@@ -35,8 +34,6 @@ public final class UiDraw {
     public static ResourceLocation ui(String name) {
         return Mino.id("textures/gui/ui/" + name + ".png");
     }
-
-    // ------------------------------------------------------------------ primitives
 
     public static void gradient(float x1, float y1, float x2, float y2, int top, int bottom) {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -59,7 +56,6 @@ public final class UiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    /** Rounded rectangle with a vertical gradient; corner radius in GUI pixels (small radii look best). */
     public static void roundRect(int x1, int y1, int x2, int y2, int r, int top, int bottom) {
         r = Math.max(0, Math.min(r, Math.min((x2 - x1) / 2, (y2 - y1) / 2)));
         if (r == 0) {
@@ -100,7 +96,6 @@ public final class UiDraw {
         roundRect(x1, y1, x2, y2, r, color, color);
     }
 
-    /** Rounded rectangle with a border of the given thickness. */
     public static void roundFrame(int x1, int y1, int x2, int y2, int r, int border, int borderColor, int top,
         int bottom) {
         roundRect(x1, y1, x2, y2, r, borderColor);
@@ -121,14 +116,11 @@ public final class UiDraw {
         roundRect(x1, y1, x2, y2, 6, PANEL, PANEL_DARK);
     }
 
-    /** Header bar of a panel (dark strip with a yellow caption). */
     public static void panelHeader(FontRenderer font, int x1, int y1, int x2, String caption) {
         roundRect(x1, y1, x2, y1 + 16, 6, 0xE0200404, 0xE0300606);
         font.drawStringWithShadow(caption, x1 + 8, y1 + 4, TITLE_YELLOW);
         GL11.glColor4f(1, 1, 1, 1);
     }
-
-    // ------------------------------------------------------------------ text
 
     public static void outlinedText(FontRenderer font, String text, float x, float y, float scale, int color,
         int outline) {
@@ -158,7 +150,6 @@ public final class UiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    /** Fits a string into maxWidth by scaling it down (min 0.6) and then trimming. */
     public static void fittedCentered(FontRenderer font, String text, float cx, float y, int maxWidth, int color) {
         int w = font.getStringWidth(text);
         float scale = w <= maxWidth ? 1f : Math.max(0.6f, maxWidth / (float) w);
@@ -166,16 +157,12 @@ public final class UiDraw {
         scaledCentered(font, text, cx, y, scale, color);
     }
 
-    /** Minecraft-style item count in the bottom-right corner. */
     public static void count(FontRenderer font, String text, int right, int bottom) {
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         font.drawStringWithShadow(text, right - font.getStringWidth(text), bottom - 8, 0xFFFFFFFF);
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    // ------------------------------------------------------------------ textures
-
-    /** Draws a pixel-art UI image; nearest filtering keeps texels crisp (icons are drawn at integer scales). */
     public static void image(String name, float x, float y, float w, float h) {
         GL11.glColor4f(1, 1, 1, 1);
         Minecraft.getMinecraft()
@@ -186,19 +173,14 @@ public final class UiDraw {
         GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
     }
 
-    /** Icons are 32x32 pixel art; tab icons also have a native 16x16 version used for small sizes. */
     public static void icon(String id, float x, float y, float size) {
         image("icon_" + id + (size <= 24 ? "_s" : ""), x, y, size, size);
     }
 
-    // ------------------------------------------------------------------ background
-
     private static final long SEED = 1425;
 
-    /** Animated red backdrop with drifting translucent cards. */
     public static void background(int width, int height) {
         gradient(0, 0, width, height, 0xFFC4161C, 0xFF7A0A0E);
-        // soft spotlight
         long time = System.currentTimeMillis();
         Random rnd = new Random(SEED);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -225,12 +207,9 @@ public final class UiDraw {
             GL11.glPopMatrix();
         }
         GL11.glEnable(GL11.GL_TEXTURE_2D);
-        // swirl highlight
         gradient(0, height * 0.55f, width, height, 0x00000000, 0x40000000);
         GL11.glColor4f(1, 1, 1, 1);
     }
-
-    // ------------------------------------------------------------------ tooltip / scissor
 
     public static void tooltip(FontRenderer font, List<String> lines, int mouseX, int mouseY, int screenW,
         int screenH) {
@@ -263,7 +242,6 @@ public final class UiDraw {
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
-    /** Pill-shaped hint button like "[Esc] Back". Returns its width. */
     public static int pill(FontRenderer font, int x, int y, String key, String label, boolean hover) {
         int kw = font.getStringWidth(key) + 8;
         int w = kw + font.getStringWidth(label) + 14;

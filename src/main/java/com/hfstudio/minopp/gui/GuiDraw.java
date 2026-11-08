@@ -12,7 +12,6 @@ import org.lwjgl.opengl.GL11;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/** GuiGraphics-like helpers for 1.7.10. */
 @SideOnly(Side.CLIENT)
 public final class GuiDraw {
 
@@ -23,9 +22,6 @@ public final class GuiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    /**
-     * Blits a region of a texture: dest (x, y, w, h), source (u, v, uw, vh) in pixels of a (texW x texH) texture.
-     */
     public static void blit(ResourceLocation texture, float x, float y, float w, float h, float u, float v, float uw,
         float vh, float texW, float texH) {
         Minecraft.getMinecraft()
@@ -63,7 +59,6 @@ public final class GuiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    /** Draws an 8x8 head (face + hat layer) from a 64x32 player skin texture. */
     public static void drawPlayerHead(ResourceLocation skin, int x, int y, int size) {
         GL11.glColor4f(1, 1, 1, 1);
         blit(skin, x, y, size, size, 8, 8, 8, 8, 64, 32);

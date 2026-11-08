@@ -6,9 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Registry of table rules (mechanics that can be switched on and off per table). Boolean rules are stored as 0/1.
- */
 public final class GameRules {
 
     private GameRules() {}
@@ -49,27 +46,22 @@ public final class GameRules {
     public static final String STACKING = bool("allowStacking", Category.HOUSE, true);
     public static final String SEVEN_ZERO = bool("allowSeven0", Category.HOUSE, false);
 
-    // Remaining house rules of the Ubisoft video game
     public static final String DRAW_TO_MATCH = bool("drawToMatch", Category.HOUSE, false);
     public static final String FORCED_PLAY = bool("forcedPlay", Category.HOUSE, false);
     public static final String NO_BLUFFING = bool("noBluffing", Category.HOUSE, false);
     public static final String CHALLENGE = bool("challengeDraw4", Category.HOUSE, false);
-    /** Team mode: a team wins together; every team needs the same number of players to start. */
     public static final String TEAM_MODE = bool("teamMode", Category.MODES, false);
     public static final String TEAM_COUNT = integer("teamCount", Category.MODES, 2, 2, Teams.MAX_TEAMS);
     public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, false);
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
 
-    // No Mercy mechanics (usable independently of the No Mercy cards)
     public static final String MERCY = bool("mercyRule", Category.NO_MERCY, false);
     public static final String MERCY_LIMIT = integer("mercyLimit", Category.NO_MERCY, 25, 10, 60);
     public static final String STACK_ANY_DRAW = bool("stackAnyDraw", Category.NO_MERCY, false);
 
-    // Game modes
     public static final String FLIP_MODE = bool("flipMode", Category.MODES, false);
     public static final String FLEX_POWER = bool("flexPower", Category.MODES, false);
 
-    // Table setup
     public static final String MAX_PLAYERS = integer("maxPlayers", Category.TABLE, 4, 2, 20);
     public static final String INITIAL_HAND = integer("initialHand", Category.TABLE, 7, 1, 15);
     public static final String DECK_COPIES = integer("deckCopies", Category.TABLE, 0, 0, 8);

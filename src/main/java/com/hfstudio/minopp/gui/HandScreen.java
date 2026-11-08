@@ -26,15 +26,9 @@ import com.hfstudio.minopp.util.Mth;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Interaction mode: the mouse is released so the hand (drawn by {@link GameOverlayLayer}) can be pointed at. Hover
- * selects a card, left click plays it, A/D (W/S with the classic layout) or the arrow keys move the selection,
- * Space/Enter plays the selected card. Right click (or Esc) goes back to free movement.
- */
 @SideOnly(Side.CLIENT)
 public class HandScreen extends GuiScreen {
 
-    /** A choice screen opened from here comes back here when it closes. */
     private static boolean resumeAfterChoice;
 
     private static final int BTN_DRAW = 1, BTN_SHOUT = 2;
@@ -45,7 +39,6 @@ public class HandScreen extends GuiScreen {
     private static String noticeText;
     private static long noticeUntil;
 
-    /** A short message (e.g. why a card cannot be played) shown under the key hints for a few seconds. */
     public static void notice(String text) {
         noticeText = text;
         noticeUntil = System.currentTimeMillis() + 2500;
@@ -55,7 +48,6 @@ public class HandScreen extends GuiScreen {
         return Minecraft.getMinecraft().currentScreen instanceof HandScreen;
     }
 
-    /** Called instead of closing by screens that may have been opened from the hand (color / target choice). */
     public static void returnFromChoice() {
         Minecraft mc = Minecraft.getMinecraft();
         if (resumeAfterChoice && Context.resolve(mc) != null) {
@@ -99,8 +91,6 @@ public class HandScreen extends GuiScreen {
         drawButton.displayString = Chat.translatable(drawn ? "gui.minopp.hand.pass" : "gui.minopp.hand.draw")
             .getFormattedText();
         drawButton.enabled = myTurn;
-        // MINO is only possible with fewer than 2 cards left: right now (1 card) or with the next card (2 cards)
-        // MINO can only be shouted on our own turn with 2 cards or fewer
         boolean canShout = ctx != null && myTurn && !ctx.me.hasShoutedMino && ctx.hand.size() <= 2;
         shoutButton.enabled = canShout;
         shoutButton.displayString = Chat.translatable("gui.minopp.hand.shout")
@@ -109,7 +99,6 @@ public class HandScreen extends GuiScreen {
 
     @Override
     public void updateScreen() {
-        // the game ended or the cards were put away: back to free movement
         if (Context.resolve(mc) == null) mc.displayGuiScreen(null);
     }
 
@@ -118,7 +107,6 @@ public class HandScreen extends GuiScreen {
         Context ctx = Context.resolve(mc);
         if (ctx == null) return;
         if (mouseX != lastMouseX || mouseY != lastMouseY) {
-            // hover selects, but only when the mouse actually moves so A/D are not overridden by a resting cursor
             if (lastMouseX != Integer.MIN_VALUE) {
                 int hit = GameOverlayLayer.hitTest(mouseX, mouseY);
                 if (hit >= 0) select(ctx, hit);
@@ -151,7 +139,8 @@ public class HandScreen extends GuiScreen {
         boolean classic = ClientConfig.display.classicInteraction;
         int prev = classic ? Keyboard.KEY_W : Keyboard.KEY_A;
         int next = classic ? Keyboard.KEY_S : Keyboard.KEY_D;
-        if (keyCode == Keyboard.KEY_ESCAPE || keyCode == mc.gameSettings.keyBindInventory.getKeyCode()) {
+        if (keyCode == Keyboard.KEY_ESCAPE || keyCode == mc.gameSettings.keyBindInventory.getKeyCode()
+            || keyCode == com.hfstudio.minopp.MinoClient.KEY_HAND.getKeyCode()) {
             mc.displayGuiScreen(null);
         } else if (ctx == null) {
             return;
@@ -201,6 +190,10 @@ public class HandScreen extends GuiScreen {
         int clamped = Mth.clamp(index, 0, ctx.hand.size() - 1);
         if (clamped != ItemHandCards.getClientHandIndex(mc.thePlayer)) {
             ItemDataUtils.setHandIndex(mc.thePlayer.getHeldItem(), clamped);
+            mc.getSoundHandler()
+                .playSound(
+                    net.minecraft.client.audio.PositionedSoundRecord
+                        .func_147674_a(new net.minecraft.util.ResourceLocation("random.click"), 1.9f));
             TurnDeadMan.pedal();
         }
     }
@@ -215,7 +208,6 @@ public class HandScreen extends GuiScreen {
         if (mc.currentScreen == this) resumeAfterChoice = false;
     }
 
-    /** Shouts MINO right away (our turn, 2 cards or fewer). */
     private void shout(Context ctx) {
         if (!ctx.isMyTurn() || ctx.me.hasShoutedMino || ctx.hand.size() > 2) return;
         mc.thePlayer.sendChatMessage("/minopp shout");
@@ -227,7 +219,6 @@ public class HandScreen extends GuiScreen {
         C2SPlayCardPacket.Client.sendPlayNoCardC2S(ctx.pos, ItemHandCards.getCardPlayer(mc.thePlayer));
     }
 
-    /** The game the held cards belong to, resolved fresh every time (the table syncs often). */
     public static final class Context {
 
         public final BlockPos pos;

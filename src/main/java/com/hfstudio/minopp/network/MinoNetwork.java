@@ -18,10 +18,6 @@ import cpw.mods.fml.relauncher.Side;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-/**
- * Id-dispatched raw payload channel; the 1.7.10 counterpart of the ServerPlatform/ClientPlatform packet helpers
- * of the 1.20.1 version. Packet handlers run on the main thread in 1.7.10.
- */
 public final class MinoNetwork {
 
     private MinoNetwork() {}

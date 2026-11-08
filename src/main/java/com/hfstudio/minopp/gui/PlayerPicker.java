@@ -20,10 +20,6 @@ import com.hfstudio.minopp.util.WorldUtil;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Grid of player tiles (head, name, hand size) for choosing targets; the look follows the hand swap screen of the
- * original mod, but scales to 20 players.
- */
 @SideOnly(Side.CLIENT)
 public class PlayerPicker {
 
@@ -91,7 +87,6 @@ public class PlayerPicker {
             GuiDraw.drawCenteredString(font, name, 0, 0, 0xFFCCCCCC);
             GL11.glPopMatrix();
             int hand = i < handSizes.size() ? handSizes.get(i) : 0;
-            // pips like the original swap screen, capped
             int pips = Math.min(hand, 8);
             for (int k = 0; k < pips; k++) {
                 int px = x + 6 + (k % 4) * 10, py = y + HEAD + 18 + (k / 4) * 9;
@@ -101,7 +96,6 @@ public class PlayerPicker {
         }
     }
 
-    /** Returns true if a tile was clicked. */
     public boolean click(int mouseX, int mouseY) {
         for (int i = 0; i < players.size(); i++) {
             int x = tileX(i), y = tileY(i);

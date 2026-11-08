@@ -19,15 +19,15 @@ import com.hfstudio.minopp.util.BlockPos;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * The wild color choice as 3D pillars standing on the table around the discard pile, in a cross facing the viewer.
- * The pointed pillar grows and brightens. The pillars are projected to the screen every frame so the choice screen can
- * pick them with the mouse.
- */
 @SideOnly(Side.CLIENT)
 public final class ColorPicker3D {
 
     private ColorPicker3D() {}
+
+    private static final FloatBuffer MODELVIEW = BufferUtils.createFloatBuffer(16);
+    private static final FloatBuffer PROJECTION = BufferUtils.createFloatBuffer(16);
+    private static final IntBuffer VIEWPORT = BufferUtils.createIntBuffer(16);
+    private static final FloatBuffer WIN = BufferUtils.createFloatBuffer(3);
 
     private static BlockPos tablePos;
     private static List<CardColor> colors;
@@ -59,7 +59,6 @@ public final class ColorPicker3D {
         return tablePos != null && tablePos.equals(pos) && colors != null;
     }
 
-    /** Index of the pillar under the mouse (GUI coordinates), or -1. The pillar nearest the cursor wins overlaps. */
     public static int hitTest(int mouseX, int mouseY) {
         int best = -1;
         double bestDist = Double.MAX_VALUE;
@@ -75,16 +74,11 @@ public final class ColorPicker3D {
         return best;
     }
 
-    /** True when every pillar was on screen last frame (otherwise the screen keeps its fallback buttons prominent). */
     public static boolean visible() {
         for (int i = 0; i < 4; i++) if (screenBounds[i] == null) return false;
         return true;
     }
 
-    /**
-     * Draws the pillars. Called from the table renderer with the GL origin at the table core block, so the pile center
-     * is (1.5, 0.94, 1.5).
-     */
     public static void render(BlockPos pos, double viewX, double viewZ) {
         if (!isActiveFor(pos)) return;
         long now = System.nanoTime();
@@ -93,7 +87,6 @@ public final class ColorPicker3D {
         float ease = 1 - (float) Math.exp(-dt * 12);
         float appear = Math.min(1f, (System.currentTimeMillis() - openedAt) / 250f);
 
-        // "front" points from the pile toward the viewer; "right" is the viewer's right
         double fx = viewX - (pos.x + 1.5), fz = viewZ - (pos.z + 1.5);
         double len = Math.sqrt(fx * fx + fz * fz);
         if (len < 1e-3) {
@@ -103,10 +96,8 @@ public final class ColorPicker3D {
             fx /= len;
             fz /= len;
         }
-        // the viewer looks along -front, so their right hand side is (front.z, -front.x)
         double rx = fz, rz = -fx;
         float spread = 0.44f, half = 0.17f;
-        // cross: 0 front, 1 right, 2 back, 3 left
         double[][] offsets = { { fx * spread, fz * spread }, { rx * spread, rz * spread },
             { -fx * spread, -fz * spread }, { -rx * spread, -rz * spread } };
 
@@ -118,8 +109,11 @@ public final class ColorPicker3D {
         OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240f, 240f);
 
-        FloatBuffer modelview = BufferUtils.createFloatBuffer(16), projection = BufferUtils.createFloatBuffer(16);
-        IntBuffer viewport = BufferUtils.createIntBuffer(16);
+        FloatBuffer modelview = MODELVIEW, projection = PROJECTION;
+        IntBuffer viewport = VIEWPORT;
+        modelview.clear();
+        projection.clear();
+        viewport.clear();
         GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
         GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projection);
         GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
@@ -169,7 +163,6 @@ public final class ColorPicker3D {
             b = Math.min(1, b * 1.15f + 0.08f);
         }
         t.startDrawingQuads();
-        // top, brightest
         t.setColorRGBA_F(
             Math.min(1, r * 1.2f + 0.1f),
             Math.min(1, g * 1.2f + 0.1f),
@@ -179,7 +172,6 @@ public final class ColorPicker3D {
         t.addVertex(x0, y1, z1);
         t.addVertex(x1, y1, z1);
         t.addVertex(x1, y1, z0);
-        // sides fade toward the table, like the light pillars of the reference
         float[] shade = { 0.85f, 0.7f, 0.85f, 0.7f };
         double[][] sides = { { x0, z0, x1, z0 }, { x1, z0, x1, z1 }, { x1, z1, x0, z1 }, { x0, z1, x0, z0 } };
         for (int s = 0; s < 4; s++) {
@@ -193,7 +185,6 @@ public final class ColorPicker3D {
         }
         t.draw();
         if (hot) {
-            // white rim around the top of the pointed pillar
             GL11.glLineWidth(2f);
             t.startDrawing(GL11.GL_LINE_LOOP);
             t.setColorRGBA_F(1, 1, 1, 0.9f);
@@ -209,14 +200,14 @@ public final class ColorPicker3D {
 
     private static float[] project(double x0, double y0, double z0, double x1, double y1, double z1,
         FloatBuffer modelview, FloatBuffer projection, IntBuffer viewport, int scale, int displayHeight) {
-        FloatBuffer win = BufferUtils.createFloatBuffer(3);
+        FloatBuffer win = WIN;
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         for (int c = 0; c < 8; c++) {
             double x = (c & 1) == 0 ? x0 : x1, y = (c & 2) == 0 ? y0 : y1, z = (c & 4) == 0 ? z0 : z1;
             win.clear();
             if (!GLU.gluProject((float) x, (float) y, (float) z, modelview, projection, viewport, win)) return null;
             float wz = win.get(2);
-            if (wz < 0 || wz > 1) return null; // behind the camera
+            if (wz < 0 || wz > 1) return null;
             float gx = win.get(0) / scale, gy = (displayHeight - win.get(1)) / scale;
             minX = Math.min(minX, gx);
             maxX = Math.max(maxX, gx);

@@ -4,10 +4,6 @@ import net.minecraft.util.ResourceLocation;
 
 import com.hfstudio.minopp.Mino;
 
-/**
- * Sound design of the game: the mod's own sounds for the core flow (play, draw, turn notice, win) and a few vanilla
- * sounds with tuned pitch for action cards, so special cards are recognizable by ear.
- */
 public final class GameSounds {
 
     private GameSounds() {}
@@ -25,7 +21,6 @@ public final class GameSounds {
         return new ResourceLocation("minecraft", name);
     }
 
-    /** Draw sounds paced like cards sliding off the deck; long draws end with a sigh instead of 20 overlaps. */
     public static void draws(ActionReport report, int count, int startOffset) {
         if (report == null || count <= 0) return;
         int shown = Math.min(count, 6);
@@ -35,7 +30,6 @@ public final class GameSounds {
         if (count >= 4) report.sound(DRAW_MULTI, startOffset + shown * 130 + 150, 0.9f, 1f);
     }
 
-    /** Dealing at the start of a game: a quick riffle. */
     public static void deal(ActionReport report, int cards) {
         int n = Math.min(cards, 10);
         for (int i = 0; i < n; i++) report.sound(DRAW, i * 70, 0.5f, 1.1f + (i % 3) * 0.08f);
@@ -45,7 +39,6 @@ public final class GameSounds {
         report.sound(again ? TURN_AGAIN : TURN, offset, player, 0.8f, 1f);
     }
 
-    /** Extra cue for action cards (number cards just make the normal "play" sound). */
     public static void cardPlayed(ActionReport report, CardType type, boolean flex) {
         String id = type.id;
         if (type.isDraw() && !flex) {

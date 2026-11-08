@@ -12,10 +12,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Plays many complete bot games for every pack and rule combination and checks engine invariants: no exceptions,
- * no lost or duplicated cards, and every game terminates.
- */
 public class GameSimulationTest {
 
     private static final int MAX_ACTIONS = 6000;
@@ -48,7 +44,6 @@ public class GameSimulationTest {
         return set;
     }
 
-    /** Returns true if the game finished normally. */
     private static boolean playOut(TableConfig config, int playerCount, long seed) {
         CardGame game = new CardGame(makePlayers(playerCount));
         game.detachedConfig = config;
@@ -59,7 +54,6 @@ public class GameSimulationTest {
         ai.aiForgetChance = 0.3f;
         for (int step = 0; step < MAX_ACTIONS; step++) {
             if (game.awaitingCutIn) {
-                // A jump-in window: let someone slap an identical card sometimes, otherwise close it
                 boolean cut = false;
                 if (step % 3 == 0) {
                     for (CardPlayer p : game.players) {
@@ -99,7 +93,6 @@ public class GameSimulationTest {
                     .getUnformattedText());
             uids(game);
             if (step % 50 == 0) {
-                // round trip through NBT like a client sync / world save
                 CardGame copy = new CardGame(game.toTag());
                 assertEquals(expected, totalCards(copy));
             }
@@ -186,7 +179,6 @@ public class GameSimulationTest {
 
     @Test
     public void mixedSingleCards() {
-        // classic game with a few No Mercy / Weekend cards mixed in by count overrides
         TableConfig c = new TableConfig();
         c.setCount("no_mercy:discard_all", 2);
         c.setCount("no_mercy:wild_draw6", 4);
@@ -217,7 +209,6 @@ public class GameSimulationTest {
                 assertEquals(a.uid, b.uid);
                 if (real.uuid.equals(viewer)) assertEquals(a.light, b.light);
                 else assertTrue(b.light.isHidden());
-                // the back of a Flip card stays visible
                 assertEquals(a.dark, b.dark);
             }
         }
@@ -226,7 +217,6 @@ public class GameSimulationTest {
             seen.deck.stream()
                 .allMatch(card -> card.light.isHidden()));
         assertEquals(game.topCard.light, seen.topCard.light);
-        // the original tag is untouched
         assertEquals(
             game.players.get(0).hand.get(0).light,
             new CardGame(table.getCompoundTag("game")).players.get(0).hand.get(0).light);

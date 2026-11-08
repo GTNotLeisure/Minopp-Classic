@@ -155,10 +155,6 @@ public final class Mino {
         event.registerServerCommand(new MinoCommand());
     }
 
-    /**
-     * Chunk data (with a fully masked description packet) has just been sent: send the viewer the tables in it again,
-     * this time with their own hand revealed.
-     */
     @SubscribeEvent
     public void onChunkWatch(ChunkWatchEvent.Watch event) {
         if (ServerConfig.gameplay.allowPeeking) return;

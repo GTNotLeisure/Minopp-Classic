@@ -22,9 +22,6 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Table lobby: seats around a felt table (up to 20), start / stop / reset, and shortcuts into the settings tabs.
- */
 @SideOnly(Side.CLIENT)
 public class SeatControlScreen extends GuiScreen {
 
@@ -94,13 +91,11 @@ public class SeatControlScreen extends GuiScreen {
                 true));
     }
 
-    /** Why the teams do not allow a start yet, or null (also null outside team mode). */
     private static net.minecraft.util.IChatComponent teamProblem(BlockEntityMinoTable te) {
         if (!Teams.enabled(te.config)) return null;
         return Teams.problem(te.getPlayersList(), Teams.count(te.config));
     }
 
-    /** Bots can be moved between teams by anyone; real players only change their own team. */
     private boolean canChangeTeam(CardPlayer p) {
         java.util.UUID me = mc.thePlayer.getGameProfile()
             .getId();
@@ -143,14 +138,12 @@ public class SeatControlScreen extends GuiScreen {
             te.config.countDeckSize());
         if (te.game != null) sub = EnumChatFormatting.YELLOW + tr("gui.minopp.play.game_active");
         if (te.game == null && Teams.enabled(te.config)) {
-            // team sizes, and whether they allow a start
             net.minecraft.util.IChatComponent problem = teamProblem(te);
             sub += "   " + Teams.summary(te.getPlayersList(), Teams.count(te.config))
                 .getFormattedText() + (problem == null ? EnumChatFormatting.GREEN + "  \u2714" : "");
         }
         fontRendererObj.drawStringWithShadow(sub, 12, 30, 0xFFFFFFFF);
 
-        // table area
         int sideW = Math.min(150, width / 3);
         int areaX1 = 10, areaY1 = 44, areaX2 = width - 20 - sideW, areaY2 = height - 50;
         UiDraw.panel(areaX1, areaY1, areaX2, areaY2);
@@ -172,11 +165,9 @@ public class SeatControlScreen extends GuiScreen {
 
         net.minecraft.util.IChatComponent problem = te.game == null ? teamProblem(te) : null;
         if (problem != null) {
-            // why Start is disabled: in the gap between the table panel and the Start button
             String why = fontRendererObj.trimStringToWidth(tr("gui.minopp.seats.teams_unequal"), width - 40);
             fontRendererObj.drawStringWithShadow(why, 16, height - 49, 0xFFFF8080);
         }
-        // seat tooltip in team mode
         if (te.game == null && Teams.enabled(te.config)) {
             for (int[] r : seatRects) {
                 if (mouseX >= r[1] && mouseX < r[3] && mouseY >= r[2] && mouseY < r[4]) {
@@ -208,7 +199,6 @@ public class SeatControlScreen extends GuiScreen {
         UiDraw.roundRect(-42, -42, 42, 42, 40, 0xFF6A3A1A, 0xFF4A2410);
         UiDraw.roundRect(-38, -38, 38, 38, 36, 0xFF3FA046, 0xFF1F6A28);
         GL11.glPopMatrix();
-        // deck in the middle
         com.hfstudio.minopp.render.CardRenderer
             .drawBack2D(ThemeManager.INSTANCE.selected(), false, cx - 9, cy - 14, 18, 28);
     }
@@ -232,7 +222,6 @@ public class SeatControlScreen extends GuiScreen {
         int top = 0xFF3A6AD0, bottom = 0xFF1A3A90;
         int team = te.game != null ? teamInGame(te, p) : p.team;
         if (Teams.enabled(te.config) && team >= 0) {
-            // seat colored by team
             int rgb = Teams.rgb(team);
             top = 0xFF000000 | rgb;
             bottom = 0xFF000000 | UiDraw.lerpColor(0xFF000000 | rgb, 0xFF000000, 0.45f);
@@ -345,7 +334,6 @@ public class SeatControlScreen extends GuiScreen {
                 return;
             }
         }
-        // team mode: left click a seat for the next team, right click for the previous one
         BlockEntityMinoTable te = getTable();
         if (te != null && te.game == null && Teams.enabled(te.config) && (button == 0 || button == 1)) {
             for (int[] r : seatRects) {

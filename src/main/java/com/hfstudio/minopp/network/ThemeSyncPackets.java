@@ -13,10 +13,6 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
 import io.netty.buffer.ByteBuf;
 
-/**
- * Card themes are client-side resource packs. Each client tells the server which theme it uses; the server relays
- * the choices to everyone, so a player who has the same theme installed sees your cards in your theme.
- */
 public final class ThemeSyncPackets {
 
     private ThemeSyncPackets() {}
@@ -24,7 +20,6 @@ public final class ThemeSyncPackets {
     public static final String C2S_ID = "minopp:theme_select";
     public static final String S2C_ID = "minopp:theme_sync";
 
-    /** Server side: theme chosen by each online player. */
     private static final Map<UUID, String> SERVER_THEMES = new HashMap<>();
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {

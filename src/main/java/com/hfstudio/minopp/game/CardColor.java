@@ -6,9 +6,6 @@ import java.util.List;
 
 import net.minecraft.util.EnumChatFormatting;
 
-/**
- * Card colors. Light colors are the classic four; dark colors are used by the dark side of Flip cards.
- */
 public enum CardColor {
 
     RED(0xFFBE0C00, EnumChatFormatting.RED, Side.LIGHT),
@@ -67,7 +64,6 @@ public enum CardColor {
         }
     }
 
-    /** Partner color used by two-colored Flex cards. */
     public CardColor flexPartner() {
         return switch (this) {
             case RED -> BLUE;

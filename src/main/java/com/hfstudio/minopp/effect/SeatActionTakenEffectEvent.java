@@ -32,8 +32,6 @@ public record SeatActionTakenEffectEvent() implements EffectEvent {
     @Override
     public void summonClient(World level, BlockPos origin, boolean selfIsPartOfSourceGame) {
         if (selfIsPartOfSourceGame) {
-            // Another player is starting / stopping the game
-            // Close the screen for better player awareness
             MinoClient.closeSeatControlScreen();
         }
     }

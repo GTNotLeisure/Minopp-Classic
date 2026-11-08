@@ -26,10 +26,6 @@ import com.hfstudio.minopp.game.TableConfig;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * "My designs": table setups (rules, packs, card counts) saved locally in {@code config/minopp/designs.json} so they
- * can be applied to any table with one click.
- */
 @SideOnly(Side.CLIENT)
 public final class DesignStore {
 

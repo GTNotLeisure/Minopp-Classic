@@ -1,7 +1,5 @@
 package com.hfstudio.minopp.render;
 
-import java.util.Random;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -44,81 +42,58 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         GL11.glColor4f(1, 1, 1, 1);
 
-        // Draw deck pile (face-down cards stacked at core +0.5)
         GL11.glPushMatrix();
         GL11.glTranslated(0.5, 0.94, 0.5);
         GL11.glScalef(0.5f, 0.4f, 0.5f);
         GL11.glRotatef(-90, 1, 0, 0);
-        Random deckRandom = new Random(1);
         int layers = (int) Math.ceil(game.deck.size() / 5f);
         float layerH = 1f / 48f;
         for (int ci = 0; ci < layers; ci++) {
-            GL11.glPushMatrix();
-            GL11.glTranslated(deckRandom.nextFloat() * 0.06 - 0.03, deckRandom.nextFloat() * 0.06 - 0.03, ci * layerH);
-            // card edges of this layer: alternate shades read as individual cards
-            CardRenderer.renderSlabSides(0.32f, 0.5f, -layerH, 0, ci % 2 == 0 ? 0xF4F2EC : 0xD6D2C8);
+            BATCH.at(jitter(ci, 0) * 0.06f - 0.03f, jitter(ci, 1) * 0.06f - 0.03f, ci * layerH, 0);
+            BATCH.slab(0.32f, 0.5f, -layerH, 0, ci % 2 == 0 ? 0xF4F2EC : 0xD6D2C8);
             if (ci == layers - 1) {
-                Card top = game.deck.isEmpty() ? null : game.deck.get(game.deck.size() - 1);
-                CardRenderer.renderCardBack3D(top, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF);
+                Card top = game.deck.get(game.deck.size() - 1);
+                BATCH.back(top, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
             }
-            GL11.glPopMatrix();
         }
+        BATCH.flush();
         GL11.glPopMatrix();
 
-        // Draw discard pile (face-up cards stacked in center)
         GL11.glPushMatrix();
         GL11.glTranslated(1.5, 0.94, 1.5);
         GL11.glScalef(0.3f, 0.3f, 0.3f);
         GL11.glRotatef(-90, 1, 0, 0);
-        Random discardRandom = new Random(1);
-
         int discardSize = game.discardDeck.size();
-        int maxVisualCards = 20; // max cards rendered (excluding top card)
-        int startIndex = Math.max(0, discardSize - maxVisualCards);
-        for (int s = 0; s < startIndex; s++) {
-            discardRandom.nextFloat();
-            discardRandom.nextFloat();
-            discardRandom.nextFloat();
-        }
-
+        int startIndex = Math.max(0, discardSize - 20);
         for (int ci = startIndex; ci <= discardSize; ci++) {
-            GL11.glPushMatrix();
-            // controls card variation in the middle pile
-            float offsetX = discardRandom.nextFloat() * 0.3f - 0.15f;
-            float offsetY = discardRandom.nextFloat() * 0.3f - 0.15f;
-            float cardYaw = discardRandom.nextFloat() * 0.8f - 0.4f;
             int visualIndex = ci - startIndex;
-            if (ci == discardSize) {
-                GL11.glTranslated(0, 0, visualIndex * (1f / 56f) + 0.01f);
+            boolean isTop = ci == discardSize;
+            if (isTop) {
+                BATCH.at(0, 0, visualIndex * (1f / 56f) + 0.01f, 0);
             } else {
-                GL11.glTranslated(offsetX, offsetY, visualIndex * (1f / 56f));
-                GL11.glRotatef((float) Math.toDegrees(cardYaw), 0, 0, 1);
+                BATCH.at(
+                    jitter(ci, 0) * 0.3f - 0.15f,
+                    jitter(ci, 1) * 0.3f - 0.15f,
+                    visualIndex * (1f / 56f),
+                    (float) Math.toDegrees(jitter(ci, 2) * 0.8f - 0.4f));
             }
-            Card card = ci == discardSize ? game.topCard : game.discardDeck.get(ci);
-            int color = (ci == discardSize) ? 0xFFFFFF : 0xBBBBBB;
-            CardRenderer.renderFace3D(
+            Card card = isTop ? game.topCard : game.discardDeck.get(ci);
+            BATCH.face(
                 card.face(game.darkSide),
                 ThemeManager.INSTANCE.themeFor(card.owner),
                 0.52f,
                 0.8f,
                 0,
-                color);
-            GL11.glPopMatrix();
+                isTop ? 0xFFFFFF : 0xBBBBBB,
+                false);
         }
+        BATCH.flush();
         GL11.glPopMatrix();
 
-        // 3D wild color choice of this client, standing around the pile
         net.minecraft.entity.EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
         if (viewer != null) ColorPicker3D.render(blockEntity.getBlockPos(), viewer.posX, viewer.posZ);
 
-        // Top card label
-        CardFace top = game.topFace();
-        IChatComponent component = top.getDisplayName();
-        if (top.isWild() || game.currentColor != top.color) {
-            component.appendText(" → ")
-                .appendSibling(Chat.translatable(game.currentColor.langKey()));
-        }
-        renderLabel(component.getFormattedText(), 1.5, 0.94 + 0.17, 1.5, 0.009f);
+        renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
 
         for (BlockEntityMinoTable.HandSwapAnimation anim : BlockEntityMinoTable.activeAnimations) {
             int stackSize = Math.max(1, Math.min(anim.cardCount, 10));
@@ -145,6 +120,35 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glEnable(GL11.GL_CULL_FACE);
         GL11.glDisable(GL12.GL_RESCALE_NORMAL);
         GL11.glPopMatrix();
+    }
+
+    private static final CardBatch BATCH = new CardBatch();
+    private static final float[] JITTER = new float[512 * 3];
+    static {
+        java.util.Random r = new java.util.Random(1);
+        for (int i = 0; i < JITTER.length; i++) JITTER[i] = r.nextFloat();
+    }
+
+    private static float jitter(int index, int axis) {
+        return JITTER[(index & 511) * 3 + axis];
+    }
+
+    private static final java.util.Map<BlockEntityMinoTable, Object[]> LABELS = new java.util.WeakHashMap<>();
+
+    private static String topLabel(BlockEntityMinoTable table, CardGame game) {
+        Object[] cached = LABELS.get(table);
+        if (cached != null && cached[0] == game.topCard
+            && cached[1] == game.currentColor
+            && (Boolean) cached[2] == game.darkSide) return (String) cached[3];
+        CardFace top = game.topFace();
+        IChatComponent component = top.getDisplayName();
+        if (top.isWild() || game.currentColor != top.color) {
+            component.appendText(" → ")
+                .appendSibling(Chat.translatable(game.currentColor.langKey()));
+        }
+        String text = component.getFormattedText();
+        LABELS.put(table, new Object[] { game.topCard, game.currentColor, game.darkSide, text });
+        return text;
     }
 
     private void renderLabel(String text, double x, double y, double z, float scale) {

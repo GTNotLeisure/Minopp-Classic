@@ -30,7 +30,6 @@ public class AutoPlayer {
         return false;
     }
 
-    /** Sensible choices for a card when the player did not (or could not) choose: used by bots and forced play. */
     public static PlayContext.PlayChoices defaultChoices(CardGame game, CardPlayer player, Card card) {
         PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
         choices.color = game.mostCommonColor(player);
@@ -48,7 +47,7 @@ public class AutoPlayer {
         CardFace top = game.topFace();
         int score = 0;
         if (!face.isWild() && face.symbolKey()
-            .equals(top.symbolKey()) && face.color != game.currentColor) score += 50; // switch suit
+            .equals(top.symbolKey()) && face.color != game.currentColor) score += 50;
         if (face.isWild() && !type.isDraw()) score += 40;
         if (face.isNumber() && face.number == 7
             && game.config()
@@ -69,7 +68,6 @@ public class AutoPlayer {
         boolean forgetsMino = RANDOM.nextFloat() < aiForgetChance;
         boolean shoutsMino = !forgetsMino && realPlayer.hand.size() <= 2;
 
-        // If the next player is a human player, we should not play Draw cards
         CardPlayer nextPlayer = game.nextPlayer();
         boolean canPlayDrawCard = !aiNoPlayerDraw || !isOnlinePlayer(server, nextPlayer.uuid);
 
@@ -105,7 +103,6 @@ public class AutoPlayer {
             if (!result.isFail) return result;
         }
 
-        // We're out of option
         return game.playNoCard(realPlayer);
     }
 

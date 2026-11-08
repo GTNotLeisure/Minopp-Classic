@@ -12,10 +12,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Drawing from the deck in every situation: off turn, unplayable / playable draws, draw-to-match, forced play,
- * pending penalties, reshuffles and an exhausted deck. Also the client-side play checks and the MINO shout rule.
- */
 public class DrawFlowTest {
 
     private int nextUid = 10_000;
@@ -24,7 +20,6 @@ public class DrawFlowTest {
         return new Card(nextUid++, new CardFace("number", color, number), null);
     }
 
-    /** Three players, player 0 to move, top card red 5, empty deck: each test sets up exactly what it needs. */
     private CardGame setup(String... enabledRules) {
         List<CardPlayer> players = new ArrayList<>();
         for (int i = 0; i < 3; i++) players.add(new CardPlayer(UUID.randomUUID(), "P" + i));
@@ -44,7 +39,6 @@ public class DrawFlowTest {
         game.currentPlayerPhase = CardGame.PlayerActionPhase.DISCARD_HAND;
         game.decisions.clear();
         game.awaitingCutIn = false;
-        // everybody holds unplayable blue cards so nobody wins by accident
         for (CardPlayer p : players) {
             p.hand.add(card(CardColor.BLUE, 9));
             p.hand.add(card(CardColor.BLUE, 8));
@@ -84,7 +78,6 @@ public class DrawFlowTest {
         CardGame game = setup(GameRules.PLAY_DRAWN);
         Card drawnRed = card(CardColor.RED, 2);
         game.deck.add(drawnRed);
-        // make another playable card available in hand: only the drawn card may be played now
         Card otherRed = card(CardColor.RED, 3);
         p(game, 0).hand.add(otherRed);
 
@@ -97,7 +90,6 @@ public class DrawFlowTest {
         assertNull(game.whyCannotPlay(p(game, 0), drawnRed, false));
         assertTrue(game.playCard(p(game, 0), otherRed.uid, new PlayContext.PlayChoices()).isFail);
 
-        // pass: keep the card, turn moves on
         ActionReport pass = game.playNoCard(p(game, 0));
         assertFalse(pass.isFail);
         assertEquals(1, game.currentPlayerIndex);
@@ -202,27 +194,23 @@ public class DrawFlowTest {
         CardGame game = setup();
         CardPlayer me = p(game, 0), other = p(game, 1);
 
-        // 3 cards on our turn: refused, no penalty
         ActionReport early = game.shoutMino(me);
         assertNotNull(early);
         assertTrue(early.isFail);
         assertFalse(me.hasShoutedMino);
         assertEquals(3, me.hand.size(), "no penalty for shouting early, it is just refused");
 
-        // 2 cards but not our turn: refused
         other.hand.remove(0);
         ActionReport offTurn = game.shoutMino(other);
         assertTrue(offTurn.isFail);
         assertFalse(other.hasShoutedMino);
 
-        // 2 cards on our turn: accepted
         me.hand.remove(0);
         assertEquals(2, me.hand.size());
         ActionReport ok = game.shoutMino(me);
         assertFalse(ok.isFail);
         assertTrue(me.hasShoutedMino);
 
-        // drawing takes the shout back
         game.deck.add(card(CardColor.GREEN, 1));
         game.playNoCard(me);
         assertFalse(me.hasShoutedMino);

@@ -11,10 +11,6 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.Chat;
 
-/**
- * Team mode: seated players belong to one of {@link GameRules#TEAM_COUNT} teams, a team wins together, and a game can
- * only start when every team has the same number of players.
- */
 public final class Teams {
 
     private Teams() {}
@@ -55,7 +51,6 @@ public final class Teams {
         return sizes;
     }
 
-    /** The team with the fewest players (lowest index on ties). */
     public static int smallest(List<CardPlayer> seated, int teamCount) {
         int[] sizes = sizes(seated, teamCount);
         int best = 0;
@@ -63,7 +58,6 @@ public final class Teams {
         return best;
     }
 
-    /** Puts players without a valid team (new, or the team count shrank) into the smallest team. */
     public static void normalize(List<CardPlayer> seated, int teamCount) {
         List<CardPlayer> valid = new ArrayList<>();
         List<CardPlayer> invalid = new ArrayList<>();
@@ -74,17 +68,12 @@ public final class Teams {
         }
     }
 
-    /** Even teams spread around the table: seats in order take teams 0, 1, 2, ... in turn. */
     public static void autoAssign(List<CardPlayer> seated, int teamCount) {
         List<CardPlayer> bySeat = new ArrayList<>(seated);
         bySeat.sort(Comparator.comparingInt(p -> p.seat));
         for (int i = 0; i < bySeat.size(); i++) bySeat.get(i).team = i % teamCount;
     }
 
-    /**
-     * Why a team game cannot start with these seated players, or null when every team has the same number (at least
-     * one) of players.
-     */
     public static IChatComponent problem(List<CardPlayer> seated, int teamCount) {
         if (seated.size() < teamCount) {
             return Chat.translatable("game.minopp.play.teams_too_few", teamCount);
@@ -98,7 +87,6 @@ public final class Teams {
         return Chat.translatable("game.minopp.play.teams_unequal", summary(seated, teamCount));
     }
 
-    /** "Red 2 · Blue 1" with team colors. */
     public static IChatComponent summary(List<CardPlayer> seated, int teamCount) {
         int[] sizes = sizes(seated, teamCount);
         IChatComponent c = new ChatComponentText("");

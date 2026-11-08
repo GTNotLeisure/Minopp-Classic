@@ -77,10 +77,8 @@ public final class DevPreview {
                 ticks = 0;
             }
             case 2 -> {
-                // wait for every bot to sit down, then deal
                 if (table == null || ticks < 30) return;
                 if (System.getProperty("minopp.previewTeams") != null && !teamsConfigured) {
-                    // dev: team mode lobby with N teams; the game is not started so the lobby can be inspected
                     teamsConfigured = true;
                     table.config.set(GameRules.TEAM_MODE, 1);
                     table.config.set(GameRules.TEAM_COUNT, Integer.parseInt(System.getProperty("minopp.previewTeams")));
@@ -100,7 +98,6 @@ public final class DevPreview {
             case 3 -> {
                 if (table == null) return;
                 if (table.game == null) {
-                    // game over: next mode after a short pause
                     if (ticks > 100) {
                         mode = (mode + 1) % MODES.length;
                         stage = 2;
@@ -136,7 +133,6 @@ public final class DevPreview {
         config.set(GameRules.SEVEN_ZERO, 1);
         config.set(GameRules.JUMP_IN, 1);
         if (MODES[mode].equals(CardPack.CLASSIC)) {
-            // a few cards of other packs mixed in
             config.setCount("no_mercy:discard_all", 2);
             config.setCount("weekend:wild_time_balloon", 2);
             config.setCount("hero:wild_rebound", 2);
@@ -156,7 +152,6 @@ public final class DevPreview {
         Mino.BLOCK_MINO_TABLE.onBlockPlacedBy(world, core.x, core.y, core.z, player, null);
         BlockEntityMinoTable table = ItemHandCards.getTable(world, core);
         table.config.set(GameRules.MAX_PLAYERS, n);
-        // the player takes the south seat (index n/2), bots fill the others
         int playerSeat = n / 2;
         int bot = 0;
         for (int i = 0; i < n; i++) {

@@ -7,10 +7,6 @@ import java.util.Map;
 
 import com.hfstudio.minopp.game.CardType.Choice;
 
-/**
- * Registry of all card types and their effects. Packs reference these by id; new cards are added by registering a
- * {@link CardType} here (or from another mod via {@link #register(CardType)}) and listing it in a {@link CardPack}.
- */
 public final class CardTypes {
 
     private CardTypes() {}
@@ -35,7 +31,6 @@ public final class CardTypes {
         return Collections.unmodifiableCollection(REGISTRY.values());
     }
 
-    // ---------------------------------------------------------------- Classic
     public static final CardType NUMBER = register(
         CardType.builder("number", CardPack.CLASSIC)
             .numbered()
@@ -78,7 +73,6 @@ public final class CardTypes {
             })
             .build());
 
-    // ---------------------------------------------------------------- No Mercy
     public static final CardType DRAW4 = register(
         CardType.builder("draw4", CardPack.NO_MERCY)
             .label("+4")
@@ -134,7 +128,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.startColorRoulette(ctx.player))
             .build());
 
-    // ---------------------------------------------------------------- Flip
     public static final CardType DRAW1 = register(
         CardType.builder("draw1", CardPack.FLIP)
             .label("+1")
@@ -171,7 +164,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.nextDrawsUntilColor(ctx.choices.color, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Flex
     public static final CardType POWER_NUMBER = register(
         CardType.builder("power_number", CardPack.FLEX)
             .numbered()
@@ -240,7 +232,6 @@ public final class CardTypes {
             .flex(Choice.COLOR_AND_TARGET, ctx -> ctx.game.targetDraws(ctx.target(0), 4, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- All Wild
     public static final CardType AW_WILD = register(
         CardType.builder("aw_wild", CardPack.ALL_WILD)
             .allWild()
@@ -304,7 +295,6 @@ public final class CardTypes {
             })
             .build());
 
-    // ---------------------------------------------------------------- Party
     public static final CardType POINT_TAKEN = register(
         CardType.builder("point_taken", CardPack.PARTY)
             .label("☛")
@@ -328,7 +318,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.pileUp(ctx.player, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Hero pack: answer a draw penalty
     public static final CardType WILD_REBOUND = register(
         CardType.builder("wild_rebound", CardPack.HERO)
             .wild()
@@ -339,7 +328,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.rebound(ctx.player, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Rhythm pack: numbers only for a round
     public static final CardType WILD_DANCE_FLOOR = register(
         CardType.builder("wild_dance_floor", CardPack.RHYTHM)
             .wild()
@@ -348,7 +336,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.startDanceFloor(ctx.player, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Mayhem pack: shuffle all hands
     public static final CardType WILD_HAND_SHUFFLE = register(
         CardType.builder("wild_hand_shuffle", CardPack.MAYHEM)
             .wild()
@@ -357,7 +344,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.shuffleHands(ctx.player, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Legend pack: trial of a color
     public static final CardType WILD_TRIAL = register(
         CardType.builder("wild_trial", CardPack.LEGEND)
             .wild()
@@ -366,7 +352,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.trial(ctx.player, ctx.choices.color, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Anniversary pack: coin flip
     public static final CardType WILD_FIFTY_FIFTY = register(
         CardType.builder("wild_fifty_fifty", CardPack.ANNIVERSARY)
             .wild()
@@ -375,7 +360,6 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.fiftyFifty(ctx.player, 4, ctx.report))
             .build());
 
-    // ---------------------------------------------------------------- Weekend pack
     public static final CardType WILD_PLUS6 = register(
         CardType.builder("wild_plus6", CardPack.WEEKEND)
             .wild()
@@ -416,7 +400,5 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.attachBalloon(ctx.player, ctx.report))
             .build());
 
-    public static void init() {
-        // Class loading registers everything above.
-    }
+    public static void init() {}
 }
