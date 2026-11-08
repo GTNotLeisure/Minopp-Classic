@@ -80,7 +80,6 @@ public final class CardPack {
         return REGISTRY.get(id);
     }
 
-    /** True for a "packId:entryKey" key of a registered entry. */
     public static boolean isEntryKey(String countKey) {
         int colon = countKey.indexOf(':');
         if (colon < 0) return false;

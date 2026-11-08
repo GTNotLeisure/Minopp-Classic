@@ -320,4 +320,61 @@ public class NewContentTest {
         assertTrue(a == 6 && b == 2 || a == 2 && b == 6);
         assertEquals(2, p(game, 2).hand.size());
     }
+
+    @Test
+    public void officialOpeningCards() {
+        CardGame game = setupN(4);
+        game.currentPlayerIndex = 0;
+        game.applyOpening(new CardFace("skip", CardColor.RED, -1));
+        assertEquals(1, game.currentPlayerIndex, "Skip: the first player is skipped");
+
+        game.currentPlayerIndex = 0;
+        game.applyOpening(new CardFace("draw2", CardColor.RED, -1));
+        assertEquals(4, p(game, 0).hand.size(), "Draw Two: the first player draws 2");
+        assertEquals(1, game.currentPlayerIndex);
+
+        game.currentPlayerIndex = 0;
+        game.isAntiClockwise = false;
+        game.applyOpening(new CardFace("reverse", CardColor.RED, -1));
+        assertTrue(game.isAntiClockwise);
+
+        game.applyOpening(new CardFace("wild", CardColor.WILD, -1));
+        assertEquals(CardColor.WILD, game.currentColor, "Wild: the first player may play any color");
+    }
+
+    @Test
+    public void openingNeverStartsOnWildDrawFour() {
+        for (int seed = 0; seed < 300; seed++) {
+            List<CardPlayer> players = new ArrayList<>();
+            for (int i = 0; i < 4; i++) players.add(new CardPlayer(UUID.randomUUID(), "P" + i));
+            CardGame game = new CardGame(players);
+            game.detachedConfig = new TableConfig();
+            game.initiate(players.get(0), 7);
+            CardType top = game.topFace()
+                .type();
+            assertTrue(
+                top == CardTypes.NUMBER || top == CardTypes.SKIP
+                    || top == CardTypes.REVERSE
+                    || top == CardTypes.DRAW2
+                    || top == CardTypes.WILD,
+                top.id);
+        }
+    }
+
+    @Test
+    public void successfulChallengeCanEndTheGame() {
+        CardGame game = setup(GameRules.MERCY, GameRules.CHALLENGE);
+        ((TableConfig) game.detachedConfig).set(GameRules.MERCY_LIMIT, 10);
+        CardPlayer bluffer = p(game, 0), victim = p(game, 1);
+        game.players.get(2).eliminated = true;
+        game.players.get(2).hand.clear();
+        for (int i = 0; i < 6; i++) bluffer.hand.add(num(CardColor.RED, i));
+        Card draw4 = card("wild_draw4", CardColor.WILD, -1);
+        bluffer.hand.add(draw4);
+        assertFalse(game.playCard(bluffer, draw4.uid, red()).isFail);
+        assertEquals(1, game.decisions.size(), "the victim is asked to challenge");
+        ActionReport r = game.answerDecision(victim, 1, null);
+        assertTrue(bluffer.eliminated, "the bluffer drew 4 and hit the mercy limit");
+        assertTrue(r.shouldDestroyGame, "only the victim is left: the game ends");
+    }
 }

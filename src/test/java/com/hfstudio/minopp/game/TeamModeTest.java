@@ -83,4 +83,21 @@ public class TeamModeTest {
         CardPlayer p = seated(3).get(0);
         assertEquals(3, p.seatCopy().team);
     }
+
+    @Test
+    public void tenTeamsOfTwo() {
+        assertEquals(
+            10,
+            GameRules.get(GameRules.TEAM_COUNT)
+                .max());
+        int[] teams = new int[20];
+        List<CardPlayer> seated = seated(teams);
+        for (CardPlayer p : seated) p.team = -1;
+        Teams.normalize(seated, 10);
+        assertNull(Teams.problem(seated, 10));
+        for (int size : Teams.sizes(seated, 10)) assertEquals(2, size);
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (int t = 0; t < 10; t++) names.add(Teams.format(t) + "|" + Teams.rgb(t));
+        assertEquals(10, names.size(), "every team has its own color");
+    }
 }

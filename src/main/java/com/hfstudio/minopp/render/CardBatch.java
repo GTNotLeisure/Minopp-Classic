@@ -69,7 +69,6 @@ public final class CardBatch {
         for (int i = 0; i < LEVELS; i++) textured[i] = new LinkedHashMap<>();
     }
 
-    /** Placement of the following cards: translation and rotation around Z, in the current GL frame. */
     public CardBatch at(float x, float y, float z, float angleDeg) {
         ox = x;
         oy = y;
@@ -129,7 +128,6 @@ public final class CardBatch {
         }
     }
 
-    /** Edge walls of a card-sized slab between z0 and z1 (untextured). */
     public void slab(float hw, float hh, float z0, float z1, int color) {
         int darker = (color >> 16 & 0xFF) * 9 / 10 << 16 | (color >> 8 & 0xFF) * 9 / 10 << 8 | (color & 0xFF) * 9 / 10;
         int down = packNormal(0, -1, 0), up = packNormal(0, 1, 0);

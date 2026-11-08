@@ -1,7 +1,5 @@
 package com.hfstudio.minopp.entity;
 
-import java.util.Random;
-
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
@@ -117,7 +115,7 @@ public class EntityAutoPlayer extends EntityLiving {
             for (int dx = -2; dx <= 2 && !tableFound; dx++) {
                 for (int dz = -2; dz <= 2 && !tableFound; dz++) {
                     for (int dy = -1; dy <= 1; dy++) {
-                        int tx = bx + dx, ty = by, tz = bz + dz;
+                        int tx = bx + dx, ty = by + dy, tz = bz + dz;
                         Block tobeTableBlock = worldObj.getBlock(tx, ty, tz);
                         if (tobeTableBlock == Mino.BLOCK_MINO_TABLE) {
                             BlockPos corePos = BlockMinoTable.getCore(worldObj, tx, ty, tz);
@@ -125,7 +123,7 @@ public class EntityAutoPlayer extends EntityLiving {
                             if (tableEntity != null) {
                                 if (tableEntity.game != null) continue;
                                 String playerName = hasCustomNameTag() ? getCustomNameTag()
-                                    : "MinoBot #" + (100 + new Random().nextInt(900));
+                                    : "MinoBot #" + (100 + rand.nextInt(900));
                                 cardPlayer = new CardPlayer(getUniqueID(), playerName);
                                 tableEntity.joinPlayerToTable(cardPlayer, new Vec3d(posX, posY, posZ));
                                 tablePos = corePos;
@@ -158,9 +156,9 @@ public class EntityAutoPlayer extends EntityLiving {
                     } else {
                         if (!isThinking) {
                             if (game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_DRAWN) {
-                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + new Random().nextInt(10);
+                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + rand.nextInt(10);
                             } else {
-                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + new Random().nextInt(40);
+                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + rand.nextInt(40);
                             }
                             isThinking = true;
                             return;

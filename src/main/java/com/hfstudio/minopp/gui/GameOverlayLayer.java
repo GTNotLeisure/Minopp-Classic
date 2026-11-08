@@ -142,152 +142,24 @@ public class GameOverlayLayer {
         int x = ClientConfig.display.guiXPosition, y = ClientConfig.display.guiYPosition;
         FontRenderer font = mc.fontRenderer;
         int lh = font.FONT_HEIGHT;
-        drawStringWithBackdrop(
-            font,
-            Chat.translatable("gui.minopp.play.game_active")
-                .getFormattedText(),
-            x,
-            y,
-            0xFF7090FF);
-        y += lh;
-        if (me != null && me.eliminated) {
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("gui.minopp.play.eliminated")
-                    .getFormattedText(),
-                x,
-                y,
-                0xFFFF5555);
-        } else if (currentPlayer.equals(cardPlayer)) {
-            String key = game.pendingDraw > 0 ? "gui.minopp.play.must_answer"
-                : "gui.minopp.play." + game.currentPlayerPhase.name()
-                    .toLowerCase();
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable(key, game.pendingDraw)
-                    .getFormattedText(),
-                x,
-                y,
-                UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()));
-        } else {
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("gui.minopp.play.turn_other", currentPlayer.name)
-                    .getFormattedText(),
-                x,
-                y,
-                0xFFAAAAAA);
+        if (infoGame != game || infoState != tableEntity.state) {
+            infoGame = game;
+            infoState = tableEntity.state;
+            infoLines.clear();
+            infoColors.clear();
+            buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
         }
-        y += lh;
-
-        IChatComponent auxInfo = Chat
-            .translatable("gui.minopp.play.direction." + (game.isAntiClockwise ? "ccw" : "cw"));
-        if (game.pendingDraw > 0) {
-            auxInfo = auxInfo.appendText(", ")
-                .appendSibling(Chat.translatable("gui.minopp.play.draw_accumulate", game.pendingDraw));
-        }
-        if (game.darkSide) auxInfo.appendText(", ")
-            .appendSibling(Chat.translatable("gui.minopp.play.dark_side"));
-        drawStringWithBackdrop(font, auxInfo.getFormattedText(), x, y, 0xFFAAAAAA);
-        y += lh;
-        if (me != null && tableEntity.config.getBool(GameRules.FLEX_POWER)) {
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable(me.powerOn ? "gui.minopp.play.power_on" : "gui.minopp.play.power_off")
-                    .getFormattedText(),
-                x,
-                y,
-                me.powerOn ? 0xFF55FF55 : 0xFFFF5555);
-            y += lh;
-        }
-        if (game.danceOwner != null) {
-            CardPlayer owner = game.deAmputate(game.danceOwner);
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("gui.minopp.play.dance_active", owner == null ? "?" : owner.name)
-                    .getFormattedText(),
-                x,
-                y,
-                0xFFFF88FF);
-            y += lh;
-        }
-        if (game.balloonHolder != null) {
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("gui.minopp.play.balloon_active")
-                    .getFormattedText(),
-                x,
-                y,
-                0xFFFF6666);
-            y += lh;
-        }
-        if (me != null && game.links.containsKey(me.uuid)) {
-            CardPlayer partner = game.deAmputate(game.links.get(me.uuid));
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("gui.minopp.play.linked_with", partner == null ? "?" : partner.name)
-                    .getFormattedText(),
-                x,
-                y,
-                0xFF88CCFF);
-            y += lh;
-        }
-        if (!game.decisions.isEmpty()) {
-            drawStringWithBackdrop(
-                font,
-                Chat.translatable("game.minopp.play.waiting_decision")
-                    .getFormattedText(),
-                x,
-                y,
-                0xFFFFAA00);
-            y += lh;
-        }
-        y += lh;
-
-        CardFace top = game.topFace();
-        IChatComponent topCardInfo = Chat.translatable(
-            "gui.minopp.play.top_card",
-            top.getDisplayName()
-                .getFormattedText());
-        if (top.isWild() || game.currentColor != top.color) {
-            topCardInfo.appendText(", ")
-                .appendSibling(
-                    Chat.translatable(
-                        "gui.minopp.play.top_card_wild_color",
-                        Chat.translatable(game.currentColor.langKey())));
-        }
-        drawStringWithBackdrop(font, topCardInfo.getFormattedText(), x, y, 0xFFFFFFDD);
-        y += lh;
-
-        StringBuilder counts = new StringBuilder();
-        for (CardPlayer p : game.players) {
-            if (counts.length() > 0) counts.append("  ");
-            boolean cur = p.equals(currentPlayer);
-            counts
-                .append(
-                    cur ? EnumChatFormatting.YELLOW
-                        : (p.eliminated ? EnumChatFormatting.DARK_GRAY : EnumChatFormatting.GRAY))
-                .append(p.name.length() > 8 ? p.name.substring(0, 8) : p.name)
-                .append(':')
-                .append(
-                    p.eliminated ? "x"
-                        : game.hiddenCounts.contains(p.uuid) && !p.equals(cardPlayer) ? "?"
-                            : String.valueOf(p.hand.size()));
-            if (p.team >= 0) counts.append(Teams.format(p.team))
-                .append('[')
-                .append(p.team + 1)
-                .append(']');
-        }
-        for (String line : font.listFormattedStringToWidth(counts.toString(), 260)) {
-            drawStringWithBackdrop(font, line, x, y, 0xFFAAAAAA);
-            y += lh;
-        }
-        y += lh;
-
-        for (String part : tableEntity.state.message()
-            .getFormattedText()
-            .split("\n")) {
-            drawStringWithBackdrop(font, part, x, y, 0xFFFFFFFF);
+        for (int i = 0; i < infoLines.size(); i++) {
+            String text = infoLines.get(i);
+            if (text != null) {
+                int color = infoColors.get(i);
+                drawStringWithBackdrop(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color == PULSE ? UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()) : color);
+            }
             y += lh;
         }
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
@@ -306,8 +178,7 @@ public class GameOverlayLayer {
                 drawStringWithBackdrop(
                     font,
                     entry.getFirst()
-                        .message()
-                        .getFormattedText(),
+                        .formattedText(),
                     x,
                     y,
                     alpha << 24 | color);
@@ -384,6 +255,135 @@ public class GameOverlayLayer {
                 .roundFrame(-msgWidth / 2 - 7, -1, msgWidth / 2 + 7, lh + 3, 6, 1, 0xFFFFC21E, 0xE0402A08, 0xE0281A04);
             GuiDraw.drawString(font, deadManMessage, -msgWidth / 2, 1, 0xFFFFF2C0);
             GL11.glPopMatrix();
+        }
+    }
+
+    private static final int PULSE = 0x01000000;
+    private Object infoGame, infoState;
+    private final List<String> infoLines = new java.util.ArrayList<>();
+    private final List<Integer> infoColors = new java.util.ArrayList<>();
+
+    private void line(String text, int color) {
+        infoLines.add(text);
+        infoColors.add(color);
+    }
+
+    private void spacer() {
+        infoLines.add(null);
+        infoColors.add(0);
+    }
+
+    private void buildInfo(BlockEntityMinoTable tableEntity, CardGame game, CardPlayer cardPlayer,
+        CardPlayer currentPlayer, CardPlayer me, FontRenderer font) {
+        line(
+            Chat.translatable("gui.minopp.play.game_active")
+                .getFormattedText(),
+            0xFF7090FF);
+        if (me != null && me.eliminated) {
+            line(
+                Chat.translatable("gui.minopp.play.eliminated")
+                    .getFormattedText(),
+                0xFFFF5555);
+        } else if (currentPlayer.equals(cardPlayer)) {
+            String key = game.pendingDraw > 0 ? "gui.minopp.play.must_answer"
+                : "gui.minopp.play." + game.currentPlayerPhase.name()
+                    .toLowerCase();
+            line(
+                Chat.translatable(key, game.pendingDraw)
+                    .getFormattedText(),
+                PULSE);
+        } else {
+            line(
+                Chat.translatable("gui.minopp.play.turn_other", currentPlayer.name)
+                    .getFormattedText(),
+                0xFFAAAAAA);
+        }
+
+        IChatComponent auxInfo = Chat
+            .translatable("gui.minopp.play.direction." + (game.isAntiClockwise ? "ccw" : "cw"));
+        if (game.pendingDraw > 0) {
+            auxInfo = auxInfo.appendText(", ")
+                .appendSibling(Chat.translatable("gui.minopp.play.draw_accumulate", game.pendingDraw));
+        }
+        if (game.darkSide) auxInfo.appendText(", ")
+            .appendSibling(Chat.translatable("gui.minopp.play.dark_side"));
+        line(auxInfo.getFormattedText(), 0xFFAAAAAA);
+        if (me != null && tableEntity.config.getBool(GameRules.FLEX_POWER)) {
+            line(
+                Chat.translatable(me.powerOn ? "gui.minopp.play.power_on" : "gui.minopp.play.power_off")
+                    .getFormattedText(),
+                me.powerOn ? 0xFF55FF55 : 0xFFFF5555);
+        }
+        if (game.danceOwner != null) {
+            CardPlayer owner = game.deAmputate(game.danceOwner);
+            line(
+                Chat.translatable("gui.minopp.play.dance_active", owner == null ? "?" : owner.name)
+                    .getFormattedText(),
+                0xFFFF88FF);
+        }
+        if (game.balloonHolder != null) {
+            line(
+                Chat.translatable("gui.minopp.play.balloon_active")
+                    .getFormattedText(),
+                0xFFFF6666);
+        }
+        if (me != null && game.links.containsKey(me.uuid)) {
+            CardPlayer partner = game.deAmputate(game.links.get(me.uuid));
+            line(
+                Chat.translatable("gui.minopp.play.linked_with", partner == null ? "?" : partner.name)
+                    .getFormattedText(),
+                0xFF88CCFF);
+        }
+        if (!game.decisions.isEmpty()) {
+            line(
+                Chat.translatable("game.minopp.play.waiting_decision")
+                    .getFormattedText(),
+                0xFFFFAA00);
+        }
+        spacer();
+
+        CardFace top = game.topFace();
+        IChatComponent topCardInfo = Chat.translatable(
+            "gui.minopp.play.top_card",
+            top.getDisplayName()
+                .getFormattedText());
+        if (top.isWild() || game.currentColor != top.color) {
+            topCardInfo.appendText(", ")
+                .appendSibling(
+                    Chat.translatable(
+                        "gui.minopp.play.top_card_wild_color",
+                        Chat.translatable(game.currentColor.langKey())));
+        }
+        line(topCardInfo.getFormattedText(), 0xFFFFFFDD);
+
+        StringBuilder counts = new StringBuilder();
+        for (CardPlayer p : game.players) {
+            if (counts.length() > 0) counts.append("  ");
+            boolean cur = p.equals(currentPlayer);
+            counts
+                .append(
+                    cur ? EnumChatFormatting.YELLOW
+                        : (p.eliminated ? EnumChatFormatting.DARK_GRAY : EnumChatFormatting.GRAY))
+                .append(p.name.length() > 8 ? p.name.substring(0, 8) : p.name)
+                .append(':')
+                .append(
+                    p.eliminated ? "x"
+                        : game.hiddenCounts.contains(p.uuid) && !p.equals(cardPlayer) ? "?"
+                            : String.valueOf(p.hand.size()));
+            if (p.team >= 0) counts.append(Teams.format(p.team))
+                .append('[')
+                .append(p.team + 1)
+                .append(']');
+        }
+        for (String line : font.listFormattedStringToWidth(counts.toString(), 260)) {
+            line(line, 0xFFAAAAAA);
+        }
+        spacer();
+
+        for (String part : tableEntity.state.message()
+            .getFormattedText()
+            .split("\n")) {
+            line(part, 0xFFFFFFFF);
         }
     }
 

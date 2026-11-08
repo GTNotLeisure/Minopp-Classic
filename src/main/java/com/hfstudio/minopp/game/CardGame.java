@@ -147,21 +147,46 @@ public class CardGame {
                 player.hand.add(deck.remove(deck.size() - 1));
             }
         }
+        boolean official = config.getBool(GameRules.OFFICIAL_START);
         boolean hasNumber = deck.stream()
             .anyMatch(c -> c.light.isNumber() && !c.light.isWild());
         Card tobeTopCard = deck.remove(deck.size() - 1);
         int guard = 0;
-        while (hasNumber && (!tobeTopCard.light.isNumber() || tobeTopCard.light.isWild()) && guard++ < 500) {
+        while (hasNumber && !acceptableOpening(tobeTopCard.light, official) && guard++ < 500) {
             deck.add(0, tobeTopCard);
             tobeTopCard = deck.remove(deck.size() - 1);
         }
         topCard = tobeTopCard;
         currentColor = topFace().color;
+        if (official) applyOpening(tobeTopCard.light);
         ActionReport report = ActionReport.builder(this, cardPlayer);
         GameSounds.deal(report, initialCardCount + 3);
         report.sound(GameSounds.PLAY, report.soundTail() + 250);
         GameSounds.turn(report, players.get(currentPlayerIndex), false, report.soundTail() + 500);
         return report.gameStarted();
+    }
+
+    private static boolean acceptableOpening(CardFace face, boolean official) {
+        if (face.isNumber() && !face.isWild()) return true;
+        if (!official) return false;
+        CardType type = face.type();
+        return type == CardTypes.SKIP || type == CardTypes.REVERSE || type == CardTypes.DRAW2 || type == CardTypes.WILD;
+    }
+
+    void applyOpening(CardFace face) {
+        CardType type = face.type();
+        CardPlayer first = players.get(currentPlayerIndex);
+        if (type == CardTypes.SKIP) {
+            currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+        } else if (type == CardTypes.REVERSE) {
+            if (activePlayers().size() == 2) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+            else isAntiClockwise = true;
+        } else if (type == CardTypes.DRAW2) {
+            drawCardsRaw(first, 2, null);
+            currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+        } else if (type == CardTypes.WILD) {
+            currentColor = CardColor.WILD;
+        }
     }
 
     public String checkPlayable(CardPlayer player, Card card, boolean useFlex) {
@@ -353,6 +378,10 @@ public class CardGame {
         }
 
         if (cardPlayer.hand.isEmpty() && !relay(cardPlayer, report)) {
+            if (type.isDraw() && !useFlex && config().getInt(GameRules.SCORE_TARGET) > 0) {
+                CardPlayer next = nextPlayer();
+                if (!next.equals(cardPlayer)) drawCards(next, pendingDraw + type.drawValue, report);
+            }
             return win(cardPlayer, report);
         }
 
@@ -606,7 +635,10 @@ public class CardGame {
         decisions.clear();
         PendingDecision first = done.get(0);
         switch (first.type) {
-            case CHALLENGE -> resolveChallenge(first, report);
+            case CHALLENGE -> {
+                ActionReport end = resolveChallenge(first, report);
+                if (end != null) return end;
+            }
             case ROULETTE_COLOR -> {
                 CardPlayer victim = deAmputate(first.player);
                 CardColor color = CardColor.values()[Math.min(first.answer, CardColor.values().length - 1)];
@@ -646,7 +678,7 @@ public class CardGame {
         return report;
     }
 
-    private void resolveChallenge(PendingDecision d, ActionReport report) {
+    private ActionReport resolveChallenge(PendingDecision d, ActionReport report) {
         CardPlayer victim = deAmputate(d.player);
         CardPlayer source = deAmputate(d.source);
         challengeable = null;
@@ -657,16 +689,17 @@ public class CardGame {
                 pendingDraw = 0;
                 lastDrawValue = 0;
                 currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
-                checkEndConditions(victim, report);
-                return;
+                return checkEndConditions(victim, report);
             } else {
                 report.messageAll(Chat.translatable("game.minopp.play.challenge_fail", victim.name));
                 pendingDraw += 2;
             }
         }
         takePendingDraw(victim, report);
-        if (checkEndConditions(victim, report) != null) return;
+        ActionReport end = checkEndConditions(victim, report);
+        if (end != null) return end;
         advanceTurn(report);
+        return null;
     }
 
     public void advanceTurn(ActionReport report) {
@@ -806,7 +839,6 @@ public class CardGame {
         deck.add(0, c);
     }
 
-    /** UNO Teams: whoever goes out takes half of a partner's cards and keeps playing. */
     private boolean relay(CardPlayer player, ActionReport report) {
         if (!rule(GameRules.TEAM_RELAY) || !config().getBool(GameRules.TEAM_MODE) || player.team < 0) return false;
         CardPlayer partner = null;
@@ -984,11 +1016,16 @@ public class CardGame {
 
     public void teamDraw(CardPlayer player, int amount, ActionReport report) {
         boolean teams = config().getBool(GameRules.TEAM_MODE) && player.team >= 0;
-        CardPlayer next = nextPlayer();
-        for (CardPlayer p : activePlayers()) {
-            if (p.equals(player) || teams && p.team == player.team) continue;
+        int idx = players.indexOf(player);
+        int hit = 0;
+        for (int i = 1; i < players.size() && hit < 2; i++) {
+            int j = ((idx + (isAntiClockwise ? -i : i)) % players.size() + players.size()) % players.size();
+            CardPlayer p = players.get(j);
+            if (p.eliminated || teams && p.team == player.team) continue;
             drawCards(p, amount, report);
+            hit++;
         }
+        CardPlayer next = nextPlayer();
         if (!teams || next.team != player.team) skipNext(1);
         report.messageAll(Chat.translatable("game.minopp.play.team_draw", player.name, amount));
     }
@@ -1059,7 +1096,6 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.thief", player.name, target.name));
     }
 
-    /** Points a winner scores from the cards left in the other hands (official scoring). */
     public int cardPoints(Card c) {
         CardFace f = face(c);
         return f.isNumber() && !f.isWild() ? Math.max(0, f.number) : f.type().points;

@@ -150,7 +150,7 @@ public class SeatControlScreen extends GuiScreen {
             sub += "   " + Teams.summary(te.getPlayersList(), Teams.count(te.config))
                 .getFormattedText() + (problem == null ? EnumChatFormatting.GREEN + "  \u2714" : "");
         }
-        fontRendererObj.drawStringWithShadow(sub, 12, 30, 0xFFFFFFFF);
+        fontRendererObj.drawStringWithShadow(fontRendererObj.trimStringToWidth(sub, width - 24), 12, 30, 0xFFFFFFFF);
 
         int sideW = Math.min(150, width / 3);
         int areaX1 = 10, areaY1 = 44, areaX2 = width - 20 - sideW, areaY2 = height - 50;

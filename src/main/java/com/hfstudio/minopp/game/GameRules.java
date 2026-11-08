@@ -48,11 +48,12 @@ public final class GameRules {
     public static final String DRAW_TO_MATCH = bool("drawToMatch", Category.HOUSE, false);
     public static final String FORCED_PLAY = bool("forcedPlay", Category.HOUSE, false);
     public static final String NO_BLUFFING = bool("noBluffing", Category.HOUSE, false);
-    public static final String CHALLENGE = bool("challengeDraw4", Category.HOUSE, false);
+    public static final String CHALLENGE = bool("challengeDraw4", Category.HOUSE, true);
     public static final String TEAM_MODE = bool("teamMode", Category.MODES, false);
     public static final String TEAM_COUNT = integer("teamCount", Category.MODES, 2, 2, Teams.MAX_TEAMS);
     public static final String TEAM_RELAY = bool("teamRelay", Category.MODES, false);
-    public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, false);
+    public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, true);
+    public static final String OFFICIAL_START = bool("officialStart", Category.BASIC, true);
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
     public static final String DEFLECT_DRAW = bool("deflectDraw", Category.HOUSE, false);
     public static final String MULTI_PLAY = bool("multiPlay", Category.HOUSE, false);

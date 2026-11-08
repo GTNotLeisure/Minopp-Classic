@@ -194,6 +194,8 @@ public class GameSimulationTest {
         runMany("teams", c, 4, 150);
         c.set(GameRules.TEAM_COUNT, 3);
         runMany("teams of two x3", c, 6, 100);
+        c.set(GameRules.TEAM_COUNT, 10);
+        runMany("ten teams of two", c, 20, 40);
     }
 
     @Test

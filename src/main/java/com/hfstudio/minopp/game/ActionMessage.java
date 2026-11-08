@@ -23,6 +23,13 @@ public final class ActionMessage {
         return message;
     }
 
+    private String formatted;
+
+    public String formattedText() {
+        if (formatted == null) formatted = message.getFormattedText();
+        return formatted;
+    }
+
     public ActionMessage(NBTTagCompound tag) {
         this(Type.valueOf(tag.getString("type")), Chat.fromJson(tag.getString("message")));
     }

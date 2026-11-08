@@ -39,6 +39,7 @@ public class DrawFlowTest {
         game.currentPlayerPhase = CardGame.PlayerActionPhase.DISCARD_HAND;
         game.decisions.clear();
         game.awaitingCutIn = false;
+        game.isAntiClockwise = false;
         for (CardPlayer p : players) {
             p.hand.add(card(CardColor.BLUE, 9));
             p.hand.add(card(CardColor.BLUE, 8));
