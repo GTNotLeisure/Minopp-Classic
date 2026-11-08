@@ -35,6 +35,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.HandMask;
 import com.hfstudio.minopp.game.TableConfig;
+import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
@@ -304,8 +305,13 @@ public class BlockEntityMinoTable extends TileEntity {
         if (angle < 0) angle += Math.PI * 2;
         int preferred = (int) Math.round(angle / (Math.PI * 2 / n)) % n;
 
+        // moving to another seat keeps the team
+        int previousTeam = -1;
         for (int i = 0; i < MAX_SEATS; i++) {
-            if (cardPlayer.equals(seats[i])) seats[i] = null;
+            if (cardPlayer.equals(seats[i])) {
+                previousTeam = seats[i].team;
+                seats[i] = null;
+            }
         }
         int chosen = -1;
         for (int d = 0; d <= n / 2 && chosen < 0; d++) {
@@ -322,7 +328,10 @@ public class BlockEntityMinoTable extends TileEntity {
             chosen = preferred;
         }
         cardPlayer.seat = chosen;
+        cardPlayer.team = previousTeam;
         seats[chosen] = cardPlayer;
+        // newcomers join the smallest team
+        Teams.normalize(getPlayersList(), Teams.count(config));
         sync();
     }
 
@@ -330,12 +339,48 @@ public class BlockEntityMinoTable extends TileEntity {
     public void onSeatCountChanged() {
         int n = seatCount();
         for (int i = n; i < MAX_SEATS; i++) seats[i] = null;
+        Teams.normalize(getPlayersList(), Teams.count(config));
+    }
+
+    /** Why a game cannot start right now (team sizes), or null. */
+    public net.minecraft.util.IChatComponent startProblem() {
+        if (!Teams.enabled(config)) return null;
+        List<CardPlayer> seated = getPlayersList();
+        Teams.normalize(seated, Teams.count(config));
+        return Teams.problem(seated, Teams.count(config));
+    }
+
+    /** Moves a seated player to a team (lobby only). */
+    public boolean setTeam(java.util.UUID uuid, int team) {
+        if (game != null || !Teams.enabled(config) || team < 0 || team >= Teams.count(config)) return false;
+        for (CardPlayer p : getPlayersList()) {
+            if (p.uuid.equals(uuid)) {
+                p.team = team;
+                sync();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Spreads the seated players evenly over the teams, alternating around the table. */
+    public void autoTeams() {
+        if (game != null || !Teams.enabled(config)) return;
+        Teams.autoAssign(getPlayersList(), Teams.count(config));
+        sync();
     }
 
     public void startGame(CardPlayer initiator) {
         if (game != null) return;
         List<CardPlayer> playerList = getPlayersList();
         if (playerList.size() < 2) return;
+        net.minecraft.util.IChatComponent teamProblem = startProblem();
+        if (teamProblem != null) {
+            state = ActionReport.builder(initiator)
+                .panic(teamProblem).state;
+            sync();
+            return;
+        }
 
         double r = PLAYER_RANGE / 2.0;
         AxisAlignedBB searchArea = AxisAlignedBB.getBoundingBox(

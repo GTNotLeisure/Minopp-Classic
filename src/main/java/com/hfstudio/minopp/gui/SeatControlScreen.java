@@ -11,6 +11,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SSeatControlPacket;
@@ -33,6 +34,8 @@ public class SeatControlScreen extends GuiScreen {
         boolean big) {}
 
     private final List<Action> actions = new ArrayList<>();
+    /** Seat hit areas of the last frame for team picking: {seat, x1, y1, x2, y2}. */
+    private final List<int[]> seatRects = new ArrayList<>();
     private long openTime = System.currentTimeMillis();
 
     public SeatControlScreen(BlockPos gamePos) {
@@ -63,6 +66,20 @@ public class SeatControlScreen extends GuiScreen {
         actions.add(
             new Action("reset", "R", tr("gui.minopp.seats.reset_plain"), x, y + 84, sideW, 22, idle && seated, false));
         actions.add(new Action("stop", "S", tr("gui.minopp.seats.stop_plain"), x, y + 112, sideW, 22, !idle, false));
+        boolean teams = Teams.enabled(te.config);
+        if (teams) {
+            actions.add(
+                new Action(
+                    "teams",
+                    "T",
+                    tr("gui.minopp.seats.auto_teams"),
+                    x,
+                    y + 140,
+                    sideW,
+                    22,
+                    idle && seated,
+                    false));
+        }
         actions.add(
             new Action(
                 "start",
@@ -73,8 +90,27 @@ public class SeatControlScreen extends GuiScreen {
                 Math.min(220, width / 2),
                 30,
                 idle && te.getPlayersList()
-                    .size() >= 2,
+                    .size() >= 2 && teamProblem(te) == null,
                 true));
+    }
+
+    /** Why the teams do not allow a start yet, or null (also null outside team mode). */
+    private static net.minecraft.util.IChatComponent teamProblem(BlockEntityMinoTable te) {
+        if (!Teams.enabled(te.config)) return null;
+        return Teams.problem(te.getPlayersList(), Teams.count(te.config));
+    }
+
+    /** Bots can be moved between teams by anyone; real players only change their own team. */
+    private boolean canChangeTeam(CardPlayer p) {
+        java.util.UUID me = mc.thePlayer.getGameProfile()
+            .getId();
+        if (p.uuid.equals(me)) return true;
+        for (Object o : mc.theWorld.playerEntities) {
+            if (((net.minecraft.entity.player.EntityPlayer) o).getGameProfile()
+                .getId()
+                .equals(p.uuid)) return false;
+        }
+        return true;
     }
 
     @Override
@@ -106,6 +142,12 @@ public class SeatControlScreen extends GuiScreen {
             te.seatCount(),
             te.config.countDeckSize());
         if (te.game != null) sub = EnumChatFormatting.YELLOW + tr("gui.minopp.play.game_active");
+        if (te.game == null && Teams.enabled(te.config)) {
+            // team sizes, and whether they allow a start
+            net.minecraft.util.IChatComponent problem = teamProblem(te);
+            sub += "   " + Teams.summary(te.getPlayersList(), Teams.count(te.config))
+                .getFormattedText() + (problem == null ? EnumChatFormatting.GREEN + "  \u2714" : "");
+        }
         fontRendererObj.drawStringWithShadow(sub, 12, 30, 0xFFFFFFFF);
 
         // table area
@@ -116,6 +158,7 @@ public class SeatControlScreen extends GuiScreen {
         int rx = (areaX2 - areaX1) / 2 - 34, ry = (areaY2 - areaY1) / 2 - 20;
         drawFelt(cx, cy, (int) (rx * 0.62), (int) (ry * 0.55));
 
+        seatRects.clear();
         int seatCount = te.seatCount();
         float appear = Math.min(1f, (System.currentTimeMillis() - openTime) / 300f);
         for (int i = 0; i < seatCount; i++) {
@@ -126,6 +169,32 @@ public class SeatControlScreen extends GuiScreen {
         }
 
         for (Action act : actions) drawAction(act, mouseX, mouseY);
+
+        net.minecraft.util.IChatComponent problem = te.game == null ? teamProblem(te) : null;
+        if (problem != null) {
+            // why Start is disabled: in the gap between the table panel and the Start button
+            String why = fontRendererObj.trimStringToWidth(tr("gui.minopp.seats.teams_unequal"), width - 40);
+            fontRendererObj.drawStringWithShadow(why, 16, height - 49, 0xFFFF8080);
+        }
+        // seat tooltip in team mode
+        if (te.game == null && Teams.enabled(te.config)) {
+            for (int[] r : seatRects) {
+                if (mouseX >= r[1] && mouseX < r[3] && mouseY >= r[2] && mouseY < r[4]) {
+                    CardPlayer p = te.seats[r[0]];
+                    if (p == null) break;
+                    List<String> tip = new ArrayList<>();
+                    tip.add(
+                        p.name + "  "
+                            + Teams.name(Math.max(0, p.team))
+                                .getFormattedText());
+                    tip.add(
+                        EnumChatFormatting.GRAY
+                            + tr(canChangeTeam(p) ? "gui.minopp.seats.team_hint" : "gui.minopp.seats.team_locked"));
+                    UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
+                    break;
+                }
+            }
+        }
 
         String esc = tr("gui.minopp.settings.back");
         int ew = UiDraw.pillWidth(fontRendererObj, "Esc", esc);
@@ -159,6 +228,21 @@ public class SeatControlScreen extends GuiScreen {
             return;
         }
         boolean current = te.game != null && te.game.currentPlayer().uuid.equals(p.uuid);
+        seatRects.add(new int[] { seat, x1, y1, x1 + w, y1 + h });
+        int top = 0xFF3A6AD0, bottom = 0xFF1A3A90;
+        int team = te.game != null ? teamInGame(te, p) : p.team;
+        if (Teams.enabled(te.config) && team >= 0) {
+            // seat colored by team
+            int rgb = Teams.rgb(team);
+            top = 0xFF000000 | rgb;
+            bottom = 0xFF000000 | UiDraw.lerpColor(0xFF000000 | rgb, 0xFF000000, 0.45f);
+        }
+        boolean hover = te.game == null && Teams.enabled(te.config)
+            && mouseX >= x1
+            && mouseX < x1 + w
+            && mouseY >= y1
+            && mouseY < y1 + h
+            && canChangeTeam(p);
         UiDraw.roundFrame(
             x1,
             y1,
@@ -166,9 +250,9 @@ public class SeatControlScreen extends GuiScreen {
             y1 + h,
             6,
             1,
-            current ? UiDraw.GLOW : (me ? 0xFFFFFFFF : 0xFF2A2A2A),
-            0xFF3A6AD0,
-            0xFF1A3A90);
+            current || hover ? UiDraw.GLOW : (me ? 0xFFFFFFFF : 0xFF2A2A2A),
+            top,
+            bottom);
         GuiDraw.drawPlayerHead(PlayerPicker.skinOf(p.uuid), x1 + 3, y1 + 3, 10);
         String name = fontRendererObj.trimStringToWidth(p.name, w - 18);
         fontRendererObj.drawStringWithShadow(name, x1 + 16, y1 + 4, 0xFFFFFFFF);
@@ -182,6 +266,11 @@ public class SeatControlScreen extends GuiScreen {
             }
         }
         GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private static int teamInGame(BlockEntityMinoTable te, CardPlayer seat) {
+        CardPlayer gp = te.game.deAmputate(seat.uuid);
+        return gp == null ? -1 : gp.team;
     }
 
     private void drawAction(Action a, int mouseX, int mouseY) {
@@ -231,6 +320,7 @@ public class SeatControlScreen extends GuiScreen {
                 C2SSeatControlPacket.Client.sendGameEnableC2S(gamePos, false);
                 mc.displayGuiScreen(null);
             }
+            case "teams" -> C2SSeatControlPacket.Client.sendAutoTeamsC2S(gamePos);
             case "start" -> {
                 C2SSeatControlPacket.Client.sendGameEnableC2S(gamePos, true);
                 mc.displayGuiScreen(null);
@@ -246,8 +336,29 @@ public class SeatControlScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         for (Action a : actions) {
-            if (a.enabled && mouseX >= a.x && mouseX < a.x + a.w && mouseY >= a.y && mouseY < a.y + a.h) {
+            if (button == 0 && a.enabled
+                && mouseX >= a.x
+                && mouseX < a.x + a.w
+                && mouseY >= a.y
+                && mouseY < a.y + a.h) {
                 perform(a.id);
+                return;
+            }
+        }
+        // team mode: left click a seat for the next team, right click for the previous one
+        BlockEntityMinoTable te = getTable();
+        if (te != null && te.game == null && Teams.enabled(te.config) && (button == 0 || button == 1)) {
+            for (int[] r : seatRects) {
+                if (mouseX < r[1] || mouseX >= r[3] || mouseY < r[2] || mouseY >= r[4]) continue;
+                CardPlayer p = te.seats[r[0]];
+                if (p == null || !canChangeTeam(p)) break;
+                int count = Teams.count(te.config);
+                int next = Math.floorMod(Math.max(0, p.team) + (button == 0 ? 1 : -1), count);
+                C2SSeatControlPacket.Client.sendTeamC2S(gamePos, p.uuid, next);
+                mc.getSoundHandler()
+                    .playSound(
+                        net.minecraft.client.audio.PositionedSoundRecord
+                            .func_147674_a(new net.minecraft.util.ResourceLocation("gui.button.press"), 1.0f));
                 return;
             }
         }
@@ -263,6 +374,7 @@ public class SeatControlScreen extends GuiScreen {
             case Keyboard.KEY_R -> "reset";
             case Keyboard.KEY_S -> "stop";
             case Keyboard.KEY_X -> "start";
+            case Keyboard.KEY_T -> "teams";
             default -> null;
         };
         if (id != null) {

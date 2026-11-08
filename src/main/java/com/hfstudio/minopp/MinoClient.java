@@ -106,6 +106,16 @@ public class MinoClient {
             // dev only: keep interaction mode open so screenshots show it
             mc.displayGuiScreen(new com.hfstudio.minopp.gui.HandScreen());
         }
+        if (System.getProperty("minopp.previewTeams") != null && mc.currentScreen == null) {
+            // dev only: show the lobby of the preview table
+            for (Object te : level.loadedTileEntityList) {
+                if (te instanceof com.hfstudio.minopp.block.BlockEntityMinoTable table && table.getPlayersList()
+                    .size() >= 3) {
+                    mc.displayGuiScreen(new com.hfstudio.minopp.gui.SeatControlScreen(table.getBlockPos()));
+                    break;
+                }
+            }
+        }
         if (System.getProperty("minopp.previewColorPicker") != null && mc.currentScreen == null) {
             // dev only: keep a wild color choice open (nothing is sent unless a color is clicked)
             com.hfstudio.minopp.gui.HandScreen.Context ctx = com.hfstudio.minopp.gui.HandScreen.Context.resolve(mc);

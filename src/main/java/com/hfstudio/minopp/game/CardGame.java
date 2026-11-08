@@ -139,9 +139,11 @@ public class CardGame {
         isAntiClockwise = false;
         darkSide = false;
 
-        if (config.getBool(GameRules.TEAMS_2V2) && players.size() >= 4 && players.size() % 2 == 0) {
-            int teams = players.size() / 2;
-            for (int i = 0; i < players.size(); i++) players.get(i).team = i % teams;
+        // Team mode: players keep the teams chosen in the lobby (copied from their seats); otherwise no teams
+        if (!Teams.enabled(config)) {
+            for (CardPlayer p : players) p.team = -1;
+        } else {
+            Teams.normalize(players, Teams.count(config));
         }
 
         deck = config.buildDeck(players.size(), random);
@@ -365,8 +367,11 @@ public class CardGame {
             report.messageAll(Chat.translatable("game.minopp.play.dance_penalty", cardPlayer.name));
         }
 
-        if (choices.shout && cardPlayer.hand.size() < 2) {
-            report.combineWith(shoutMino(cardPlayer));
+        if (choices.shout && cardPlayer.hand.size() < 2 && !cardPlayer.hasShoutedMino) {
+            // shouted together with this card (we had 2 or fewer before playing it, and it is our play)
+            cardPlayer.hasShoutedMino = true;
+            report.sound(Mino.id("game.mino_shout"), 0);
+            report.messageAll(Chat.translatable("game.minopp.play.mino_shout", cardPlayer.name));
         }
 
         if (rule(GameRules.SEVEN_ZERO) && face.isNumber() && !cardPlayer.hand.isEmpty()) {
@@ -495,8 +500,12 @@ public class CardGame {
     public ActionReport shoutMino(CardPlayer realPlayer) {
         ActionReport report = ActionReport.builder(this, realPlayer);
         if (!realPlayer.hasShoutedMino) {
-            // MINO can only be shouted with fewer than 2 cards left; earlier shouts are simply refused
-            if (realPlayer.hand.size() >= 2) {
+            // MINO can only be shouted on our own turn with 2 cards or fewer; anything else is simply refused
+            int idx = players.indexOf(realPlayer);
+            if (idx != currentPlayerIndex || awaitingCutIn) {
+                return report.fail(Chat.translatable("game.minopp.play.mino_shout_not_turn"));
+            }
+            if (realPlayer.hand.size() > 2) {
                 return report.fail(Chat.translatable("game.minopp.play.mino_shout_too_early"));
             }
             realPlayer.hasShoutedMino = true;
@@ -1057,6 +1066,8 @@ public class CardGame {
             drawn.add(c);
         }
         GameSounds.draws(report, drawn.size(), 0);
+        // a shout only protects a last card: drawing more takes it back
+        if (!drawn.isEmpty() && cardPlayer.hand.size() > 1) cardPlayer.hasShoutedMino = false;
         return drawn;
     }
 

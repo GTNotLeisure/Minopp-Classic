@@ -34,8 +34,6 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class HandScreen extends GuiScreen {
 
-    /** Set when a card is played while the shout toggle is on; consumed by the play. */
-    public static boolean shoutArmed;
     /** A choice screen opened from here comes back here when it closes. */
     private static boolean resumeAfterChoice;
 
@@ -102,10 +100,10 @@ public class HandScreen extends GuiScreen {
             .getFormattedText();
         drawButton.enabled = myTurn;
         // MINO is only possible with fewer than 2 cards left: right now (1 card) or with the next card (2 cards)
-        boolean canShout = ctx != null && !ctx.me.hasShoutedMino && ctx.hand.size() <= 2;
-        if (!canShout) shoutArmed = false;
+        // MINO can only be shouted on our own turn with 2 cards or fewer
+        boolean canShout = ctx != null && myTurn && !ctx.me.hasShoutedMino && ctx.hand.size() <= 2;
         shoutButton.enabled = canShout;
-        shoutButton.displayString = (shoutArmed ? "§e✔ " : "") + Chat.translatable("gui.minopp.hand.shout")
+        shoutButton.displayString = Chat.translatable("gui.minopp.hand.shout")
             .getFormattedText();
     }
 
@@ -215,18 +213,12 @@ public class HandScreen extends GuiScreen {
         resumeAfterChoice = true;
         BlockMinoTable.Client.playCard(ctx.pos, ctx.table, ctx.me, card);
         if (mc.currentScreen == this) resumeAfterChoice = false;
-        shoutArmed = false;
     }
 
-    /** With one card left MINO is shouted at once; with two it is shouted together with the next card played. */
+    /** Shouts MINO right away (our turn, 2 cards or fewer). */
     private void shout(Context ctx) {
-        if (ctx.me.hasShoutedMino || ctx.hand.size() > 2) return;
-        if (ctx.hand.size() == 1) {
-            shoutArmed = false;
-            mc.thePlayer.sendChatMessage("/minopp shout");
-        } else {
-            shoutArmed = !shoutArmed;
-        }
+        if (!ctx.isMyTurn() || ctx.me.hasShoutedMino || ctx.hand.size() > 2) return;
+        mc.thePlayer.sendChatMessage("/minopp shout");
     }
 
     private void draw(Context ctx) {

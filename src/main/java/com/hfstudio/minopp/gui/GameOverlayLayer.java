@@ -272,7 +272,7 @@ public class GameOverlayLayer {
                 .append(p.name.length() > 8 ? p.name.substring(0, 8) : p.name)
                 .append(':')
                 .append(p.eliminated ? "x" : p.hand.size());
-            if (p.team >= 0) counts.append(EnumChatFormatting.AQUA)
+            if (p.team >= 0) counts.append(com.hfstudio.minopp.game.Teams.format(p.team))
                 .append('[')
                 .append(p.team + 1)
                 .append(']');

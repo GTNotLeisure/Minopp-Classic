@@ -198,16 +198,40 @@ public class DrawFlowTest {
     }
 
     @Test
-    public void minoOnlyWithFewerThanTwoCards() {
+    public void minoOnlyOnOwnTurnWithTwoOrFewerCards() {
         CardGame game = setup();
-        CardPlayer me = p(game, 0);
+        CardPlayer me = p(game, 0), other = p(game, 1);
+
+        // 3 cards on our turn: refused, no penalty
         ActionReport early = game.shoutMino(me);
         assertNotNull(early);
         assertTrue(early.isFail);
         assertFalse(me.hasShoutedMino);
         assertEquals(3, me.hand.size(), "no penalty for shouting early, it is just refused");
 
-        // shouting together with the card that leaves one card
+        // 2 cards but not our turn: refused
+        other.hand.remove(0);
+        ActionReport offTurn = game.shoutMino(other);
+        assertTrue(offTurn.isFail);
+        assertFalse(other.hasShoutedMino);
+
+        // 2 cards on our turn: accepted
+        me.hand.remove(0);
+        assertEquals(2, me.hand.size());
+        ActionReport ok = game.shoutMino(me);
+        assertFalse(ok.isFail);
+        assertTrue(me.hasShoutedMino);
+
+        // drawing takes the shout back
+        game.deck.add(card(CardColor.GREEN, 1));
+        game.playNoCard(me);
+        assertFalse(me.hasShoutedMino);
+    }
+
+    @Test
+    public void minoShoutedTogetherWithTheCard() {
+        CardGame game = setup();
+        CardPlayer me = p(game, 0);
         me.hand.remove(0);
         Card red = card(CardColor.RED, 6);
         me.hand.set(0, red);
@@ -216,5 +240,18 @@ public class DrawFlowTest {
         assertFalse(game.playCard(me, red.uid, choices).isFail);
         assertEquals(1, me.hand.size());
         assertTrue(me.hasShoutedMino);
+    }
+
+    @Test
+    public void minoWithThreeCardsIsNotShoutedByThePlay() {
+        CardGame game = setup();
+        CardPlayer me = p(game, 0);
+        Card red = card(CardColor.RED, 6);
+        me.hand.add(red);
+        PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+        choices.shout = true;
+        assertFalse(game.playCard(me, red.uid, choices).isFail);
+        assertEquals(3, me.hand.size());
+        assertFalse(me.hasShoutedMino);
     }
 }

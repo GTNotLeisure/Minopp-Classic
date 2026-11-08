@@ -128,8 +128,10 @@ public class GameSimulationTest {
             GameRules.CHALLENGE, GameRules.PLAY_DRAWN, GameRules.STACK_DRAW4_ON_DRAW2 }) c.set(r, 1);
         runMany("house rules", c, 4, 200);
         c.set(GameRules.NO_BLUFFING, 1);
-        c.set(GameRules.TEAMS_2V2, 1);
+        c.set(GameRules.TEAM_MODE, 1);
         runMany("2v2 no bluff", c, 4, 200);
+        c.set(GameRules.TEAM_COUNT, 3);
+        runMany("3 teams of 2", c, 6, 100);
     }
 
     @Test

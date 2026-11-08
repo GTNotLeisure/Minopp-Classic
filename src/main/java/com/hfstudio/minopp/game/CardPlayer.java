@@ -73,6 +73,7 @@ public class CardPlayer {
     public CardPlayer seatCopy() {
         CardPlayer p = new CardPlayer(uuid, name);
         p.seat = seat;
+        p.team = team;
         return p;
     }
 

@@ -149,9 +149,9 @@ public class BlockMinoTable extends Block {
             }
             PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
             choices.useFlex = useFlex;
-            // shouting rides along with the card that leaves fewer than 2 cards in hand, never earlier
-            choices.shout = (isShoutModifierHeld() || com.hfstudio.minopp.gui.HandScreen.shoutArmed)
-                && realPlayer.hand.size() <= 2;
+            // Ctrl while playing shouts MINO with the card (only on our turn with 2 cards or fewer, checked again
+            // by the server)
+            choices.shout = isShoutModifierHeld() && realPlayer.hand.size() <= 2;
 
             CardType.Choice choice = type.choiceFor(useFlex);
             boolean needsColor = choice.needsColor();

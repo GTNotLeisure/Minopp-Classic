@@ -47,6 +47,7 @@ public final class DevPreview {
         "Clover", "Maple", "Pixel", "Sprout", "Tofu", "Juniper", "Waffle", "Comet", "Hazel", "Noodle", "Bean" };
 
     private int ticks;
+    private boolean teamsConfigured;
     private int stage;
     private int mode;
     private BlockPos core;
@@ -78,6 +79,15 @@ public final class DevPreview {
             case 2 -> {
                 // wait for every bot to sit down, then deal
                 if (table == null || ticks < 30) return;
+                if (System.getProperty("minopp.previewTeams") != null && !teamsConfigured) {
+                    // dev: team mode lobby with N teams; the game is not started so the lobby can be inspected
+                    teamsConfigured = true;
+                    table.config.set(GameRules.TEAM_MODE, 1);
+                    table.config.set(GameRules.TEAM_COUNT, Integer.parseInt(System.getProperty("minopp.previewTeams")));
+                    table.onSeatCountChanged();
+                    table.sync();
+                }
+                if (System.getProperty("minopp.previewTeams") != null) return;
                 if (table.getPlayersList()
                     .size() >= playerCount() || ticks > 200) {
                     configureMode(table.config);

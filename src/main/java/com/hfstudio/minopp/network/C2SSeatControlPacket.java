@@ -23,14 +23,17 @@ public class C2SSeatControlPacket {
 
     public static final String ID = "minopp:seat_control";
 
-    private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5, APPLY = 6;
+    private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5, APPLY = 6,
+        TEAM = 7, AUTO_TEAMS = 8;
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
         int action = packet.readInt();
         net.minecraft.nbt.NBTTagCompound applyTag = action == APPLY ? Buf.readNbt(packet) : null;
-        String key = (action >= RULE && action != APPLY) ? Buf.readString(packet) : null;
-        int value = (action == RULE || action == PACK || action == COUNT) ? packet.readInt() : 0;
+        String key = (action == RULE || action == PACK || action == COUNT || action == PRESET || action == TEAM)
+            ? Buf.readString(packet)
+            : null;
+        int value = (action == RULE || action == PACK || action == COUNT || action == TEAM) ? packet.readInt() : 0;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null) return;
         List<CardPlayer> playersList = tableEntity.getPlayersList();
@@ -46,6 +49,11 @@ public class C2SSeatControlPacket {
                         player.addChatComponentMessage(Chat.translatable("game.minopp.play.no_enough_player"));
                         return;
                     }
+                    net.minecraft.util.IChatComponent teamProblem = tableEntity.startProblem();
+                    if (teamProblem != null) {
+                        player.addChatComponentMessage(teamProblem);
+                        return;
+                    }
                     tableEntity.startGame(cardPlayer);
                 }
             }
@@ -58,7 +66,8 @@ public class C2SSeatControlPacket {
             case RULE -> {
                 if (tableEntity.game == null && GameRules.get(key) != null) {
                     tableEntity.config.set(key, value);
-                    if (key.equals(GameRules.MAX_PLAYERS)) tableEntity.onSeatCountChanged();
+                    if (key.equals(GameRules.MAX_PLAYERS) || key.equals(GameRules.TEAM_COUNT)
+                        || key.equals(GameRules.TEAM_MODE)) tableEntity.onSeatCountChanged();
                     tableEntity.sync();
                 }
             }
@@ -89,6 +98,24 @@ public class C2SSeatControlPacket {
                     tableEntity.sync();
                 }
             }
+            case TEAM -> {
+                // players pick their own team; bots (no online player behind the seat) can be moved by anyone
+                java.util.UUID target;
+                try {
+                    target = java.util.UUID.fromString(key);
+                } catch (IllegalArgumentException e) {
+                    return;
+                }
+                boolean self = target.equals(cardPlayer.uuid);
+                boolean bot = net.minecraft.server.MinecraftServer.getServer()
+                    .getConfigurationManager().playerEntityList.stream()
+                        .noneMatch(
+                            o -> ((EntityPlayerMP) o).getGameProfile()
+                                .getId()
+                                .equals(target));
+                if (self || bot) tableEntity.setTeam(target, value);
+            }
+            case AUTO_TEAMS -> tableEntity.autoTeams();
             default -> {}
         }
     }
@@ -104,6 +131,17 @@ public class C2SSeatControlPacket {
 
         public static void sendGameEnableC2S(BlockPos gamePos, boolean gameEnable) {
             MinoNetwork.sendPacketToServer(ID, header(gamePos, gameEnable ? START : STOP));
+        }
+
+        public static void sendTeamC2S(BlockPos gamePos, java.util.UUID player, int team) {
+            ByteBuf packet = header(gamePos, TEAM);
+            Buf.writeString(packet, player.toString());
+            packet.writeInt(team);
+            MinoNetwork.sendPacketToServer(ID, packet);
+        }
+
+        public static void sendAutoTeamsC2S(BlockPos gamePos) {
+            MinoNetwork.sendPacketToServer(ID, header(gamePos, AUTO_TEAMS));
         }
 
         public static void sendResetSeatsC2S(BlockPos gamePos) {

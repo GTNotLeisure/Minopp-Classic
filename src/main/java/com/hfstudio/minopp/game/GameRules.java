@@ -54,7 +54,9 @@ public final class GameRules {
     public static final String FORCED_PLAY = bool("forcedPlay", Category.HOUSE, false);
     public static final String NO_BLUFFING = bool("noBluffing", Category.HOUSE, false);
     public static final String CHALLENGE = bool("challengeDraw4", Category.HOUSE, false);
-    public static final String TEAMS_2V2 = bool("teams2v2", Category.MODES, false);
+    /** Team mode: a team wins together; every team needs the same number of players to start. */
+    public static final String TEAM_MODE = bool("teamMode", Category.MODES, false);
+    public static final String TEAM_COUNT = integer("teamCount", Category.MODES, 2, 2, Teams.MAX_TEAMS);
     public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, false);
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
 
