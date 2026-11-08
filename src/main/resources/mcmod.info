@@ -1,0 +1,21 @@
+{
+  "modListVersion": 2,
+  "modList": [
+    {
+      "modid": "${modId}",
+      "name": "${modName}",
+      "description": "Recreation of a classical card game in Minecraft, with some changes to better reflect the game with the same name. Backport of Mino++: Expanded to Minecraft 1.7.10.",
+      "version": "${modVersion}",
+      "mcversion": "${minecraftVersion}",
+      "url": "",
+      "updateUrl": "",
+      "authorList": ["Zbx1425", "MalayP", "DtHnAme", "VengeancePC"],
+      "credits": "",
+      "logoFile": "minopp.png",
+      "screenshots": [],
+      "requiredMods": ["gtnhlib"],
+      "dependencies": ["gtnhlib"],
+      "parent": ""
+    }
+  ]
+}
