@@ -110,6 +110,10 @@ public class ActionReport {
         return state(Chat.translatable("game.minopp.play.played", initiator.name, topName()));
     }
 
+    public ActionReport bring() {
+        return state(Chat.translatable("game.minopp.play.bring", initiator.name));
+    }
+
     public ActionReport chain(int number) {
         return state(Chat.translatable("game.minopp.play.chain", initiator.name, number));
     }

@@ -57,6 +57,7 @@ public final class GameRules {
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
     public static final String DEFLECT_DRAW = bool("deflectDraw", Category.HOUSE, false);
     public static final String MULTI_PLAY = bool("multiPlay", Category.HOUSE, false);
+    public static final String BRING_CARD = bool("bringCard", Category.HOUSE, false);
     public static final String NUMBER_FINISH = bool("numberFinish", Category.HOUSE, false);
 
     public static final String MERCY = bool("mercyRule", Category.NO_MERCY, false);
@@ -72,7 +73,24 @@ public final class GameRules {
     public static final String JUMP_IN_SECONDS = integer("jumpInSeconds", Category.TABLE, 5, 1, 15);
     public static final String SHOUT_PENALTY = integer("shoutPenalty", Category.TABLE, 2, 0, 6);
     public static final String BALLOON_PENALTY = integer("balloonPenalty", Category.TABLE, 4, 1, 10);
-    public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 20);
+    public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 10000);
+
+    private static final Map<String, int[]> PRESETS = Map.of(SCORE_TARGET, new int[] { 0, 200, 300, 500, 750, 1000 });
+
+    public static int[] presets(String id) {
+        return PRESETS.get(id);
+    }
+
+    public static int stepPreset(String id, int value, int dir) {
+        int[] p = PRESETS.get(id);
+        if (p == null) return value;
+        if (dir > 0) {
+            for (int v : p) if (v > value) return v;
+            return p[0];
+        }
+        for (int i = p.length - 1; i >= 0; i--) if (p[i] < value) return p[i];
+        return p[p.length - 1];
+    }
 
     public static Rule get(String id) {
         return REGISTRY.get(id);

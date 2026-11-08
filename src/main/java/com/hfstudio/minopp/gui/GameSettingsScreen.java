@@ -331,6 +331,8 @@ public class GameSettingsScreen extends GuiScreen {
                                     c * 4 * Math.max(1, entry.numbers().length),
                                     def));
                         }
+                        String linked = ruleNames(TableConfig.rulesForCard(entry.typeId()));
+                        if (!linked.isEmpty()) t.desc.add(tr("gui.minopp.cards.enables", linked));
                         String others = sharedWith(pack, faces);
                         if (!others.isEmpty()) t.desc.add(tr("gui.minopp.cards.shared", others));
                         t.controls.add(tr("gui.minopp.controls.card_left"));
@@ -412,6 +414,17 @@ public class GameSettingsScreen extends GuiScreen {
         return c;
     }
 
+    private static String ruleNames(String[] ids) {
+        StringBuilder sb = new StringBuilder();
+        for (String id : ids) {
+            GameRules.Rule r = GameRules.get(id);
+            if (r == null) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(tr(r.langKey()));
+        }
+        return sb.toString();
+    }
+
     private static Map<CardFace, Set<CardPack>> facePacks;
 
     private static String sharedWith(CardPack owner, List<CardFace> faces) {
@@ -433,11 +446,26 @@ public class GameSettingsScreen extends GuiScreen {
             Tile t = new Tile("rule:" + r.id(), Kind.RULE, r);
             t.title = tr(r.langKey());
             t.desc.add(tr(r.langKey() + ".desc"));
+            String needs = ruleNames(TableConfig.requiredRules(r.id()));
+            if (!needs.isEmpty()) t.desc.add(tr("gui.minopp.rule.needs", needs));
             if (r.bool()) {
                 t.controls.add(tr("gui.minopp.controls.rule_toggle"));
             } else {
-                t.desc.add(tr("gui.minopp.rule.range", r.min(), r.max()));
-                t.controls.add(tr("gui.minopp.controls.rule_int"));
+                int[] presets = GameRules.presets(r.id());
+                if (presets != null) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int p : presets) {
+                        if (sb.length() > 0) sb.append(" / ");
+                        sb.append(
+                            p == 0 && r.id()
+                                .equals(GameRules.SCORE_TARGET) ? tr("gui.minopp.rule.scoreTarget.single") : p);
+                    }
+                    t.desc.add(tr("gui.minopp.rule.presets", sb.toString()));
+                    t.controls.add(tr("gui.minopp.controls.rule_preset"));
+                } else {
+                    t.desc.add(tr("gui.minopp.rule.range", r.min(), r.max()));
+                    t.controls.add(tr("gui.minopp.controls.rule_int"));
+                }
                 t.controls.add(tr("gui.minopp.controls.rule_input"));
             }
             list.add(t);
@@ -743,8 +771,11 @@ public class GameSettingsScreen extends GuiScreen {
                     checked = v != 0;
                     dim = v == 0;
                 } else {
-                    count = v == 0 && r.id()
-                        .equals(GameRules.DECK_COPIES) ? "A" : String.valueOf(v);
+                    if (v == 0 && r.id()
+                        .equals(GameRules.DECK_COPIES)) count = "A";
+                    else if (v == 0 && r.id()
+                        .equals(GameRules.SCORE_TARGET)) count = tr("gui.minopp.rule.scoreTarget.single");
+                    else count = String.valueOf(v);
                 }
                 locked = !editable;
             }
@@ -1269,7 +1300,7 @@ public class GameSettingsScreen extends GuiScreen {
     private void openEditor(Tile t, int value) {
         editingId = t.id;
         numberField = new GuiTextField(fontRendererObj, 0, -100, 32, 12);
-        numberField.setMaxStringLength(3);
+        numberField.setMaxStringLength(5);
         numberField.setText(String.valueOf(value));
         numberField.setFocused(true);
         numberField.setCursorPositionEnd();
@@ -1313,6 +1344,8 @@ public class GameSettingsScreen extends GuiScreen {
         } else if (t.kind == Kind.RULE) {
             GameRules.Rule r = (GameRules.Rule) t.payload;
             int nv = r.clamp(v);
+            if (r.id()
+                .equals(GameRules.SCORE_TARGET) && nv > 0) nv = Math.max(50, nv);
             cfg.set(r.id(), nv);
             if (previewTable == null) C2SSeatControlPacket.Client.sendRuleC2S(gamePos, r.id(), nv);
         }
@@ -1388,6 +1421,8 @@ public class GameSettingsScreen extends GuiScreen {
                     nv = r.defaultValue();
                 } else if (shift) {
                     nv = r.min();
+                } else if (GameRules.presets(r.id()) != null) {
+                    nv = GameRules.stepPreset(r.id(), v, button == 1 ? 1 : -1);
                 } else {
                     nv = r.clamp(v + (button == 1 ? 1 : -1));
                 }

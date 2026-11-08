@@ -115,6 +115,44 @@ public class GameOverlayLayer {
             x,
             y,
             0xFFAAAAAA);
+        if (!tableEntity.settlement.isEmpty()) {
+            y += font.FONT_HEIGHT + 6;
+            drawStringWithBackdrop(
+                font,
+                Chat.translatable("gui.minopp.settle.title")
+                    .getFormattedText(),
+                x,
+                y,
+                0xFFFFD040);
+            y += font.FONT_HEIGHT + 2;
+            int rank = 1;
+            for (BlockEntityMinoTable.Settlement s : tableEntity.settlement) {
+                String line;
+                if (s.winner()) {
+                    line = "\u00a76\u2605 \u00a7f" + Chat.translatable("gui.minopp.settle.winner", s.name(), s.gained())
+                        .getFormattedText();
+                    if (tableEntity.settleTarget > 0) line += "\u00a77"
+                        + Chat.translatable("gui.minopp.settle.total", s.total(), tableEntity.settleTarget)
+                            .getFormattedText();
+                } else {
+                    line = "\u00a77" + (++rank)
+                        + ". \u00a7f"
+                        + Chat.translatable("gui.minopp.settle.loser", s.name(), s.cards(), s.points())
+                            .getFormattedText();
+                }
+                drawStringWithBackdrop(font, line, x, y, 0xFFFFFFFF);
+                y += font.FONT_HEIGHT;
+            }
+            if (!tableEntity.matchWinner.isEmpty()) {
+                drawStringWithBackdrop(
+                    font,
+                    Chat.translatable("gui.minopp.settle.match", tableEntity.matchWinner)
+                        .getFormattedText(),
+                    x,
+                    y + 2,
+                    0xFFFFD040);
+            }
+        }
     }
 
     private void renderGameActive(BlockEntityMinoTable tableEntity) {
@@ -201,7 +239,7 @@ public class GameOverlayLayer {
                     .getFormattedText()
                     : Chat.translatable("gui.minopp.play.cursor.play")
                         .getFormattedText();
-                case DISCARD_DRAWN, CHAIN -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass")
+                case DISCARD_DRAWN, CHAIN, BRING -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass")
                     .getFormattedText()
                     : Chat.translatable("gui.minopp.play.cursor.play")
                         .getFormattedText();

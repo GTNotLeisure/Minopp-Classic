@@ -377,4 +377,55 @@ public class NewContentTest {
         assertTrue(bluffer.eliminated, "the bluffer drew 4 and hit the mercy limit");
         assertTrue(r.shouldDestroyGame, "only the victim is left: the game ends");
     }
+
+    @Test
+    public void actionCardBringsOneSameColorCard() {
+        CardGame game = setup(GameRules.BRING_CARD);
+        CardPlayer me = p(game, 0);
+        Card skip = card("skip", CardColor.RED, -1), red5 = num(CardColor.RED, 5), red6 = num(CardColor.RED, 6);
+        me.hand.add(skip);
+        me.hand.add(red5);
+        me.hand.add(red6);
+        assertFalse(game.playCard(me, skip.uid, none()).isFail);
+        assertEquals(CardGame.PlayerActionPhase.BRING, game.currentPlayerPhase);
+        assertEquals(0, game.currentPlayerIndex);
+        assertEquals("game.minopp.play.bring_only", game.whyCannotPlay(me, me.hand.get(0), false));
+        assertFalse(game.playCard(me, red5.uid, none()).isFail);
+        assertEquals(CardGame.PlayerActionPhase.DISCARD_HAND, game.currentPlayerPhase);
+        assertEquals(2, game.currentPlayerIndex, "the skip still applies after the brought card");
+        assertTrue(me.hand.contains(red6), "only one card can be brought");
+    }
+
+    @Test
+    public void passingABringKeepsTheActionEffect() {
+        CardGame game = setup(GameRules.BRING_CARD);
+        CardPlayer me = p(game, 0);
+        Card skip = card("skip", CardColor.RED, -1);
+        me.hand.add(skip);
+        me.hand.add(num(CardColor.RED, 5));
+        int before = me.hand.size();
+        assertFalse(game.playCard(me, skip.uid, none()).isFail);
+        assertFalse(game.playNoCard(me).isFail);
+        assertEquals(before - 1, me.hand.size(), "passing a bring does not draw");
+        assertEquals(2, game.currentPlayerIndex);
+    }
+
+    @Test
+    public void bringNeedsTheRuleAndAnActionCard() {
+        CardGame off = setup();
+        CardPlayer a = p(off, 0);
+        Card skip = card("skip", CardColor.RED, -1);
+        a.hand.add(skip);
+        a.hand.add(num(CardColor.RED, 5));
+        off.playCard(a, skip.uid, none());
+        assertEquals(2, off.currentPlayerIndex);
+
+        CardGame on = setup(GameRules.BRING_CARD);
+        CardPlayer b = p(on, 0);
+        Card red7 = num(CardColor.RED, 7);
+        b.hand.add(red7);
+        b.hand.add(num(CardColor.RED, 5));
+        on.playCard(b, red7.uid, none());
+        assertEquals(1, on.currentPlayerIndex, "number cards do not bring");
+    }
 }

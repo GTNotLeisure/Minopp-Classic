@@ -37,6 +37,8 @@ public class EntityAutoPlayer extends EntityLiving {
     public CardPlayer cardPlayer;
     public BlockPos tablePos = null;
     private boolean noPush;
+    private boolean summoned;
+    private int homelessSeconds;
 
     public EntityAutoPlayer(World level) {
         super(level);
@@ -98,6 +100,8 @@ public class EntityAutoPlayer extends EntityLiving {
             return;
         }
 
+        if (worldObj.getTotalWorldTime() % 20 == 0) leash();
+        if (isDead) return;
         if (!getActive()) {
             tablePos = null;
             heal(10);
@@ -250,7 +254,29 @@ public class EntityAutoPlayer extends EntityLiving {
         return new ItemStack[5];
     }
 
+    // bots stay at their table: pulled back when moved away, and lobby-summoned bots vanish once they lose their seat
+    private void leash() {
+        BlockEntityMinoTable table = tablePos == null ? null : ItemHandCards.getTable(worldObj, tablePos);
+        if (table == null) {
+            if (summoned && ++homelessSeconds >= 10) setDead();
+            return;
+        }
+        homelessSeconds = 0;
+        double dx = posX - (tablePos.x + 1.5), dz = posZ - (tablePos.z + 1.5), dy = posY - tablePos.y;
+        if (dx * dx + dz * dz <= 25 && Math.abs(dy) <= 3) return;
+        int seat = cardPlayer == null ? -1 : table.seatOf(cardPlayer.uuid);
+        if (seat < 0) {
+            if (summoned) setDead();
+            return;
+        }
+        Vec3d spot = table.botSpot(seat);
+        mountEntity(null);
+        motionX = motionY = motionZ = 0;
+        setPositionAndUpdate(spot.x, spot.y, spot.z);
+    }
+
     public void seatAt(BlockEntityMinoTable table, String name) {
+        summoned = true;
         setCustomNameTag(name);
         setActive(true);
         cardPlayer = new CardPlayer(getUniqueID(), name);
@@ -282,6 +308,7 @@ public class EntityAutoPlayer extends EntityLiving {
         super.writeEntityToNBT(compound);
         if (tablePos != null) compound.setLong("TablePos", tablePos.asLong());
         if (cardPlayer != null) compound.setTag("CardPlayer", cardPlayer.toTag());
+        compound.setBoolean("Summoned", summoned);
         if (getHeldItem() != null) compound.setTag("HandStack", getHeldItem().writeToNBT(new NBTTagCompound()));
         writeConfigToTag(compound);
     }
@@ -300,6 +327,7 @@ public class EntityAutoPlayer extends EntityLiving {
             cardPlayer = null;
         }
         readConfigFromTag(compound);
+        summoned = compound.getBoolean("Summoned");
 
         if (tablePos != null && cardPlayer != null) {
             ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);

@@ -92,10 +92,20 @@ public class SeatControlScreen extends GuiScreen {
             actions.add(new Action("stop", "S", tr("gui.minopp.seats.stop_plain"), x, r, sideW, h, !idle, false));
         }
         r += step;
-        boolean freeSeat = te.getPlayersList()
-            .size() < te.seatCount();
-        actions
-            .add(new Action("bot_add", null, tr("gui.minopp.seats.bot_add"), x, r, third, h, idle && freeSeat, false));
+        int seatedCount = te.getPlayersList()
+            .size();
+        boolean freeSeat = seatedCount < te.seatCount();
+        actions.add(
+            new Action(
+                "bot_add",
+                null,
+                tr("gui.minopp.seats.bot_add"),
+                x,
+                r,
+                third,
+                h,
+                idle && (freeSeat || seatedCount > 0),
+                false));
         actions.add(
             new Action(
                 "bot_fill",
@@ -191,7 +201,7 @@ public class SeatControlScreen extends GuiScreen {
         int cx = (areaX1 + areaX2) / 2, cy = (areaY1 + areaY2) / 2;
         int rx = (areaX2 - areaX1) / 2 - 34, ry = (areaY2 - areaY1) / 2 - 20;
         drawFelt(cx, cy, (int) (rx * 0.62), (int) (ry * 0.55));
-        int target = te.config.getInt(GameRules.SCORE_TARGET) * 100;
+        int target = te.config.getInt(GameRules.SCORE_TARGET);
         if (target > 0 && !te.scores.isEmpty()) {
             StringBuilder line = new StringBuilder(tr("gui.minopp.seats.points", target));
             for (Map.Entry<UUID, Integer> e : te.scores.entrySet()) {
@@ -392,6 +402,7 @@ public class SeatControlScreen extends GuiScreen {
             case "bot_add" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 0);
             case "bot_fill" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 1);
             case "bot_clear" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 2);
+            case "bot_remove" -> C2SSeatControlPacket.Client.sendBotsC2S(gamePos, 3);
             case "settings" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.PACKS);
             case "style" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.STYLE);
             case "designs" -> GameSettingsScreen.open(gamePos, this, GameSettingsScreen.Tab.DESIGNS);
@@ -417,12 +428,13 @@ public class SeatControlScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         for (Action a : actions) {
-            if (button == 0 && a.enabled
-                && mouseX >= a.x
-                && mouseX < a.x + a.w
-                && mouseY >= a.y
-                && mouseY < a.y + a.h) {
+            if (!a.enabled || mouseX < a.x || mouseX >= a.x + a.w || mouseY < a.y || mouseY >= a.y + a.h) continue;
+            if (button == 0) {
                 perform(a.id);
+                return;
+            }
+            if (button == 1 && a.id.equals("bot_add")) {
+                perform("bot_remove");
                 return;
             }
         }
@@ -454,13 +466,14 @@ public class SeatControlScreen extends GuiScreen {
             case Keyboard.KEY_X -> "start";
             case Keyboard.KEY_T -> "teams";
             case Keyboard.KEY_L -> "leave";
-            case Keyboard.KEY_B -> "bot_add";
+            case Keyboard.KEY_B -> isShiftKeyDown() ? "bot_remove" : "bot_add";
             case Keyboard.KEY_F -> "bot_fill";
             case Keyboard.KEY_K -> "bot_clear";
             default -> null;
         };
         if (id != null) {
-            for (Action a : actions) if (a.id.equals(id) && a.enabled) perform(id);
+            String actionId = id.equals("bot_remove") ? "bot_add" : id;
+            for (Action a : actions) if (a.id.equals(actionId) && a.enabled) perform(id);
             return;
         }
         super.keyTyped(c, key);

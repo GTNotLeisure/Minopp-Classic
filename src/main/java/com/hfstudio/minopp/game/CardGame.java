@@ -199,6 +199,9 @@ public class CardGame {
             return face.isNumber() && !face.isWild() && face.number == chainNumber && !useFlex ? null
                 : "game.minopp.play.chain_only";
         }
+        if (currentPlayerPhase == PlayerActionPhase.BRING) {
+            return !face.isWild() && face.color == currentColor && !useFlex ? null : "game.minopp.play.bring_only";
+        }
         if (rule(GameRules.NUMBER_FINISH) && player.hand.size() == 1 && !face.isNumber()) {
             return "game.minopp.play.number_finish";
         }
@@ -355,10 +358,19 @@ public class CardGame {
             }
         }
 
+        boolean brought = currentPlayerPhase == PlayerActionPhase.BRING && !isCut;
+        int keptSkip = skipCount;
+        boolean keptExtra = extraTurn;
         colorBeforePlay = currentColor;
         skipCount = 0;
         extraTurn = false;
         deferAdvance = false;
+        if (brought) {
+            // the action card that opened the bring still takes effect when the turn moves on
+            skipCount = keptSkip;
+            extraTurn = keptExtra;
+            currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+        }
         doDiscardCard(cardPlayer, card, report);
         GameSounds.cardPlayed(report, type, useFlex);
 
@@ -424,6 +436,16 @@ public class CardGame {
         if (end != null) return end;
 
         if (!deferAdvance) {
+            if (!isCut && !brought
+                && rule(GameRules.BRING_CARD)
+                && !face.isNumber()
+                && !face.isWild()
+                && !useFlex
+                && decisions.isEmpty()
+                && hasColor(cardPlayer, currentColor)) {
+                currentPlayerPhase = PlayerActionPhase.BRING;
+                return report.bring();
+            }
             if (!isCut && rule(GameRules.MULTI_PLAY)
                 && face.isNumber()
                 && !face.isWild()
@@ -476,7 +498,7 @@ public class CardGame {
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
 
-        if (currentPlayerPhase == PlayerActionPhase.CHAIN) {
+        if (currentPlayerPhase == PlayerActionPhase.CHAIN || currentPlayerPhase == PlayerActionPhase.BRING) {
             report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
             return report.state(Chat.translatable("game.minopp.play.chain_end", cardPlayer.name));
@@ -1030,6 +1052,14 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.team_draw", player.name, amount));
     }
 
+    private boolean hasColor(CardPlayer player, CardColor color) {
+        for (Card c : player.hand) {
+            CardFace f = face(c);
+            if (!f.isWild() && f.color == color) return true;
+        }
+        return false;
+    }
+
     private boolean hasNumber(CardPlayer player, int number) {
         for (Card c : player.hand) {
             CardFace f = face(c);
@@ -1478,6 +1508,7 @@ public class CardGame {
         DISCARD_HAND,
         DISCARD_DRAWN,
         CHAIN,
+        BRING,
     }
 
     private static List<Card> readCards(NBTTagList list) {

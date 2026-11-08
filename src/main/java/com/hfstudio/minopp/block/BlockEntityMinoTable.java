@@ -171,6 +171,11 @@ public class BlockEntityMinoTable extends TileEntity {
                 entry);
         }
         compoundTag.setTag("scores", scoresTag);
+        net.minecraft.nbt.NBTTagList settleTag = new net.minecraft.nbt.NBTTagList();
+        for (Settlement s : settlement) settleTag.appendTag(s.toTag());
+        compoundTag.setTag("settlement", settleTag);
+        compoundTag.setInteger("settleTarget", settleTarget);
+        compoundTag.setString("matchWinner", matchWinner);
     }
 
     @Override
@@ -187,6 +192,12 @@ public class BlockEntityMinoTable extends TileEntity {
                 scoreNames.put(id, entry.getString("name"));
             } catch (IllegalArgumentException ignored) {}
         }
+        settlement.clear();
+        net.minecraft.nbt.NBTTagList settleTag = compoundTag.getTagList("settlement", 10);
+        for (int i = 0; i < settleTag.tagCount() && i < MAX_SEATS; i++)
+            settlement.add(Settlement.fromTag(settleTag.getCompoundTagAt(i)));
+        settleTarget = compoundTag.getInteger("settleTarget");
+        matchWinner = compoundTag.getString("matchWinner");
         NBTTagCompound playersTag = compoundTag.getCompoundTag("seats");
         for (int i = 0; i < MAX_SEATS; i++) {
             seats[i] = playersTag.hasKey("seat" + i) ? new CardPlayer(playersTag.getCompoundTag("seat" + i)) : null;
@@ -366,9 +377,9 @@ public class BlockEntityMinoTable extends TileEntity {
             if (seats[i] != null) continue;
             Vec3d seat = getSeatLocalPos(i, n);
             double ox = seat.x - 1.5, oz = seat.z - 1.5;
-            double len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
+            Vec3d spot = botSpot(i);
             EntityAutoPlayer bot = new EntityAutoPlayer(worldObj);
-            bot.setPosition(xCoord + seat.x + ox / len * 0.45, yCoord, zCoord + seat.z + oz / len * 0.45);
+            bot.setPosition(spot.x, spot.y, spot.z);
             bot.rotationYaw = (float) Math.toDegrees(Math.atan2(-ox, oz)) + 180;
             worldObj.spawnEntityInWorld(bot);
             bot.seatAt(this, freeBotName());
@@ -377,10 +388,10 @@ public class BlockEntityMinoTable extends TileEntity {
         return added;
     }
 
-    public int removeBots() {
+    public int removeBots(int max) {
         if (game != null || worldObj == null || worldObj.isRemote) return 0;
         int removed = 0;
-        for (int i = 0; i < MAX_SEATS; i++) {
+        for (int i = MAX_SEATS - 1; i >= 0 && removed < max; i--) {
             if (seats[i] == null) continue;
             Entity e = WorldUtil.getEntityByUUID(worldObj, seats[i].uuid);
             if (e instanceof EntityAutoPlayer) {
@@ -489,6 +500,8 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         game = new CardGame(gamePlayers);
         game.tableEntity = this;
+        settlement.clear();
+        matchWinner = "";
         state = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND)).state;
         lastHandMoveCounter = 0;
         sendSeatActionTakenToAll();
@@ -560,27 +573,67 @@ public class BlockEntityMinoTable extends TileEntity {
     public final Map<UUID, Integer> scores = new LinkedHashMap<>();
     public final Map<UUID, String> scoreNames = new HashMap<>();
 
+    public record Settlement(String name, int cards, int points, int gained, int total, boolean winner) {
+
+        NBTTagCompound toTag() {
+            NBTTagCompound t = new NBTTagCompound();
+            t.setString("name", name);
+            t.setInteger("cards", cards);
+            t.setInteger("points", points);
+            t.setInteger("gained", gained);
+            t.setInteger("total", total);
+            t.setBoolean("winner", winner);
+            return t;
+        }
+
+        static Settlement fromTag(NBTTagCompound t) {
+            return new Settlement(
+                t.getString("name"),
+                t.getInteger("cards"),
+                t.getInteger("points"),
+                t.getInteger("gained"),
+                t.getInteger("total"),
+                t.getBoolean("winner"));
+        }
+    }
+
+    public final List<Settlement> settlement = new ArrayList<>();
+    public int settleTarget;
+    public String matchWinner = "";
+
     private void scoreRound(List<CardPlayer> winners, ActionReport result) {
-        int target = config.getInt(GameRules.SCORE_TARGET) * 100;
-        if (target <= 0 || game == null || winners == null || winners.isEmpty()) return;
+        if (game == null || winners == null || winners.isEmpty()) return;
+        int target = config.getInt(GameRules.SCORE_TARGET);
         List<CardPlayer> losers = new ArrayList<>(game.players);
         losers.removeAll(winners);
         int points = game.handPoints(losers);
+        settlement.clear();
+        settleTarget = target;
+        matchWinner = "";
         CardPlayer best = null;
         int bestScore = -1;
         for (CardPlayer w : winners) {
-            int total = scores.merge(w.uuid, points, Integer::sum);
-            scoreNames.put(w.uuid, w.name);
-            sendMessageToAll(
-                new ActionMessage(
-                    ActionMessage.Type.MESSAGE_ALL,
-                    Chat.translatable("game.minopp.play.points", w.name, points, total, target)));
+            int total = target > 0 ? scores.merge(w.uuid, points, Integer::sum) : points;
+            if (target > 0) {
+                scoreNames.put(w.uuid, w.name);
+                sendMessageToAll(
+                    new ActionMessage(
+                        ActionMessage.Type.MESSAGE_ALL,
+                        Chat.translatable("game.minopp.play.points", w.name, points, total, target)));
+            }
+            settlement.add(new Settlement(w.name, w.hand.size(), 0, points, total, true));
             if (total > bestScore) {
                 bestScore = total;
                 best = w;
             }
         }
-        if (best != null && bestScore >= target) {
+        losers.sort(java.util.Comparator.comparingInt(p -> game.handPoints(List.of(p))));
+        for (CardPlayer p : losers) {
+            int own = game.handPoints(List.of(p));
+            settlement.add(new Settlement(p.name, p.hand.size(), own, 0, scores.getOrDefault(p.uuid, 0), false));
+        }
+        if (target > 0 && best != null && bestScore >= target) {
+            matchWinner = best.name;
             sendMessageToAll(
                 new ActionMessage(
                     ActionMessage.Type.MESSAGE_ALL,
@@ -631,12 +684,68 @@ public class BlockEntityMinoTable extends TileEntity {
 
     @Override
     public void updateEntity() {
-        if (worldObj.isRemote || game == null || game.decisions.isEmpty()) return;
-        if (worldObj.getTotalWorldTime() % 10 != 0) return;
+        if (worldObj.isRemote || game == null) return;
+        long time = worldObj.getTotalWorldTime();
+        if (time % 10 != 0) return;
         MinecraftServer server = MinecraftServer.getServer();
-        ActionReport report = game
-            .tickDecisions(System.currentTimeMillis(), uuid -> AutoPlayer.isOnlinePlayer(server, uuid));
-        if (report != null) handleActionResult(report, game != null ? game.currentPlayer() : null, null);
+        if (!game.decisions.isEmpty()) {
+            ActionReport report = game
+                .tickDecisions(System.currentTimeMillis(), uuid -> AutoPlayer.isOnlinePlayer(server, uuid));
+            if (report != null) handleActionResult(report, game != null ? game.currentPlayer() : null, null);
+            return;
+        }
+        if (time % 20 == 0) tickAbsent(server);
+    }
+
+    private static final long ABSENT_GRACE_MS = 15_000, STAND_IN_DELAY_MS = 2_000;
+    private final AutoPlayer standIn = new AutoPlayer();
+    private final java.util.Set<UUID> standingIn = new java.util.HashSet<>();
+    private UUID absentId;
+    private long absentSince;
+
+    private boolean present(MinecraftServer server, UUID uuid) {
+        return AutoPlayer.isOnlinePlayer(server, uuid)
+            || WorldUtil.getEntityByUUID(worldObj, uuid) instanceof EntityAutoPlayer;
+    }
+
+    // a disconnected player's turns are played by a stand-in so the table never stalls; they take over again on return
+    private void tickAbsent(MinecraftServer server) {
+        if (game.awaitingCutIn) return;
+        CardPlayer current = game.currentPlayer();
+        if (current == null || present(server, current.uuid)) {
+            if (current != null) standingIn.remove(current.uuid);
+            absentId = null;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (!current.uuid.equals(absentId)) {
+            absentId = current.uuid;
+            absentSince = now;
+            return;
+        }
+        if (now - absentSince < (standingIn.contains(current.uuid) ? STAND_IN_DELAY_MS : ABSENT_GRACE_MS)) return;
+        if (standingIn.add(current.uuid)) {
+            sendMessageToAll(
+                new ActionMessage(
+                    ActionMessage.Type.MESSAGE_ALL,
+                    Chat.translatable("game.minopp.play.stand_in", current.name)));
+        }
+        standIn.aiForgetChance = 0;
+        CardPlayer real = game.deAmputate(current);
+        absentId = null;
+        handleActionResult(standIn.playAtGame(game, real, server), real, null);
+    }
+
+    public int seatOf(UUID uuid) {
+        for (int i = 0; i < MAX_SEATS; i++) if (seats[i] != null && seats[i].uuid.equals(uuid)) return i;
+        return -1;
+    }
+
+    public Vec3d botSpot(int seat) {
+        Vec3d local = getSeatLocalPos(seat, seatCount());
+        double ox = local.x - 1.5, oz = local.z - 1.5;
+        double len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
+        return new Vec3d(xCoord + local.x + ox / len * 0.45, yCoord, zCoord + local.z + oz / len * 0.45);
     }
 
     private void sendMessageToAll(ActionMessage message) {
