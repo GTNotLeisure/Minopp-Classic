@@ -3,12 +3,12 @@ package com.hfstudio.minopp.network;
 import java.util.UUID;
 
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.world.World;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.ActionReport;
-import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
@@ -19,106 +19,81 @@ public class C2SPlayCardPacket {
 
     public static final String ID = "minopp:play_card";
 
+    private static final int ACTION_PLAY = 0, ACTION_NO_CARD = 1, ACTION_DOUBT = 2, ACTION_DECISION = 3;
+
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
-        World level = player.worldObj;
-        UUID playerUuid = Buf.readUUID(packet);
+        UUID playerUuid = player.getGameProfile()
+            .getId();
         int actionType = packet.readInt();
 
-        BlockEntityMinoTable tableEntity = ItemHandCards.getTable(level, gamePos);
-        switch (actionType) {
-            case 0 -> {
-                final Card card = new Card(Buf.readNbt(packet));
-                final int wildSelectionOrdinal = packet.readInt();
-                final boolean shout = packet.readBoolean();
-                if (tableEntity == null || tableEntity.game == null) return;
-                CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
-                if (cardPlayer == null) return;
-                Card.Suit wildSelection = wildSelectionOrdinal == -1 ? null : Card.Suit.values()[wildSelectionOrdinal];
-                ActionReport result = tableEntity.game.playCard(cardPlayer, card, wildSelection, shout);
-                tableEntity.handleActionResult(result, cardPlayer, player);
+        BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
+        if (tableEntity == null || tableEntity.game == null) return;
+        CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
+        if (cardPlayer == null) return;
+        tableEntity.lastPlayedByUuid = playerUuid;
+
+        ActionReport result = switch (actionType) {
+            case ACTION_PLAY -> {
+                int cardUid = packet.readInt();
+                PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+                int colorOrdinal = packet.readByte();
+                choices.color = colorOrdinal < 0 || colorOrdinal >= CardColor.values().length ? null
+                    : CardColor.values()[colorOrdinal];
+                int targets = packet.readByte();
+                for (int i = 0; i < targets; i++) choices.targets.add(Buf.readUUID(packet));
+                choices.useFlex = packet.readBoolean();
+                choices.shout = packet.readBoolean();
+                yield tableEntity.game.playCard(cardPlayer, cardUid, choices);
             }
-            case 1 -> {
-                if (tableEntity == null || tableEntity.game == null) return;
-                CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
-                if (cardPlayer == null) return;
-                ActionReport result = tableEntity.game.playNoCard(cardPlayer);
-                tableEntity.handleActionResult(result, cardPlayer, player);
+            case ACTION_NO_CARD -> tableEntity.game.playNoCard(cardPlayer);
+            case ACTION_DOUBT -> tableEntity.game.doubtMino(cardPlayer, Buf.readUUID(packet));
+            case ACTION_DECISION -> {
+                int answer = packet.readInt();
+                UUID target = packet.readBoolean() ? Buf.readUUID(packet) : null;
+                yield tableEntity.game.answerDecision(cardPlayer, answer, target);
             }
-            case 2 -> {
-                UUID targetPlayerUuid = Buf.readUUID(packet);
-                if (tableEntity == null || tableEntity.game == null) return;
-                CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
-                if (cardPlayer == null) return;
-                ActionReport result = tableEntity.game.doubtMino(cardPlayer, targetPlayerUuid);
-                tableEntity.handleActionResult(result, cardPlayer, player);
-            }
-            case 3 -> {
-                final Card card = new Card(Buf.readNbt(packet));
-                final int wildSelectionOrdinal = packet.readInt();
-                final boolean shout = packet.readBoolean();
-                final UUID targetPlayerUuid = Buf.readUUID(packet);
-                if (tableEntity == null || tableEntity.game == null) return;
-                CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
-                if (cardPlayer == null) return;
-                Card.Suit wildSelection = wildSelectionOrdinal == -1 ? null : Card.Suit.values()[wildSelectionOrdinal];
-                int discardSizeBefore = tableEntity.game.discardDeck.size();
-                ActionReport result = tableEntity.game.playCard(cardPlayer, card, wildSelection, shout);
-                if (tableEntity.game != null && card.number == 7
-                    && tableEntity.game.discardDeck.size() > discardSizeBefore
-                    && tableEntity.getRule(BlockEntityMinoTable.RULE_SEVEN0, false)) {
-                    CardPlayer targetPlayer = tableEntity.game.deAmputate(targetPlayerUuid);
-                    if (targetPlayer != null) {
-                        tableEntity.game.swapHands(cardPlayer, targetPlayer);
-                    }
-                }
-                tableEntity.handleActionResult(result, cardPlayer, player);
-            }
-            default -> {}
-        }
+            default -> null;
+        };
+        tableEntity.handleActionResult(result, cardPlayer, player);
     }
 
     public static class Client {
 
-        public static void sendPlayCardC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection,
-            boolean shout) {
+        private static ByteBuf header(BlockPos gamePos, int action) {
             ByteBuf packet = MinoNetwork.buffer();
             Buf.writeBlockPos(packet, gamePos);
-            Buf.writeUUID(packet, player.uuid);
-            packet.writeInt(0);
-            Buf.writeNbt(packet, card.toTag());
-            packet.writeInt(wildSelection == null ? -1 : wildSelection.ordinal());
-            packet.writeBoolean(shout);
+            packet.writeInt(action);
+            return packet;
+        }
+
+        public static void sendPlayCardC2S(BlockPos gamePos, CardPlayer player, int cardUid,
+            PlayContext.PlayChoices choices) {
+            ByteBuf packet = header(gamePos, ACTION_PLAY);
+            packet.writeInt(cardUid);
+            packet.writeByte(choices.color == null ? -1 : choices.color.ordinal());
+            packet.writeByte(choices.targets.size());
+            for (UUID target : choices.targets) Buf.writeUUID(packet, target);
+            packet.writeBoolean(choices.useFlex);
+            packet.writeBoolean(choices.shout);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
         public static void sendPlayNoCardC2S(BlockPos gamePos, CardPlayer player) {
-            ByteBuf packet = MinoNetwork.buffer();
-            Buf.writeBlockPos(packet, gamePos);
-            Buf.writeUUID(packet, player.uuid);
-            packet.writeInt(1);
-            MinoNetwork.sendPacketToServer(ID, packet);
+            MinoNetwork.sendPacketToServer(ID, header(gamePos, ACTION_NO_CARD));
         }
 
         public static void sendDoubtMinoC2S(BlockPos gamePos, CardPlayer player, UUID targetPlayer) {
-            ByteBuf packet = MinoNetwork.buffer();
-            Buf.writeBlockPos(packet, gamePos);
-            Buf.writeUUID(packet, player.uuid);
-            packet.writeInt(2);
+            ByteBuf packet = header(gamePos, ACTION_DOUBT);
             Buf.writeUUID(packet, targetPlayer);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
-        public static void sendSwapHandC2S(BlockPos gamePos, CardPlayer player, Card card, Card.Suit wildSelection,
-            boolean shout, UUID targetPlayerUuid) {
-            ByteBuf packet = MinoNetwork.buffer();
-            Buf.writeBlockPos(packet, gamePos);
-            Buf.writeUUID(packet, player.uuid);
-            packet.writeInt(3); // new action type
-            Buf.writeNbt(packet, card.toTag());
-            packet.writeInt(wildSelection == null ? -1 : wildSelection.ordinal());
-            packet.writeBoolean(shout);
-            Buf.writeUUID(packet, targetPlayerUuid); // the swap target
+        public static void sendDecisionC2S(BlockPos gamePos, int answer, UUID target) {
+            ByteBuf packet = header(gamePos, ACTION_DECISION);
+            packet.writeInt(answer);
+            packet.writeBoolean(target != null);
+            if (target != null) Buf.writeUUID(packet, target);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
     }

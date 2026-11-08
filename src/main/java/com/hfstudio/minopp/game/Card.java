@@ -1,162 +1,85 @@
 package com.hfstudio.minopp.game;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.UUID;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.IChatComponent;
 
-import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.NbtUtil;
 
-public class Card implements Comparable<Card> {
+/**
+ * A physical card. Every card has a light face; cards of a Flip deck also have a dark face on the back.
+ * Identity is the per-game unique id, as several physical cards may print the same face.
+ */
+public final class Card implements Comparable<Card> {
 
-    public Family family;
-    public Suit suit;
-    public int number;
-    public Card equivCard;
+    public final int uid;
+    public final CardFace light;
+    public final CardFace dark;
+    /** Player who last held/played this card; used to pick the card theme on other clients. Not game relevant. */
+    public UUID owner;
 
-    public Card(Family family, Suit suit, int number) {
-        this.family = family;
-        this.suit = suit;
-        this.number = number;
+    public Card(int uid, CardFace light, CardFace dark) {
+        this.uid = uid;
+        this.light = light;
+        this.dark = dark;
     }
 
-    private Card(Family family, Suit suit, int number, Card equivCard) {
-        this(family, suit, number);
-        this.equivCard = equivCard;
+    public CardFace face(boolean darkSide) {
+        return darkSide && dark != null ? dark : light;
     }
 
-    public static List<Card> createDeck() {
-        // Create a deck of UNO cards.
-        List<Card> deck = new ArrayList<>();
-        // Numbers
-        for (Suit suit : Suit.values()) {
-            if (suit == Suit.WILD) continue;
-            for (int i = 0; i <= 9; i++) deck.add(new Card(Family.NUMBER, suit, i));
-            for (int i = 1; i <= 9; i++) deck.add(new Card(Family.NUMBER, suit, i));
-        }
-        // Skip, Reverse, Draw 2
-        for (Suit suit : Suit.values()) {
-            if (suit == Suit.WILD) continue;
-            for (int i = 0; i < 2; i++) {
-                deck.add(new Card(Family.SKIP, suit, -101));
-                deck.add(new Card(Family.REVERSE, suit, -102));
-                deck.add(new Card(Family.DRAW, suit, -2));
-            }
-        }
-        // Wild, Wild Draw 4
-        for (int i = 0; i < 4; i++) {
-            deck.add(new Card(Family.NUMBER, Suit.WILD, -1));
-            deck.add(new Card(Family.DRAW, Suit.WILD, -4));
-        }
-        return deck;
+    /** The face that is not currently active (shown on the back). */
+    public CardFace backFace(boolean darkSide) {
+        if (dark == null) return null;
+        return darkSide ? light : dark;
     }
 
-    public boolean canPlayOn(Card topCard) {
-        if (equivCard != null) return equivCard.canPlayOn(topCard);
-        if (topCard.equivCard != null) return canPlayOn(topCard.equivCard);
-
-        if (topCard.family == Family.DRAW) {
-            // Draw 2 and Wild Draw 4 can only be resolved by playing another Draw 2 or Wild Draw 4.
-            return family == topCard.family && number == topCard.number;
-        }
-        if (suit == Suit.WILD) {
-            // Wild cards can be played on any card.
-            return true;
-        }
-        return suit == topCard.suit || number == topCard.number;
-    }
-
-    public IChatComponent getDisplayName() {
-        return Chat.translatable(
-            "game.minopp.card.suit." + suit.name()
-                .toLowerCase())
-            .appendText(" ")
-            .appendSibling(getCardFaceName());
-    }
-
-    public IChatComponent getCardFaceName() {
-        return Chat.translatable(
-            "game.minopp.card.family." + family.name()
-                .toLowerCase(),
-            family == Family.DRAW ? -number : (suit == Suit.WILD ? "" : number));
-    }
-
-    public Card withEquivFamily(Family equivFamily) {
-        return new Card(family, suit, number, new Card(equivFamily, getEquivSuit(), number));
-    }
-
-    public Card withEquivSuit(Suit equivSuit) {
-        return new Card(family, suit, number, new Card(getEquivFamily(), equivSuit, number));
-    }
-
-    public Family getEquivFamily() {
-        return equivCard == null ? family : equivCard.family;
-    }
-
-    public Suit getEquivSuit() {
-        return equivCard == null ? suit : equivCard.suit;
-    }
-
-    public Card eraseEquiv() {
-        return new Card(family, suit, number);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Card card = (Card) o;
-        return number == card.number && family == card.family && suit == card.suit;
-    }
-
-    @Override
-    public int hashCode() {
-        return suit.ordinal() << 16 | family.ordinal() << 8 | (number + 128);
-    }
-
-    @Override
-    public int compareTo(Card o) {
-        return Integer.compare(hashCode(), o.hashCode());
-    }
-
-    public enum Suit {
-
-        RED(0xFFBE0C00),
-        YELLOW(0xFFE7D004),
-        GREEN(0xFF328A10),
-        BLUE(0xFF1254AB),
-
-        WILD(0xFF1E1A19);
-
-        public final int color;
-
-        Suit(int color) {
-            this.color = color;
-        }
-    }
-
-    public enum Family {
-        NUMBER,
-        SKIP,
-        REVERSE,
-        DRAW
-    }
-
-    public Card(NBTTagCompound tag) {
-        this(
-            Family.valueOf(tag.getString("family")),
-            Suit.valueOf(tag.getString("suit")),
-            tag.getInteger("number"),
-            tag.hasKey("actualCard") ? new Card(tag.getCompoundTag("actualCard")) : null);
+    public IChatComponent getDisplayName(boolean darkSide) {
+        return face(darkSide).getDisplayName();
     }
 
     public NBTTagCompound toTag() {
         NBTTagCompound tag = new NBTTagCompound();
-        tag.setString("family", family.name());
-        tag.setString("suit", suit.name());
-        tag.setInteger("number", number);
-        if (equivCard != null) tag.setTag("actualCard", equivCard.toTag());
+        tag.setInteger("u", uid);
+        tag.setTag("l", light.toTag());
+        if (dark != null) tag.setTag("d", dark.toTag());
+        if (owner != null) NbtUtil.putUUID(tag, "o", owner);
         return tag;
+    }
+
+    public static Card fromTag(NBTTagCompound tag) {
+        Card card = new Card(
+            tag.getInteger("u"),
+            CardFace.fromTag(tag.getCompoundTag("l")),
+            tag.hasKey("d") ? CardFace.fromTag(tag.getCompoundTag("d")) : null);
+        if (NbtUtil.hasUUID(tag, "o")) card.owner = NbtUtil.getUUID(tag, "o");
+        return card;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return this == o || (o instanceof Card c && c.uid == uid);
+    }
+
+    @Override
+    public int hashCode() {
+        return uid;
+    }
+
+    @Override
+    public int compareTo(Card o) {
+        int c = light.compareTo(o.light);
+        return c != 0 ? c : Integer.compare(uid, o.uid);
+    }
+
+    public int compareTo(Card o, boolean darkSide) {
+        int c = face(darkSide).compareTo(o.face(darkSide));
+        return c != 0 ? c : Integer.compare(uid, o.uid);
+    }
+
+    @Override
+    public String toString() {
+        return "Card#" + uid + "[" + light + (dark != null ? " | " + dark : "") + "]";
     }
 }

@@ -44,7 +44,9 @@ public final class ActionMessage {
 
     @Override
     public int hashCode() {
-        return type.hashCode() * 31 + message.hashCode();
+        // ChatStyle#hashCode NPEs in 1.7.10 when no color is set, so hash the text instead
+        return type.hashCode() * 31 + message.getUnformattedText()
+            .hashCode();
     }
 
     public enum Type {

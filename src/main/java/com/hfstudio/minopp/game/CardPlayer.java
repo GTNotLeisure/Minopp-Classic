@@ -20,6 +20,15 @@ public class CardPlayer {
 
     public boolean hasShoutedMino = false;
 
+    /** Seat index at the table (0 = north, clockwise). */
+    public int seat = -1;
+    /** Knocked out by the mercy rule. */
+    public boolean eliminated = false;
+    /** Flex power card side (true = on/green). */
+    public boolean powerOn = true;
+    /** Team index in 2v2 mode, -1 otherwise. */
+    public int team = -1;
+
     public CardPlayer(EntityPlayer mcPlayer) {
         this.uuid = mcPlayer.getGameProfile()
             .getId();
@@ -37,8 +46,12 @@ public class CardPlayer {
         this.name = tag.getString("name");
         this.hand = new ArrayList<>();
         NBTTagList handTag = tag.getTagList("hand", 10);
-        for (int i = 0; i < handTag.tagCount(); i++) hand.add(new Card(handTag.getCompoundTagAt(i)));
+        for (int i = 0; i < handTag.tagCount(); i++) hand.add(Card.fromTag(handTag.getCompoundTagAt(i)));
         this.hasShoutedMino = tag.getBoolean("hasShoutedMino");
+        this.seat = tag.hasKey("seat") ? tag.getInteger("seat") : -1;
+        this.eliminated = tag.getBoolean("eliminated");
+        this.powerOn = !tag.hasKey("powerOn") || tag.getBoolean("powerOn");
+        this.team = tag.hasKey("team") ? tag.getInteger("team") : -1;
     }
 
     public NBTTagCompound toTag() {
@@ -49,7 +62,18 @@ public class CardPlayer {
         for (Card card : hand) handTag.appendTag(card.toTag());
         tag.setTag("hand", handTag);
         tag.setBoolean("hasShoutedMino", hasShoutedMino);
+        tag.setInteger("seat", seat);
+        tag.setBoolean("eliminated", eliminated);
+        tag.setBoolean("powerOn", powerOn);
+        tag.setInteger("team", team);
         return tag;
+    }
+
+    /** Copy without hand, for seat bookkeeping. */
+    public CardPlayer seatCopy() {
+        CardPlayer p = new CardPlayer(uuid, name);
+        p.seat = seat;
+        return p;
     }
 
     @Override

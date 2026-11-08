@@ -3,20 +3,19 @@ package com.hfstudio.minopp.render;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ItemRenderer;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.IIcon;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import net.minecraftforge.client.IItemRenderer;
 
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
+import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -26,8 +25,8 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 /**
- * 1.7.10 counterpart of HandCardsWithoutLevelRenderer: shows the held card fan in third person, nothing in first
- * person (the HUD overlay shows the hand instead), and the plain sprite elsewhere.
+ * Third-person card fan in the bearer's theme (Flip cards show their other side), nothing in first person (the HUD
+ * overlay shows the hand instead), and the plain sprite elsewhere.
  */
 @SideOnly(Side.CLIENT)
 public class HandCardsItemRenderer implements IItemRenderer {
@@ -57,30 +56,19 @@ public class HandCardsItemRenderer implements IItemRenderer {
         tablePos = BlockMinoTable.getCore(level, tablePos.x, tablePos.y, tablePos.z);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(level, tablePos);
         if (tableEntity == null || tableEntity.game == null) return;
-        CardPlayer realPlayer = tableEntity.game.players.stream()
-            .filter(p -> p.uuid.equals(bearerId))
-            .findFirst()
-            .orElse(null);
+        CardPlayer realPlayer = tableEntity.game.deAmputate(bearerId);
         if (realPlayer == null) return;
+        String theme = ThemeManager.INSTANCE.themeFor(bearerId);
 
-        IIcon icon = Mino.ITEM_HAND_CARDS.getIconFromDamage(0);
-        Minecraft.getMinecraft()
-            .getTextureManager()
-            .bindTexture(TextureMap.locationItemsTexture);
         GL11.glPushMatrix();
-        GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
-        GL11.glTranslated(0, 0, 0.18);
-        for (int k = 0; k < realPlayer.hand.size(); k++) {
-            ItemRenderer.renderItemIn2D(
-                Tessellator.instance,
-                icon.getMaxU(),
-                icon.getMinV(),
-                icon.getMinU(),
-                icon.getMaxV(),
-                icon.getIconWidth(),
-                icon.getIconHeight(),
-                0.0625F);
-            GL11.glTranslated(0, 0.02, 0.08);
+        GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glTranslated(0.5, 0.5, 0.18);
+        int n = realPlayer.hand.size();
+        for (int k = 0; k < n; k++) {
+            Card card = realPlayer.hand.get(k);
+            CardRenderer.renderCardBack3D(card, tableEntity.game.darkSide, theme, 0.32f, 0.5f, 0, 0xFFFFFF);
+            GL11.glTranslated(0, 0.02, Math.min(0.08, 1.2 / Math.max(1, n)));
         }
 
         // Render arrow texture above the cards of the current player
@@ -90,8 +78,7 @@ public class HandCardsItemRenderer implements IItemRenderer {
                 .bindTexture(ARROW);
             float v0 = ((int) (System.currentTimeMillis() / 100L) % 5) * 0.2f;
             float v1 = v0 + 0.2f;
-            GL11.glTranslated(0.5, 1.3, 0);
-            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glTranslated(0, 0.8, 0);
             for (int i = 0; i < 2; i++) {
                 GL11.glPushMatrix();
                 GL11.glRotatef(i == 0 ? 45 : -45, 0, 1, 0);
@@ -106,9 +93,9 @@ public class HandCardsItemRenderer implements IItemRenderer {
                 t.draw();
                 GL11.glPopMatrix();
             }
-            GL11.glEnable(GL11.GL_CULL_FACE);
         }
-        GL11.glDisable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
+        GL11.glEnable(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL12.GL_RESCALE_NORMAL);
         GL11.glPopMatrix();
     }
 }

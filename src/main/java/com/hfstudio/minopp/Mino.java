@@ -81,6 +81,8 @@ public final class Mino {
             LOGGER.error("Failed to register config", e);
         }
 
+        com.hfstudio.minopp.game.CardPack.init();
+
         BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(CreativeTabs.tabDecorations);
         GameRegistry.registerBlock(BLOCK_MINO_TABLE, "mino_table");
         GameRegistry.registerTileEntity(BlockEntityMinoTable.class, "minopp:mino_table");
@@ -118,6 +120,9 @@ public final class Mino {
         FMLCommonHandler.instance()
             .bus()
             .register(TaskScheduler.Holder.INSTANCE);
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new com.hfstudio.minopp.network.ThemeSyncPackets.ServerEvents());
         proxy.init(event);
     }
 

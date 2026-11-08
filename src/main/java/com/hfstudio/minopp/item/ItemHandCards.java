@@ -67,6 +67,14 @@ public class ItemHandCards extends Item {
         return te instanceof BlockEntityMinoTable ? (BlockEntityMinoTable) te : null;
     }
 
+    /** The hand in display order (also the order the scroll index refers to). */
+    public static java.util.List<com.hfstudio.minopp.game.Card> sortedHand(com.hfstudio.minopp.game.CardGame game,
+        CardPlayer player) {
+        java.util.List<com.hfstudio.minopp.game.Card> hand = new java.util.ArrayList<>(player.hand);
+        hand.sort((a, b) -> a.compareTo(b, game.darkSide));
+        return hand;
+    }
+
     public static int getClientHandIndex(EntityPlayer player) {
         ItemStack held = player.getHeldItem();
         if (held != null && held.getItem() == Mino.ITEM_HAND_CARDS) {

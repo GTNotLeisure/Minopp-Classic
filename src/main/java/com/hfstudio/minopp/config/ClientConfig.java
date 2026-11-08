@@ -37,5 +37,14 @@ public class ClientConfig {
             + "jump-in reminders. Default is true (enabled).")
         @Config.DefaultBoolean(true)
         public boolean enableGameHistoryGUI = true;
+
+        @Config.Comment("Card theme used for your cards. Themes come from resource packs (assets/minopp/themes.json). "
+            + "Other players who have the same theme installed see your cards in it.")
+        @Config.DefaultString("classic")
+        public String cardTheme = "classic";
+
+        @Config.Comment("Show the cards played by other players in their own theme when you have it installed.")
+        @Config.DefaultBoolean(true)
+        public boolean showOthersThemes = true;
     }
 }

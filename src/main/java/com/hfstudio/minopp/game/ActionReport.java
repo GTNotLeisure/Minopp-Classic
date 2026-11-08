@@ -84,12 +84,16 @@ public class ActionReport {
         return this;
     }
 
+    private IChatComponent topName() {
+        return game.topCard.getDisplayName(game.darkSide);
+    }
+
     public ActionReport played() {
-        return state(Chat.translatable("game.minopp.play.played", initiator.name, game.topCard.getDisplayName()));
+        return state(Chat.translatable("game.minopp.play.played", initiator.name, topName()));
     }
 
     public ActionReport cut() {
-        return state(Chat.translatable("game.minopp.play.cut", initiator.name, game.topCard.getDisplayName()));
+        return state(Chat.translatable("game.minopp.play.cut", initiator.name, topName()));
     }
 
     public ActionReport drew(int drawCount) {
@@ -113,13 +117,28 @@ public class ActionReport {
     }
 
     public ActionReport gameWon() {
+        return gameWon(initiator, List.of(initiator));
+    }
+
+    public ActionReport gameWon(CardPlayer winner, List<CardPlayer> winners) {
         shouldDestroyGame = true;
-        IChatComponent result = Chat.translatable("game.minopp.play.game_won", initiator.name);
+        IChatComponent result;
+        if (winners.size() > 1) {
+            StringBuilder names = new StringBuilder();
+            for (CardPlayer p : winners) {
+                if (names.length() > 0) names.append(" & ");
+                names.append(p.name);
+            }
+            result = Chat.translatable("game.minopp.play.game_won_team", names.toString());
+        } else {
+            result = Chat.translatable("game.minopp.play.game_won", winner.name);
+        }
         for (CardPlayer player : game.players) {
-            if (!player.equals(initiator)) {
+            if (!winners.contains(player)) {
                 result = result.appendText("\n")
                     .appendSibling(
-                        Chat.translatable("game.minopp.play.game_nearly_won", player.name, player.hand.size()));
+                        player.eliminated ? Chat.translatable("game.minopp.play.game_eliminated", player.name)
+                            : Chat.translatable("game.minopp.play.game_nearly_won", player.name, player.hand.size()));
             }
         }
         return state(result);

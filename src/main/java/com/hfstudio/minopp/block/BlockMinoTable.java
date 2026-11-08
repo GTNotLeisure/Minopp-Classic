@@ -28,12 +28,15 @@ import org.lwjgl.input.Keyboard;
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.MinoClient;
 import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.CardType;
+import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.PlayContext;
+import com.hfstudio.minopp.gui.PlayChoiceScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
-import com.hfstudio.minopp.gui.SwapHandSelectionScreen;
 import com.hfstudio.minopp.gui.TurnDeadMan;
-import com.hfstudio.minopp.gui.WildSelectionScreen;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
@@ -74,55 +77,28 @@ public class BlockMinoTable extends Block {
 
         ItemStack itemStack = player.getHeldItem();
         if (itemStack != null) {
-            if (level.isRemote && itemStack.getItem() == Mino.ITEM_HAND_CARDS) {
+            if (level.isRemote && itemStack.getItem() == Mino.ITEM_HAND_CARDS
+                && blockEntity instanceof BlockEntityMinoTable tableEntity
+                && tableEntity.game != null) {
                 BlockPos tablePos = ItemDataUtils.getBlockPos(itemStack);
-                int handIndex = ItemDataUtils.getHandIndex(itemStack);
-                CardPlayer playerWithoutHand = ItemHandCards.getCardPlayer(player);
-                if (blockEntity instanceof BlockEntityMinoTable tableEntity) {
-                    if (tableEntity.game != null) {
-                        if (tablePos == null || !tablePos.equals(corePos)) {
-                            Client.displayActionBar(
-                                Chat.translatable("game.minopp.play.no_player")
-                                    .getFormattedText());
-                            return false;
-                        }
-                        TurnDeadMan.pedal();
-                        CardPlayer realPlayer = tableEntity.game.deAmputate(playerWithoutHand);
-                        if (realPlayer == null) return false;
-                        if (Client.isCursorHittingPile()) {
-                            C2SPlayCardPacket.Client.sendPlayNoCardC2S(corePos, playerWithoutHand);
-                        } else {
-                            Card selectedCard = realPlayer.hand
-                                .get(Mth.clamp(handIndex, 0, realPlayer.hand.size() - 1));
-                            if (selectedCard.suit == Card.Suit.WILD) {
-                                Client.openWildSelectionScreen(
-                                    corePos,
-                                    playerWithoutHand,
-                                    selectedCard,
-                                    Client.isShoutModifierHeld());
-                            } else {
-                                if (selectedCard.number == 7
-                                    && tableEntity.getRule(BlockEntityMinoTable.RULE_SEVEN0, false)
-                                    && selectedCard.canPlayOn(tableEntity.game.topCard)) {
-                                    Client.openSwapHandSelectionScreen(
-                                        corePos,
-                                        playerWithoutHand,
-                                        selectedCard,
-                                        Client.isShoutModifierHeld(),
-                                        tableEntity.game);
-                                } else {
-                                    C2SPlayCardPacket.Client.sendPlayCardC2S(
-                                        corePos,
-                                        playerWithoutHand,
-                                        selectedCard,
-                                        null,
-                                        Client.isShoutModifierHeld());
-                                }
-                            }
-                        }
-                        return true;
-                    }
+                if (tablePos == null || !tablePos.equals(corePos)) {
+                    Client.displayActionBar(
+                        Chat.translatable("game.minopp.play.no_player")
+                            .getFormattedText());
+                    return false;
                 }
+                TurnDeadMan.pedal();
+                CardPlayer playerWithoutHand = ItemHandCards.getCardPlayer(player);
+                CardPlayer realPlayer = tableEntity.game.deAmputate(playerWithoutHand);
+                if (realPlayer == null || realPlayer.hand.isEmpty()) return false;
+                if (Client.isCursorHittingPile()) {
+                    C2SPlayCardPacket.Client.sendPlayNoCardC2S(corePos, playerWithoutHand);
+                } else {
+                    List<Card> hand = ItemHandCards.sortedHand(tableEntity.game, realPlayer);
+                    Card selectedCard = hand.get(Mth.clamp(ItemDataUtils.getHandIndex(itemStack), 0, hand.size() - 1));
+                    Client.playCard(corePos, tableEntity, realPlayer, selectedCard);
+                }
+                return true;
             }
         } else if (blockEntity instanceof BlockEntityMinoTable tableEntity) {
             CardPlayer cardPlayer = ItemHandCards.getCardPlayer(player);
@@ -151,16 +127,42 @@ public class BlockMinoTable extends Block {
             Minecraft.getMinecraft().ingameGUI.func_110326_a(text, false);
         }
 
-        public static void openWildSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard,
-            boolean shout) {
-            Minecraft.getMinecraft()
-                .displayGuiScreen(new WildSelectionScreen(corePos, player, selectedCard, shout));
-        }
+        /** Works out which choices the selected card needs and either plays it or asks for them first. */
+        public static void playCard(BlockPos corePos, BlockEntityMinoTable tableEntity, CardPlayer realPlayer,
+            Card card) {
+            CardGame game = tableEntity.game;
+            CardFace face = game.face(card);
+            CardType type = face.type();
+            boolean useFlex = isFlexModifierHeld() && tableEntity.config.getBool(GameRules.FLEX_POWER)
+                && realPlayer.powerOn
+                && (type.hasFlex() || face.flexColor != null);
+            PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+            choices.useFlex = useFlex;
+            choices.shout = isShoutModifierHeld();
 
-        public static void openSwapHandSelectionScreen(BlockPos corePos, CardPlayer player, Card selectedCard,
-            boolean shout, CardGame game) {
-            Minecraft.getMinecraft()
-                .displayGuiScreen(new SwapHandSelectionScreen(corePos, player, selectedCard, shout, game));
+            CardType.Choice choice = type.choiceFor(useFlex);
+            boolean needsColor = choice.needsColor();
+            int targets = choice.targetCount();
+            if (tableEntity.config.getBool(GameRules.SEVEN_ZERO) && face.isNumber()
+                && face.number == 7
+                && game.checkPlayable(realPlayer, card, useFlex) == null
+                && game.activePlayers()
+                    .size() > 2) {
+                targets = Math.max(targets, 1);
+            }
+            boolean answeringDraw = game.pendingDraw > 0;
+            if ((needsColor || targets > 0)
+                && (game.checkPlayable(realPlayer, card, useFlex) == null || answeringDraw)) {
+                Minecraft.getMinecraft()
+                    .displayGuiScreen(
+                        new PlayChoiceScreen(corePos, realPlayer, card, choices, needsColor, targets, game.darkSide));
+            } else {
+                if (targets > 0 && game.activePlayers()
+                    .size() == 2) {
+                    for (CardPlayer p : game.activePlayers()) if (!p.equals(realPlayer)) choices.targets.add(p.uuid);
+                }
+                C2SPlayCardPacket.Client.sendPlayCardC2S(corePos, realPlayer, card.uid, choices);
+            }
         }
 
         public static void openSeatControlScreen(BlockPos corePos) {
@@ -168,9 +170,16 @@ public class BlockMinoTable extends Block {
                 .displayGuiScreen(new SeatControlScreen(corePos));
         }
 
-        public static boolean isShoutModifierHeld() {
-            int keyCode = MinoClient.KEY_SHOUT_MODIFIER.getKeyCode();
+        private static boolean isKeyHeld(int keyCode) {
             return keyCode > 0 && keyCode < Keyboard.KEYBOARD_SIZE && Keyboard.isKeyDown(keyCode);
+        }
+
+        public static boolean isShoutModifierHeld() {
+            return isKeyHeld(MinoClient.KEY_SHOUT_MODIFIER.getKeyCode());
+        }
+
+        public static boolean isFlexModifierHeld() {
+            return isKeyHeld(MinoClient.KEY_FLEX_MODIFIER.getKeyCode());
         }
 
         public static BlockPos getCursorPickedGame() {
@@ -195,10 +204,9 @@ public class BlockMinoTable extends Block {
                 if (tableEntity.game == null) return false;
                 AxisAlignedBB pileAabb = getPileAabb(tableEntity).getOffsetBoundingBox(gamePos.x, gamePos.y, gamePos.z);
                 EntityLivingBase cameraEntity = mc.renderViewEntity;
-                float partialTicks = 1.0f;
                 float hitDistance = 20;
-                Vec3 rayBegin = cameraEntity.getPosition(partialTicks);
-                Vec3 rayDir = cameraEntity.getLook(partialTicks);
+                Vec3 rayBegin = cameraEntity.getPosition(1.0f);
+                Vec3 rayDir = cameraEntity.getLook(1.0f);
                 Vec3 rayEnd = rayBegin
                     .addVector(rayDir.xCoord * hitDistance, rayDir.yCoord * hitDistance, rayDir.zCoord * hitDistance);
                 return pileAabb.calculateIntercept(rayBegin, rayEnd) != null || pileAabb.isVecInside(rayBegin);
@@ -350,12 +358,6 @@ public class BlockMinoTable extends Block {
     @SideOnly(Side.CLIENT)
     public float getAmbientOcclusionLightValue() {
         return 1.0F;
-    }
-
-    @Override
-    @SideOnly(Side.CLIENT)
-    protected String getTextureName() {
-        return "minecraft:planks_spruce";
     }
 
     @Override

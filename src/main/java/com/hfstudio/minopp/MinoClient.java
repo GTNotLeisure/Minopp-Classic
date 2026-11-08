@@ -7,25 +7,38 @@ import java.util.Random;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.IReloadableResourceManager;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 
 import org.lwjgl.input.Keyboard;
 
+import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.effect.EffectQueue;
+import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.PendingDecision;
+import com.hfstudio.minopp.gui.DecisionScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
+import com.hfstudio.minopp.gui.TableSettingsScreen;
+import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.MinoNetwork;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
+import com.hfstudio.minopp.network.ThemeSyncPackets;
+import com.hfstudio.minopp.render.ThemeManager;
+import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.WorldUtil;
+
+import cpw.mods.fml.client.registry.ClientRegistry;
 
 public class MinoClient {
 
     public static final EffectQueue SOUND_QUEUE = new EffectQueue();
 
     public static KeyBinding KEY_SHOUT_MODIFIER;
+    public static KeyBinding KEY_FLEX_MODIFIER;
 
     // For interfacing with platform codes
     public static double globalFovModifier = 1;
@@ -34,26 +47,68 @@ public class MinoClient {
     /** Winner sparkle effect (replacement for the Glowing effect): entity id -> remaining ticks. */
     private static final Map<UUID, Integer> GLOWS = new HashMap<>();
     private static final Random RANDOM = new Random();
+    private static boolean wasInWorld = false;
+    private static PendingDecision lastOpenedDecision = null;
 
     public static void init() {
         KEY_SHOUT_MODIFIER = new KeyBinding(
             "key.minopp.shout_modifier",
             Keyboard.KEY_LCONTROL,
             "key.categories.minopp");
-        cpw.mods.fml.client.registry.ClientRegistry.registerKeyBinding(KEY_SHOUT_MODIFIER);
+        KEY_FLEX_MODIFIER = new KeyBinding("key.minopp.flex_modifier", Keyboard.KEY_LMENU, "key.categories.minopp");
+        ClientRegistry.registerKeyBinding(KEY_SHOUT_MODIFIER);
+        ClientRegistry.registerKeyBinding(KEY_FLEX_MODIFIER);
         MinoNetwork.registerClientReceiver(S2CActionEphemeralPacket.ID, S2CActionEphemeralPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CEffectListPacket.ID, S2CEffectListPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CAutoPlayerScreenPacket.ID, S2CAutoPlayerScreenPacket.Client::handleS2C);
+        MinoNetwork.registerClientReceiver(
+            ThemeSyncPackets.S2C_ID,
+            buf -> ThemeManager.INSTANCE.playerThemes.putAll(ThemeSyncPackets.decode(buf)));
+
+        if (Minecraft.getMinecraft()
+            .getResourceManager() instanceof IReloadableResourceManager rm) {
+            rm.registerReloadListener(ThemeManager.INSTANCE);
+        }
     }
 
     public static void tick() {
-        World level = Minecraft.getMinecraft().theWorld;
-        if (level == null) {
+        Minecraft mc = Minecraft.getMinecraft();
+        World level = mc.theWorld;
+        if (level == null || mc.thePlayer == null) {
             GLOWS.clear();
+            if (wasInWorld) ThemeManager.INSTANCE.onDisconnect();
+            wasInWorld = false;
             return;
+        }
+        if (!wasInWorld) {
+            wasInWorld = true;
+            ThemeManager.INSTANCE.sendSelection(true);
         }
         MinoClient.SOUND_QUEUE.tick(level);
         tickGlows(level);
+        tickDecisionPrompt(mc);
+    }
+
+    /** Opens the decision prompt when the game asks us something (challenge, roulette color, point taken). */
+    private static void tickDecisionPrompt(Minecraft mc) {
+        BlockPos gamePos = ItemHandCards.getHandCardGamePos(mc.thePlayer);
+        BlockEntityMinoTable table = gamePos == null ? null : ItemHandCards.getTable(mc.theWorld, gamePos);
+        if (table == null || table.game == null) {
+            lastOpenedDecision = null;
+            return;
+        }
+        CardPlayer self = ItemHandCards.getCardPlayer(mc.thePlayer);
+        PendingDecision decision = table.game.decisionFor(self.uuid);
+        if (decision == null) {
+            lastOpenedDecision = null;
+            return;
+        }
+        boolean same = lastOpenedDecision != null && lastOpenedDecision.type == decision.type
+            && lastOpenedDecision.deadline == decision.deadline;
+        if (!same && mc.currentScreen == null) {
+            lastOpenedDecision = decision;
+            mc.displayGuiScreen(new DecisionScreen(gamePos, self, decision));
+        }
     }
 
     public static void addGlow(UUID target, int durationTicks) {
@@ -83,7 +138,7 @@ public class MinoClient {
 
     public static void closeSeatControlScreen() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen instanceof SeatControlScreen) {
+        if (mc.currentScreen instanceof SeatControlScreen || mc.currentScreen instanceof TableSettingsScreen) {
             mc.displayGuiScreen(null);
         }
     }

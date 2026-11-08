@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -9,8 +10,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 
-import com.hfstudio.minopp.block.BlockEntityMinoTable;
-
 public class AutoPlayer {
 
     public boolean aiNoWin = false;
@@ -18,6 +17,8 @@ public class AutoPlayer {
     public float aiForgetChance = 0.2f;
     public byte aiNoDelay = 0;
     public boolean aiStartGame = false;
+
+    private static final Random RANDOM = new Random();
 
     public static boolean isOnlinePlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return false;
@@ -29,96 +30,83 @@ public class AutoPlayer {
         return false;
     }
 
+    /** Sensible choices for a card when the player did not (or could not) choose: used by bots and forced play. */
+    public static PlayContext.PlayChoices defaultChoices(CardGame game, CardPlayer player, Card card) {
+        PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+        choices.color = game.mostCommonColor(player);
+        List<CardPlayer> others = game.activePlayers();
+        others.remove(player);
+        others.removeIf(p -> player.team >= 0 && p.team == player.team && others.size() > 1);
+        others.sort(Comparator.comparingInt(p -> p.hand.size()));
+        for (int i = 0; i < Math.min(2, others.size()); i++) choices.targets.add(others.get(i).uuid);
+        return choices;
+    }
+
+    private int score(CardGame game, CardPlayer player, Card card, boolean useFlex) {
+        CardFace face = game.face(card);
+        CardType type = face.type();
+        CardFace top = game.topFace();
+        int score = 0;
+        if (!face.isWild() && face.symbolKey()
+            .equals(top.symbolKey()) && face.color != game.currentColor) score += 50; // switch suit
+        if (face.isWild() && !type.isDraw()) score += 40;
+        if (face.isNumber() && face.number == 7
+            && game.config()
+                .getBool(GameRules.SEVEN_ZERO))
+            score += 30;
+        if (!face.isWild() && face.color == game.currentColor) score += 20;
+        if (type.isDraw()) score += 5 + type.drawValue;
+        if (type == CardTypes.DISCARD_ALL || type == CardTypes.DOUBLE_DISCARD_ALL) {
+            score += 10 * (int) player.hand.stream()
+                .filter(c -> game.face(c).color == face.color)
+                .count();
+        }
+        if (useFlex) score += 8;
+        return score;
+    }
+
     public ActionReport playAtGame(CardGame game, CardPlayer realPlayer, MinecraftServer server) {
-        Card topCard = game.topCard;
-        boolean forgetsMino = new Random().nextFloat() < aiForgetChance;
+        boolean forgetsMino = RANDOM.nextFloat() < aiForgetChance;
         boolean shoutsMino = !forgetsMino && realPlayer.hand.size() <= 2;
 
         // If the next player is a human player, we should not play Draw cards
-        CardPlayer nextPlayer = game.players.get(
-            (game.currentPlayerIndex + (game.isAntiClockwise ? -1 : 1) + game.players.size()) % game.players.size());
+        CardPlayer nextPlayer = game.nextPlayer();
         boolean canPlayDrawCard = !aiNoPlayerDraw || !isOnlinePlayer(server, nextPlayer.uuid);
 
-        if (aiNoWin) {
-            if (realPlayer.hand.size() <= 1) {
-                return game.playNoCard(realPlayer);
-            }
+        if (aiNoWin && realPlayer.hand.size() <= 1) {
+            return game.playNoCard(realPlayer);
         }
 
-        // Prioritize switching suit to make things more interesting
-        // If we have a card of same number but different suit
+        boolean flexAvailable = game.config()
+            .getBool(GameRules.FLEX_POWER) && realPlayer.powerOn;
+        Card best = null;
+        boolean bestFlex = false;
+        int bestScore = Integer.MIN_VALUE;
         for (Card card : new ArrayList<>(realPlayer.hand)) {
-            if (card.number == topCard.number && card.suit != topCard.getEquivSuit() && card.suit != Card.Suit.WILD) {
-                if (!canPlayDrawCard && card.family == Card.Family.DRAW) continue;
-                ActionReport result = game.playCard(realPlayer, card, null, shoutsMino);
-                if (!result.isFail) return result;
-            }
-        }
-        // If we have a Wild card
-        for (Card card : new ArrayList<>(realPlayer.hand)) {
-            if (card.suit == Card.Suit.WILD && card.family != Card.Family.DRAW) {
-                ActionReport result = game.playCard(realPlayer, card, getMostCommonSuit(realPlayer), shoutsMino);
-                if (!result.isFail) return result;
-            }
-        }
-
-        // If we have a 7
-        for (Card card : new ArrayList<>(realPlayer.hand)) {
-            if (card.number == 7 && game.tableEntity.getRule(BlockEntityMinoTable.RULE_SEVEN0, false)) {
-                if (!canPlayDrawCard && card.family == Card.Family.DRAW) continue;
-                if (!card.canPlayOn(topCard)) continue;
-                ActionReport result = game.playCard(realPlayer, card, null, shoutsMino);
-                if (!result.isFail) {
-                    List<CardPlayer> others = new ArrayList<>(game.players);
-                    others.remove(realPlayer);
-                    if (!others.isEmpty()) {
-                        game.swapHands(realPlayer, others.get(new Random().nextInt(others.size())));
-                    }
-                    return result;
+            CardType type = game.face(card)
+                .type();
+            if (!canPlayDrawCard && type.isDraw() && game.pendingDraw == 0) continue;
+            for (int f = 0; f < (flexAvailable ? 2 : 1); f++) {
+                boolean useFlex = f == 1;
+                if (game.checkPlayable(realPlayer, card, useFlex) != null) continue;
+                int s = score(game, realPlayer, card, useFlex) + RANDOM.nextInt(6);
+                if (s > bestScore) {
+                    bestScore = s;
+                    best = card;
+                    bestFlex = useFlex;
                 }
             }
         }
-
-        // If we have a card of same suit
-        for (Card card : new ArrayList<>(realPlayer.hand)) {
-            if (card.suit == topCard.getEquivSuit() && card.suit != Card.Suit.WILD) {
-                if (!canPlayDrawCard && card.family == Card.Family.DRAW) continue;
-                ActionReport result = game.playCard(realPlayer, card, null, shoutsMino);
-                if (!result.isFail) return result;
-            }
-        }
-        // If we have any other card
-        for (Card card : new ArrayList<>(realPlayer.hand)) {
-            if (!canPlayDrawCard && card.family == Card.Family.DRAW) continue;
-            if (card.canPlayOn(topCard)) {
-                if (card.suit == Card.Suit.WILD) {
-                    ActionReport result = game.playCard(realPlayer, card, getMostCommonSuit(realPlayer), shoutsMino);
-                    if (!result.isFail) return result;
-                } else {
-                    ActionReport result = game.playCard(realPlayer, card, null, shoutsMino);
-                    if (!result.isFail) return result;
-                }
-            }
+        if (best != null) {
+            PlayContext.PlayChoices choices = defaultChoices(game, realPlayer, best);
+            choices.useFlex = bestFlex;
+            choices.shout = shoutsMino;
+            ActionReport result = game.playCard(realPlayer, best.uid, choices);
+            if (!result.isFail) return result;
         }
 
         // We're out of option
         return game.playNoCard(realPlayer);
-    }
-
-    private Card.Suit getMostCommonSuit(CardPlayer realPlayer) {
-        int[] suitCount = new int[4];
-        for (Card handCard : realPlayer.hand) {
-            if (handCard.suit != Card.Suit.WILD) {
-                suitCount[handCard.suit.ordinal()]++;
-            }
-        }
-        Card.Suit mostCommonSuit = Card.Suit.values()[new Random().nextInt(4)];
-        for (int i = 1; i < 4; i++) {
-            if (suitCount[i] > suitCount[mostCommonSuit.ordinal()]) {
-                mostCommonSuit = Card.Suit.values()[i];
-            }
-        }
-        return mostCommonSuit;
     }
 
     public void useConfigNbt(NBTTagCompound aiConfig) {

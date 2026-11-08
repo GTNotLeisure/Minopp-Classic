@@ -1,0 +1,6 @@
+{
+  "themes": [
+    { "id": "classic", "name": "Classic" },
+    { "id": "winter", "name": "Winter", "fallback": "classic" }
+  ]
+}

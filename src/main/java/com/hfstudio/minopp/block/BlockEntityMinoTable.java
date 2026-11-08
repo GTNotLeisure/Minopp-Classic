@@ -1,12 +1,10 @@
 package com.hfstudio.minopp.block;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -19,6 +17,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.world.WorldServer;
@@ -29,15 +28,16 @@ import com.hfstudio.minopp.effect.EffectEvents;
 import com.hfstudio.minopp.effect.SeatActionTakenEffectEvent;
 import com.hfstudio.minopp.game.ActionMessage;
 import com.hfstudio.minopp.game.ActionReport;
-import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.AutoPlayer;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
-import com.hfstudio.minopp.util.Direction;
 import com.hfstudio.minopp.util.NbtUtil;
 import com.hfstudio.minopp.util.Pair;
 import com.hfstudio.minopp.util.Vec3d;
@@ -45,7 +45,10 @@ import com.hfstudio.minopp.util.WorldUtil;
 
 public class BlockEntityMinoTable extends TileEntity {
 
-    public Map<Direction, CardPlayer> players = new EnumMap<>(Direction.class);
+    public static final int MAX_SEATS = 20;
+
+    /** Seats around the table; index 0 is north, increasing clockwise. Only the first {@link #seatCount()} are used. */
+    public final CardPlayer[] seats = new CardPlayer[MAX_SEATS];
     public CardGame game = null;
     public ActionMessage state = ActionMessage.NO_GAME;
     public List<Pair<ActionMessage, Long>> clientMessageList = new ArrayList<>();
@@ -56,30 +59,29 @@ public class BlockEntityMinoTable extends TileEntity {
     public UUID lastPlayedByUuid = null;
     public int lastDiscardSize = 0;
     public Map<UUID, Integer> lastHandSizes = new HashMap<>();
+    private int lastHandMoveCounter = 0;
 
-    // game rules
-    public Map<String, Boolean> rules = new HashMap<>();
+    /** Rules, packs and card counts of this table. */
+    public final TableConfig config = new TableConfig();
 
     public boolean getRule(String name, boolean defaultValue) {
-        Boolean value = rules.get(name);
-        return value == null ? defaultValue : value;
+        return GameRules.get(name) == null ? defaultValue : config.getBool(name);
     }
 
-    public static final String RULE_JUMP_IN = "allowJumpIn";
-    public static final String RULE_STACKING = "allowStacking";
-    public static final String RULE_SEVEN0 = "allowSeven0";
+    public static final String RULE_JUMP_IN = GameRules.JUMP_IN;
+    public static final String RULE_STACKING = GameRules.STACKING;
+    public static final String RULE_SEVEN0 = GameRules.SEVEN_ZERO;
 
-    public static final List<Direction> PLAYER_ORDER = List
-        .of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST);
+    public int seatCount() {
+        return config.getInt(GameRules.MAX_PLAYERS);
+    }
 
-    public Direction getPlayerDirection(UUID uuid) {
-        if (uuid == null) return null;
-        for (Map.Entry<Direction, CardPlayer> entry : players.entrySet()) {
-            if (entry.getValue() != null && uuid.equals(entry.getValue().uuid)) {
-                return entry.getKey();
-            }
+    public int getPlayerSeat(UUID uuid) {
+        if (uuid == null) return -1;
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (seats[i] != null && uuid.equals(seats[i].uuid)) return i;
         }
-        return null;
+        return -1;
     }
 
     public static class HandSwapAnimation {
@@ -114,19 +116,21 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public static final List<HandSwapAnimation> activeAnimations = new ArrayList<>();
 
-    public static Vec3d getSeatLocalPos(Direction dir) {
-        return switch (dir) {
-            case NORTH -> new Vec3d(1.5, 0.94, 0);
-            case SOUTH -> new Vec3d(1.5, 0.94, 3);
-            case WEST -> new Vec3d(0, 0.94, 1.5);
-            case EAST -> new Vec3d(3, 0.94, 1.5);
-        };
+    /** Angle of a seat in radians, 0 = north, clockwise seen from above. */
+    public static double seatAngle(int seat, int seatCount) {
+        return seat * Math.PI * 2 / Math.max(1, seatCount);
     }
 
-    public BlockEntityMinoTable() {
-        for (Direction direction : PLAYER_ORDER) {
-            players.put(direction, null);
-        }
+    /** Position of a seat on the edge of the 3x3 table, relative to the core block. */
+    public static Vec3d getSeatLocalPos(int seat, int seatCount) {
+        double a = seatAngle(seat, seatCount);
+        double dx = Math.sin(a), dz = -Math.cos(a);
+        double scale = 1.5 / Math.max(Math.abs(dx), Math.abs(dz));
+        return new Vec3d(1.5 + dx * scale, 0.94, 1.5 + dz * scale);
+    }
+
+    public Vec3d getSeatLocalPos(int seat) {
+        return getSeatLocalPos(seat, seatCount());
     }
 
     public BlockPos getBlockPos() {
@@ -141,27 +145,15 @@ public class BlockEntityMinoTable extends TileEntity {
 
     protected void saveAdditional(NBTTagCompound compoundTag) {
         NBTTagCompound playersTag = new NBTTagCompound();
-        for (Map.Entry<Direction, CardPlayer> entry : players.entrySet()) {
-            if (entry.getValue() != null) {
-                playersTag.setTag(
-                    entry.getKey()
-                        .getSerializedName(),
-                    entry.getValue()
-                        .toTag());
-            }
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (seats[i] != null) playersTag.setTag("seat" + i, seats[i].toTag());
         }
-        compoundTag.setTag("players", playersTag);
-        if (game != null) {
-            compoundTag.setTag("game", game.toTag());
-        }
+        compoundTag.setTag("seats", playersTag);
+        if (game != null) compoundTag.setTag("game", game.toTag());
         compoundTag.setTag("state", state.toTag());
         if (award != null) compoundTag.setTag("award", award.writeToNBT(new NBTTagCompound()));
         compoundTag.setBoolean("demo", demo);
-        NBTTagCompound rulesTag = new NBTTagCompound();
-        for (Map.Entry<String, Boolean> entry : rules.entrySet()) {
-            rulesTag.setBoolean(entry.getKey(), entry.getValue());
-        }
-        compoundTag.setTag("rules", rulesTag);
+        compoundTag.setTag("config", config.toTag());
         compoundTag.setBoolean("gameEnd", gameEnd);
         if (lastPlayedByUuid != null) NbtUtil.putUUID(compoundTag, "lastPlayedBy", lastPlayedByUuid);
         compoundTag.setInteger("lastDiscardSize", lastDiscardSize);
@@ -170,13 +162,10 @@ public class BlockEntityMinoTable extends TileEntity {
     @Override
     public void readFromNBT(NBTTagCompound compoundTag) {
         super.readFromNBT(compoundTag);
-        NBTTagCompound playersTag = compoundTag.getCompoundTag("players");
-        for (Direction direction : PLAYER_ORDER) {
-            if (playersTag.hasKey(direction.getSerializedName())) {
-                players.put(direction, new CardPlayer(playersTag.getCompoundTag(direction.getSerializedName())));
-            } else {
-                players.put(direction, null);
-            }
+        NBTTagCompound playersTag = compoundTag.getCompoundTag("seats");
+        for (int i = 0; i < MAX_SEATS; i++) {
+            seats[i] = playersTag.hasKey("seat" + i) ? new CardPlayer(playersTag.getCompoundTag("seat" + i)) : null;
+            if (seats[i] != null) seats[i].seat = i;
         }
         CardGame previousGame = game;
         if (compoundTag.hasKey("game")) {
@@ -197,29 +186,18 @@ public class BlockEntityMinoTable extends TileEntity {
                 entry -> entry.getFirst()
                     .type() == ActionMessage.Type.FAIL);
         }
-        if (compoundTag.hasKey("award")) {
-            award = ItemStack.loadItemStackFromNBT(compoundTag.getCompoundTag("award"));
-        } else {
-            award = null;
-        }
-        if (compoundTag.hasKey("demo", 1)) {
-            demo = compoundTag.getBoolean("demo");
-        } else {
-            demo = false;
-        }
-        rules.clear();
-        if (compoundTag.hasKey("rules")) {
-            NBTTagCompound rulesTag = compoundTag.getCompoundTag("rules");
-            for (Object key : rulesTag.func_150296_c()) {
-                rules.put((String) key, rulesTag.getBoolean((String) key));
-            }
+        award = compoundTag.hasKey("award") ? ItemStack.loadItemStackFromNBT(compoundTag.getCompoundTag("award"))
+            : null;
+        demo = compoundTag.hasKey("demo", 1) && compoundTag.getBoolean("demo");
+        if (compoundTag.hasKey("config")) {
+            config.fromTag(compoundTag.getCompoundTag("config"));
+        } else if (compoundTag.hasKey("rules")) {
+            // Table saved by the 1:1 port: plain rules map
+            NBTTagCompound legacy = new NBTTagCompound();
+            legacy.setTag("rules", compoundTag.getCompoundTag("rules"));
+            config.fromTag(legacy);
         }
         gameEnd = compoundTag.getBoolean("gameEnd");
-
-        // Default values for missing rules
-        rules.putIfAbsent(RULE_JUMP_IN, true);
-        rules.putIfAbsent(RULE_STACKING, true);
-        rules.putIfAbsent(RULE_SEVEN0, false);
 
         // used for animation tracking
         lastPlayedByUuid = NbtUtil.hasUUID(compoundTag, "lastPlayedBy") ? NbtUtil.getUUID(compoundTag, "lastPlayedBy")
@@ -228,10 +206,9 @@ public class BlockEntityMinoTable extends TileEntity {
         // intialise tracking values
         if (game != null && previousGame == null) {
             lastDiscardSize = game.discardDeck.size();
+            lastHandMoveCounter = game.handMoveCounter;
             lastHandSizes.clear();
-            for (CardPlayer p : game.players) {
-                lastHandSizes.put(p.uuid, p.hand.size());
-            }
+            for (CardPlayer p : game.players) lastHandSizes.put(p.uuid, p.hand.size());
         }
 
         // Animation detection
@@ -248,99 +225,109 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     private void detectAnimations() {
-        boolean isHandSwapPlay = game.topCard != null && (game.topCard.number == 0 || game.topCard.number == 7)
-            && game.discardDeck.size() > lastDiscardSize
-            && getRule(RULE_SEVEN0, false);
-
-        // 0 card animate
-        if (isHandSwapPlay && game.topCard.number == 0 && game.topCard.family == Card.Family.NUMBER) {
-            List<Direction> occupiedOrder = PLAYER_ORDER.stream()
-                .filter(d -> players.get(d) != null)
-                .collect(Collectors.toList());
-            int occupiedSize = occupiedOrder.size();
-            for (int i = 0; i < occupiedSize; i++) {
-                Direction from = occupiedOrder.get(i);
-                Direction to = occupiedOrder
-                    .get(game.isAntiClockwise ? (i - 1 + occupiedSize) % occupiedSize : (i + 1) % occupiedSize);
-                activeAnimations.add(new HandSwapAnimation(getSeatLocalPos(from), getSeatLocalPos(to), 5));
+        boolean handsMoved = game.handMoveCounter != lastHandMoveCounter;
+        lastHandMoveCounter = game.handMoveCounter;
+        if (handsMoved) {
+            List<CardPlayer> active = game.activePlayers();
+            switch (game.handMoveKind) {
+                case 0 -> { // 0 card: everyone passes their hand on
+                    int n = active.size();
+                    for (int i = 0; i < n; i++) {
+                        CardPlayer from = active.get(i);
+                        CardPlayer to = active.get(game.isAntiClockwise ? (i - 1 + n) % n : (i + 1) % n);
+                        activeAnimations
+                            .add(new HandSwapAnimation(getSeatLocalPos(from.seat), getSeatLocalPos(to.seat), 5));
+                    }
+                }
+                case 7 -> { // 7 card / forced swap
+                    CardPlayer fromP = game.deAmputate(game.lastSwapFromUuid);
+                    CardPlayer toP = game.deAmputate(game.lastSwapToUuid);
+                    if (fromP != null && toP != null) {
+                        activeAnimations.add(
+                            new HandSwapAnimation(
+                                getSeatLocalPos(fromP.seat),
+                                getSeatLocalPos(toP.seat),
+                                toP.hand.size()));
+                        activeAnimations.add(
+                            new HandSwapAnimation(
+                                getSeatLocalPos(toP.seat),
+                                getSeatLocalPos(fromP.seat),
+                                fromP.hand.size()));
+                    }
+                }
+                case 1 -> { // shuffle: everything goes to the middle
+                    for (CardPlayer p : active) {
+                        activeAnimations
+                            .add(new HandSwapAnimation(getSeatLocalPos(p.seat), new Vec3d(1.5, 0.94, 1.5), 4));
+                    }
+                }
+                default -> {}
             }
-        }
-
-        // 7 card animate
-        if (isHandSwapPlay && game.topCard.number == 7
-            && game.lastSwapFromUuid != null
-            && game.lastSwapToUuid != null) {
-            Direction fromDir = getPlayerDirection(game.lastSwapFromUuid);
-            Direction toDir = getPlayerDirection(game.lastSwapToUuid);
-            if (fromDir != null && toDir != null) {
-                CardPlayer fromP = game.deAmputate(game.lastSwapFromUuid);
-                CardPlayer toP = game.deAmputate(game.lastSwapToUuid);
-                int fromCount = toP != null ? toP.hand.size() : 5;
-                int toCount = fromP != null ? fromP.hand.size() : 5;
-                activeAnimations
-                    .add(new HandSwapAnimation(getSeatLocalPos(fromDir), getSeatLocalPos(toDir), fromCount));
-                activeAnimations.add(new HandSwapAnimation(getSeatLocalPos(toDir), getSeatLocalPos(fromDir), toCount));
-            }
-        }
-
-        // Draw animation - skip entirely if hand swap just happened
-        if (!isHandSwapPlay) {
+        } else {
+            // Draw animation - skip entirely if hands just moved
             for (CardPlayer p : game.players) {
                 if (p.uuid.equals(lastPlayedByUuid)) continue;
                 Integer prevBoxed = lastHandSizes.get(p.uuid);
                 int prev = prevBoxed == null ? 0 : prevBoxed;
                 int curr = p.hand.size();
                 if (curr > prev) {
-                    Direction dir = getPlayerDirection(p.uuid);
-                    if (dir != null) {
-                        activeAnimations
-                            .add(new HandSwapAnimation(new Vec3d(0.5, 0.94, 0.5), getSeatLocalPos(dir), curr - prev));
-                    }
+                    activeAnimations
+                        .add(new HandSwapAnimation(new Vec3d(0.5, 0.94, 0.5), getSeatLocalPos(p.seat), curr - prev));
                 }
             }
         }
 
         lastDiscardSize = game.discardDeck.size();
         lastHandSizes.clear();
-        for (CardPlayer p : game.players) {
-            lastHandSizes.put(p.uuid, p.hand.size());
-        }
+        for (CardPlayer p : game.players) lastHandSizes.put(p.uuid, p.hand.size());
     }
 
     public List<CardPlayer> getPlayersList() {
         List<CardPlayer> playersList = new ArrayList<>();
-        for (Direction direction : PLAYER_ORDER) {
-            if (players.get(direction) != null) {
-                playersList.add(players.get(direction));
-            }
+        int n = seatCount();
+        for (int i = 0; i < n; i++) {
+            if (seats[i] != null) playersList.add(seats[i]);
         }
         return playersList;
     }
 
-    public List<Direction> getEmptyDirections() {
-        List<Direction> emptyDirections = new ArrayList<>();
-        for (Direction direction : PLAYER_ORDER) {
-            if (players.get(direction) == null) {
-                emptyDirections.add(direction);
-            }
-        }
-        return emptyDirections;
-    }
-
     private static final int PLAYER_RANGE = 20;
 
+    /** Seats a player at the free seat closest to where they stand. */
     public void joinPlayerToTable(CardPlayer cardPlayer, Vec3d playerPos) {
         if (game != null) return;
-        double cx = xCoord + 1.5, cz = zCoord + 1.5;
-        double ox = playerPos.x - cx, oz = playerPos.z - cz;
-        Direction playerDirection = Direction.fromYRot(Math.atan2(oz, ox) * 180 / Math.PI - 90);
-        for (Direction checkDir : PLAYER_ORDER) {
-            if (cardPlayer.equals(players.get(checkDir))) {
-                players.put(checkDir, null);
+        int n = seatCount();
+        double dx = playerPos.x - (xCoord + 1.5), dz = playerPos.z - (zCoord + 1.5);
+        double angle = Math.atan2(dx, -dz);
+        if (angle < 0) angle += Math.PI * 2;
+        int preferred = (int) Math.round(angle / (Math.PI * 2 / n)) % n;
+
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (cardPlayer.equals(seats[i])) seats[i] = null;
+        }
+        int chosen = -1;
+        for (int d = 0; d <= n / 2 && chosen < 0; d++) {
+            for (int sign : new int[] { 1, -1 }) {
+                int idx = ((preferred + sign * d) % n + n) % n;
+                if (seats[idx] == null) {
+                    chosen = idx;
+                    break;
+                }
             }
         }
-        players.put(playerDirection, cardPlayer);
+        if (chosen < 0) {
+            // Table full: take the preferred seat like the original did (replacing its occupant)
+            chosen = preferred;
+        }
+        cardPlayer.seat = chosen;
+        seats[chosen] = cardPlayer;
         sync();
+    }
+
+    /** Applies a seat count change, removing players from seats that no longer exist. */
+    public void onSeatCountChanged() {
+        int n = seatCount();
+        for (int i = n; i < MAX_SEATS; i++) seats[i] = null;
     }
 
     public void startGame(CardPlayer initiator) {
@@ -365,31 +352,11 @@ public class BlockEntityMinoTable extends TileEntity {
                     if (cardPlayer.uuid.equals(
                         mcPlayer.getGameProfile()
                             .getId())) {
-                        ItemStack handCard = new ItemStack(Mino.ITEM_HAND_CARDS);
-                        ItemDataUtils.setCardGameBinding(handCard, getBlockPos(), cardPlayer.uuid);
-                        InventoryPlayer inv = mcPlayer.inventory;
-                        if (inv.currentItem < InventoryPlayer.getHotbarSize() && inv.getCurrentItem() == null) {
-                            inv.setInventorySlotContents(inv.currentItem, handCard);
-                            playerFound = true;
-                        } else {
-                            boolean addSuccessful = inv.addItemStackToInventory(handCard);
-                            if (!addSuccessful) {
-                                EntityItem itemEntity = mcPlayer.dropPlayerItemWithRandomChoice(handCard, false);
-                                if (itemEntity != null) {
-                                    itemEntity.delayBeforeCanPickup = 0;
-                                    itemEntity.func_145797_a(mcPlayer.getCommandSenderName());
-                                }
-                            }
-                            mcPlayer
-                                .addChatComponentMessage(Chat.translatable("game.minopp.play.hand_card_in_inventory"));
-                            playerFound = true;
-                        }
-                        mcPlayer.inventoryContainer.detectAndSendChanges();
-                    }
-                } else {
-                    if (cardPlayer.uuid.equals(entity.getUniqueID())) {
+                        giveHandCards(mcPlayer, cardPlayer);
                         playerFound = true;
                     }
+                } else if (cardPlayer.uuid.equals(entity.getUniqueID())) {
+                    playerFound = true;
                 }
                 if (playerFound) break;
             }
@@ -401,18 +368,38 @@ public class BlockEntityMinoTable extends TileEntity {
             }
         }
 
-        players.values()
-            .forEach(p -> {
-                if (p != null) {
-                    p.hand.clear();
-                    p.hasShoutedMino = false;
-                }
-            });
-        game = new CardGame(getPlayersList());
+        List<CardPlayer> gamePlayers = new ArrayList<>();
+        for (CardPlayer p : playerList) {
+            p.hand.clear();
+            p.hasShoutedMino = false;
+            gamePlayers.add(p.seatCopy());
+        }
+        game = new CardGame(gamePlayers);
         game.tableEntity = this;
-        state = game.initiate(initiator, 7).state;
+        state = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND)).state;
+        lastHandMoveCounter = 0;
         sendSeatActionTakenToAll();
         sync();
+    }
+
+    private void giveHandCards(EntityPlayer mcPlayer, CardPlayer cardPlayer) {
+        ItemStack handCard = new ItemStack(Mino.ITEM_HAND_CARDS);
+        ItemDataUtils.setCardGameBinding(handCard, getBlockPos(), cardPlayer.uuid);
+        InventoryPlayer inv = mcPlayer.inventory;
+        if (inv.currentItem < InventoryPlayer.getHotbarSize() && inv.getCurrentItem() == null) {
+            inv.setInventorySlotContents(inv.currentItem, handCard);
+        } else {
+            boolean addSuccessful = inv.addItemStackToInventory(handCard);
+            if (!addSuccessful) {
+                EntityItem itemEntity = mcPlayer.dropPlayerItemWithRandomChoice(handCard, false);
+                if (itemEntity != null) {
+                    itemEntity.delayBeforeCanPickup = 0;
+                    itemEntity.func_145797_a(mcPlayer.getCommandSenderName());
+                }
+            }
+            mcPlayer.addChatComponentMessage(Chat.translatable("game.minopp.play.hand_card_in_inventory"));
+        }
+        mcPlayer.inventoryContainer.detectAndSendChanges();
     }
 
     public void destroyGame(CardPlayer initiator) {
@@ -427,39 +414,29 @@ public class BlockEntityMinoTable extends TileEntity {
                 ItemStack invItem = items[i];
                 if (invItem == null || invItem.getItem() != Mino.ITEM_HAND_CARDS) continue;
                 BlockPos tablePos = ItemDataUtils.getBlockPos(invItem);
-                if (tablePos != null && tablePos.equals(getBlockPos())) {
-                    items[i] = null;
-                }
+                if (tablePos != null && tablePos.equals(getBlockPos())) items[i] = null;
             }
             mcPlayer.inventoryContainer.detectAndSendChanges();
         }
 
-        for (CardPlayer cardPlayer : players.values()) {
-            if (cardPlayer == null) continue;
+        for (CardPlayer cardPlayer : getPlayersList()) {
             Entity entity = WorldUtil.getEntityByUUID(worldObj, cardPlayer.uuid);
             if (entity instanceof EntityLivingBase livingEntity && !(entity instanceof EntityPlayer)) {
                 ItemStack stack = livingEntity.getHeldItem();
-                if (stack != null && stack.getItem() == Mino.ITEM_HAND_CARDS) {
+                if (stack != null && stack.getItem() == Mino.ITEM_HAND_CARDS)
                     livingEntity.setCurrentItemOrArmor(0, null);
-                }
             }
+            cardPlayer.hand.clear();
+            cardPlayer.hasShoutedMino = false;
         }
-
-        players.values()
-            .forEach(p -> {
-                if (p != null) {
-                    p.hand.clear();
-                    p.hasShoutedMino = false;
-                }
-            });
-        state = ActionReport.builder(initiator)
+        if (initiator != null) state = ActionReport.builder(initiator)
             .gameDestroyed().state;
         sync();
     }
 
     public void resetSeats(CardPlayer initiator) {
         sendSeatActionTakenToAll();
-        players.replaceAll((d, v) -> null);
+        for (int i = 0; i < MAX_SEATS; i++) seats[i] = null;
         state = ActionReport.builder(initiator)
             .panic(Chat.translatable("game.minopp.play.seats_reset", initiator.name)).state;
         sync();
@@ -467,9 +444,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public void handleActionResult(ActionReport result, CardPlayer cardPlayer, EntityPlayerMP player) {
         if (result != null) {
-            if (result.shouldDestroyGame) {
-                destroyGame(cardPlayer);
-            }
+            if (result.shouldDestroyGame) destroyGame(cardPlayer);
             if (result.state != null) state = result.state;
             for (ActionMessage message : result.messages) {
                 switch (message.type()) {
@@ -491,26 +466,26 @@ public class BlockEntityMinoTable extends TileEntity {
                     double dy = serverPlayer.posY - (tableCenterPos.y + 0.5);
                     double dz = serverPlayer.posZ - (tableCenterPos.z + 0.5);
                     if (dx * dx + dy * dy + dz * dz <= EffectEvents.EFFECT_RADIUS * EffectEvents.EFFECT_RADIUS) {
+                        UUID id = serverPlayer.getGameProfile()
+                            .getId();
                         boolean playerPartOfGame = getPlayersList().stream()
-                            .anyMatch(
-                                p -> p.uuid.equals(
-                                    serverPlayer.getGameProfile()
-                                        .getId()));
+                            .anyMatch(p -> p.uuid.equals(id));
                         S2CEffectListPacket.sendS2C(serverPlayer, result.effects, tableCenterPos, playerPartOfGame);
                     }
                 }
             }
-
-            // Auto-resolve draw penalty for next player if they can't stack
-            if (game != null && game.drawCount > 0) {
-                CardPlayer penalisedPlayer = game.players.get(game.currentPlayerIndex);
-                ActionReport penaltyReport = game.resolveDrawPenalty();
-                if (penaltyReport != null) {
-                    handleActionResult(penaltyReport, penalisedPlayer, null);
-                }
-            }
         }
         sync();
+    }
+
+    @Override
+    public void updateEntity() {
+        if (worldObj.isRemote || game == null || game.decisions.isEmpty()) return;
+        if (worldObj.getTotalWorldTime() % 10 != 0) return;
+        MinecraftServer server = MinecraftServer.getServer();
+        ActionReport report = game
+            .tickDecisions(System.currentTimeMillis(), uuid -> AutoPlayer.isOnlinePlayer(server, uuid));
+        if (report != null) handleActionResult(report, game != null ? game.currentPlayer() : null, null);
     }
 
     private void sendMessageToAll(ActionMessage message) {
@@ -548,11 +523,6 @@ public class BlockEntityMinoTable extends TileEntity {
     @Override
     public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
         readFromNBT(pkt.func_148857_g());
-    }
-
-    @Override
-    public boolean canUpdate() {
-        return false;
     }
 
     @Override

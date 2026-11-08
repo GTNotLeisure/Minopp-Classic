@@ -44,6 +44,7 @@ public final class MinoNetwork {
         registerNetworkReceiver(C2SPlayCardPacket.ID, C2SPlayCardPacket::handleC2S);
         registerNetworkReceiver(C2SSeatControlPacket.ID, C2SSeatControlPacket::handleC2S);
         registerNetworkReceiver(C2SAutoPlayerConfigPacket.ID, C2SAutoPlayerConfigPacket::handleC2S);
+        registerNetworkReceiver(ThemeSyncPackets.C2S_ID, ThemeSyncPackets::handleC2S);
     }
 
     public static void registerNetworkReceiver(String id, C2SPacketHandler handler) {

@@ -1,0 +1,209 @@
+package com.hfstudio.minopp.game;
+
+/**
+ * Definition of one kind of card. Card types are registered in {@link CardTypes}; which of them end up in a deck (and
+ * how many) is decided by the {@link CardPack}s and per-table overrides in {@link TableConfig}.
+ */
+public final class CardType {
+
+    /** What the player playing this card must choose on the client. */
+    public enum Choice {
+
+        NONE,
+        /** Choose the next color. */
+        COLOR,
+        /** Choose another player. */
+        TARGET,
+        /** Choose the next color, then another player. */
+        COLOR_AND_TARGET,
+        /** Choose two other players. */
+        TWO_TARGETS,
+        /** Choose the next color, then two other players. */
+        COLOR_AND_TWO_TARGETS;
+
+        public boolean needsColor() {
+            return this == COLOR || this == COLOR_AND_TARGET || this == COLOR_AND_TWO_TARGETS;
+        }
+
+        public int targetCount() {
+            return switch (this) {
+                case TARGET, COLOR_AND_TARGET -> 1;
+                case TWO_TARGETS, COLOR_AND_TWO_TARGETS -> 2;
+                default -> 0;
+            };
+        }
+    }
+
+    @FunctionalInterface
+    public interface Effect {
+
+        void apply(PlayContext ctx);
+    }
+
+    @FunctionalInterface
+    public interface Condition {
+
+        boolean test(CardGame game, CardPlayer player, CardFace face);
+    }
+
+    public final String id;
+    public final String packId;
+    public final boolean wild;
+    public final boolean numbered;
+    /** Cards with the same match key match each other by symbol (e.g. Flex Skip on Skip). */
+    public final String matchKey;
+    public final String shortLabel;
+    /** Texture symbol id. */
+    public final String symbol;
+    public final int sortOrder;
+    /** Amount drawn by the victim; > 0 makes this a stackable draw card. */
+    public final int drawValue;
+    /** All-wild cards keep the current color instead of choosing a new one. */
+    public final boolean keepsColor;
+    public final Choice choice;
+    public final Choice flexChoice;
+    public final Effect effect;
+    /** Effect of the flex side (Flex cards only), null otherwise. */
+    public final Effect flexEffect;
+    /** Extra condition to be playable at all (e.g. Rebound only answers a pending draw). */
+    public final Condition condition;
+    /** Whether this card may be played while a draw penalty is pending (besides draw cards). */
+    public final boolean answersDraw;
+    public final int points;
+
+    private CardType(Builder b) {
+        this.id = b.id;
+        this.packId = b.packId;
+        this.wild = b.wild;
+        this.numbered = b.numbered;
+        this.matchKey = b.matchKey == null ? b.id : b.matchKey;
+        this.shortLabel = b.shortLabel == null ? "" : b.shortLabel;
+        this.symbol = b.symbol == null ? b.id : b.symbol;
+        this.sortOrder = b.sortOrder;
+        this.drawValue = b.drawValue;
+        this.keepsColor = b.keepsColor;
+        this.choice = b.choice;
+        this.flexChoice = b.flexChoice;
+        this.effect = b.effect;
+        this.flexEffect = b.flexEffect;
+        this.condition = b.condition;
+        this.answersDraw = b.answersDraw;
+        this.points = b.points;
+    }
+
+    public boolean isDraw() {
+        return drawValue > 0;
+    }
+
+    public boolean hasFlex() {
+        return flexEffect != null;
+    }
+
+    public Choice choiceFor(boolean flex) {
+        return flex && hasFlex() ? flexChoice : choice;
+    }
+
+    public static Builder builder(String id, String packId) {
+        return new Builder(id, packId);
+    }
+
+    public static final class Builder {
+
+        private final String id;
+        private final String packId;
+        private boolean wild, numbered, keepsColor, answersDraw;
+        private String matchKey, shortLabel, symbol;
+        private int sortOrder = 100, drawValue, points = 20;
+        private Choice choice = Choice.NONE, flexChoice = Choice.NONE;
+        private Effect effect = ctx -> {};
+        private Effect flexEffect;
+        private Condition condition;
+
+        private Builder(String id, String packId) {
+            this.id = id;
+            this.packId = packId;
+        }
+
+        public Builder wild() {
+            this.wild = true;
+            this.choice = Choice.COLOR;
+            this.points = 50;
+            return this;
+        }
+
+        public Builder allWild() {
+            this.wild = true;
+            this.keepsColor = true;
+            this.choice = Choice.NONE;
+            this.points = 50;
+            return this;
+        }
+
+        public Builder numbered() {
+            this.numbered = true;
+            this.points = 0;
+            this.sortOrder = 0;
+            return this;
+        }
+
+        public Builder match(String matchKey) {
+            this.matchKey = matchKey;
+            return this;
+        }
+
+        public Builder label(String shortLabel) {
+            this.shortLabel = shortLabel;
+            return this;
+        }
+
+        public Builder symbol(String symbol) {
+            this.symbol = symbol;
+            return this;
+        }
+
+        public Builder sort(int sortOrder) {
+            this.sortOrder = sortOrder;
+            return this;
+        }
+
+        public Builder draw(int drawValue) {
+            this.drawValue = drawValue;
+            return this;
+        }
+
+        public Builder choice(Choice choice) {
+            this.choice = choice;
+            return this;
+        }
+
+        public Builder effect(Effect effect) {
+            this.effect = effect;
+            return this;
+        }
+
+        public Builder flex(Choice flexChoice, Effect flexEffect) {
+            this.flexChoice = flexChoice;
+            this.flexEffect = flexEffect;
+            return this;
+        }
+
+        public Builder condition(Condition condition) {
+            this.condition = condition;
+            return this;
+        }
+
+        public Builder answersDraw() {
+            this.answersDraw = true;
+            return this;
+        }
+
+        public Builder points(int points) {
+            this.points = points;
+            return this;
+        }
+
+        public CardType build() {
+            return new CardType(this);
+        }
+    }
+}
