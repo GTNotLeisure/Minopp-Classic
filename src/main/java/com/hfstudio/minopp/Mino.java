@@ -159,11 +159,11 @@ public final class Mino {
 
     @SubscribeEvent
     public void onChunkWatch(ChunkWatchEvent.Watch event) {
-        if (ServerConfig.gameplay.allowPeeking) return;
         EntityPlayerMP player = event.player;
         Chunk chunk = player.worldObj.getChunkFromChunkCoords(event.chunk.chunkXPos, event.chunk.chunkZPos);
         for (Object te : chunk.chunkTileEntityMap.values()) {
-            if (te instanceof BlockEntityMinoTable table && table.game != null) table.sendTo(player);
+            if (te instanceof BlockEntityMinoTable table && table.game != null && !table.peekAll())
+                table.sendTo(player);
         }
     }
 

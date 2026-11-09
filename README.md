@@ -186,8 +186,10 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 
 | Option | Default | Effect |
 |:-------|:-------:|:-------|
-| `allowPeeking` | `false` | Everyone can see every hand. Off by default; hands are sent to their owners only. |
-| `everyoneCanManageBots` | `false` | Let every player add and remove bots. When off, only operators (and the single-player host) can. |
+| `allowPeeking` | `true` | Lets rooms turn on their "See Everyone's Hand" rule (off by default per room). When false, no room can, and other players' cards are never sent to clients. |
+| `everyoneCanManageBots` | `false` | Let every player add and remove bots. When off, only the room host and operators can. |
+
+**Room permissions:** the player who places a table hosts its room; while they are offline the first online player seated there takes over. Only the host and operators (or the single-player world owner) can start or stop games, change rules, packs and card counts, reset seats, set bots' teams and break the table. Anyone can take or leave a seat and pick their own team.
 
 <hr>
 

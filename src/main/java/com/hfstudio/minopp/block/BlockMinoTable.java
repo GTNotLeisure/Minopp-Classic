@@ -265,6 +265,12 @@ public class BlockMinoTable extends Block {
         super.onBlockPlacedBy(level, x, y, z, placer, itemStack);
         if (!level.isRemote) {
             level.setBlockMetadataWithNotify(x, y, z, 0, 2);
+            if (placer instanceof EntityPlayer owner
+                && level.getTileEntity(x, y, z) instanceof BlockEntityMinoTable te) {
+                te.ownerUuid = owner.getGameProfile()
+                    .getId();
+                te.ownerName = owner.getCommandSenderName();
+            }
             // Place silently first so the integrity check in onNeighborBlockChange doesn't see a half-built table
             for (int i = 1; i < 9; i++) {
                 TablePartType thisPart = TablePartType.values()[i];
@@ -288,10 +294,29 @@ public class BlockMinoTable extends Block {
         }
     }
 
+    // only the room's host and operators may take a table apart
+    @Override
+    public boolean removedByPlayer(World level, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (!level.isRemote) {
+            BlockPos core = getCore(level, x, y, z);
+            if (level.getTileEntity(core.x, core.y, core.z) instanceof BlockEntityMinoTable te
+                && !te.canManage(player)) {
+                player.addChatComponentMessage(
+                    Chat.translatable("game.minopp.play.host_only", te.hostName.isEmpty() ? "?" : te.hostName));
+                te.sync();
+                return false;
+            }
+        }
+        return super.removedByPlayer(level, player, x, y, z, willHarvest);
+    }
+
     @Override
     public void onBlockHarvested(World level, int x, int y, int z, int meta, EntityPlayer player) {
-        if (!level.isRemote && player.capabilities.isCreativeMode) {
-            BlockPos firstPartPos = getCore(level, x, y, z);
+        BlockPos core = getCore(level, x, y, z);
+        boolean allowed = !(level.getTileEntity(core.x, core.y, core.z) instanceof BlockEntityMinoTable te)
+            || te.canManage(player);
+        if (!level.isRemote && player.capabilities.isCreativeMode && allowed) {
+            BlockPos firstPartPos = core;
             for (TablePartType thisPart : TablePartType.values()) {
                 int px = firstPartPos.x + thisPart.xOff, pz = firstPartPos.z + thisPart.zOff;
                 if (level.getBlock(px, firstPartPos.y, pz) == this) {

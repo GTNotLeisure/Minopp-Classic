@@ -188,6 +188,7 @@ public class SeatControlScreen extends GuiScreen {
             te.seatCount(),
             te.config.countDeckSize());
         if (te.game != null) sub = EnumChatFormatting.YELLOW + tr("gui.minopp.play.game_active");
+        if (!te.hostName.isEmpty()) sub += "   " + EnumChatFormatting.GOLD + tr("gui.minopp.seats.host", te.hostName);
         if (te.game == null && Teams.enabled(te.config)) {
             IChatComponent problem = teamProblem(te);
             sub += "   " + Teams.summary(te.getPlayersList(), Teams.count(te.config))

@@ -62,6 +62,57 @@ public class BlockEntityMinoTable extends TileEntity {
     public boolean demo = false;
     public boolean gameEnd = false;
     public UUID lastPlayedByUuid = null;
+    public UUID ownerUuid;
+    public String ownerName = "";
+    public UUID hostUuid;
+    public String hostName = "";
+
+    /**
+     * Who runs the room: the player who placed the table while they are online, otherwise the first online player
+     * seated at it. Null when nobody qualifies, and then anyone may manage it.
+     */
+    public UUID currentHost() {
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null) return hostUuid;
+        java.util.Set<UUID> online = new java.util.HashSet<>();
+        for (Object o : server.getConfigurationManager().playerEntityList) {
+            online.add(
+                ((EntityPlayerMP) o).getGameProfile()
+                    .getId());
+        }
+        if (ownerUuid != null && online.contains(ownerUuid)) {
+            hostName = ownerName;
+            return ownerUuid;
+        }
+        for (CardPlayer p : getPlayersList()) {
+            if (online.contains(p.uuid)) {
+                hostName = p.name;
+                return p.uuid;
+            }
+        }
+        hostName = "";
+        return null;
+    }
+
+    /** Operators and the single player world's owner can do anything; otherwise only the room's host can. */
+    public boolean canManage(EntityPlayer player) {
+        if (player.canCommandSenderUseCommand(2, "minopp")) return true;
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server != null && server.isSinglePlayer()
+            && player.getCommandSenderName()
+                .equals(server.getServerOwner()))
+            return true;
+        UUID host = currentHost();
+        return host == null || host.equals(
+            player.getGameProfile()
+                .getId());
+    }
+
+    /** Everyone sees every hand only when the server allows it and the room turned it on. */
+    public boolean peekAll() {
+        return ServerConfig.gameplay.allowPeeking && config.getBool(GameRules.PEEK_HANDS);
+    }
+
     public int lastDiscardSize = 0;
     public Map<UUID, Integer> lastHandSizes = new HashMap<>();
     private int lastHandMoveCounter = 0;
@@ -159,6 +210,11 @@ public class BlockEntityMinoTable extends TileEntity {
         compoundTag.setTag("config", config.toTag());
         compoundTag.setBoolean("gameEnd", gameEnd);
         if (lastPlayedByUuid != null) NbtUtil.putUUID(compoundTag, "lastPlayedBy", lastPlayedByUuid);
+        if (ownerUuid != null) NbtUtil.putUUID(compoundTag, "owner", ownerUuid);
+        compoundTag.setString("ownerName", ownerName);
+        if (worldObj != null && !worldObj.isRemote) hostUuid = currentHost();
+        if (hostUuid != null) NbtUtil.putUUID(compoundTag, "host", hostUuid);
+        compoundTag.setString("hostName", hostName);
         compoundTag.setInteger("lastDiscardSize", lastDiscardSize);
         NBTTagCompound scoresTag = new NBTTagCompound();
         for (Map.Entry<UUID, Integer> e : scores.entrySet()) {
@@ -235,6 +291,10 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         gameEnd = compoundTag.getBoolean("gameEnd");
 
+        ownerUuid = NbtUtil.hasUUID(compoundTag, "owner") ? NbtUtil.getUUID(compoundTag, "owner") : null;
+        ownerName = compoundTag.getString("ownerName");
+        hostUuid = NbtUtil.hasUUID(compoundTag, "host") ? NbtUtil.getUUID(compoundTag, "host") : null;
+        hostName = compoundTag.getString("hostName");
         lastPlayedByUuid = NbtUtil.hasUUID(compoundTag, "lastPlayedBy") ? NbtUtil.getUUID(compoundTag, "lastPlayedBy")
             : null;
 
@@ -780,7 +840,7 @@ public class BlockEntityMinoTable extends TileEntity {
     public void sync() {
         markDirty();
         if (worldObj == null) return;
-        if (worldObj.isRemote || ServerConfig.gameplay.allowPeeking || game == null) {
+        if (worldObj.isRemote || peekAll() || game == null) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
             return;
         }
@@ -808,8 +868,9 @@ public class BlockEntityMinoTable extends TileEntity {
     private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
         UUID viewer = player.getGameProfile()
             .getId();
-        boolean reveal = ServerConfig.gameplay.allowPeeking || game != null && game.isPeeking(viewer);
-        NBTTagCompound tag = reveal ? fullTag : HandMask.maskTableTag(fullTag, viewer);
+        boolean reveal = peekAll() || game != null && game.isPeeking(viewer);
+        NBTTagCompound tag = reveal ? fullTag
+            : HandMask.maskTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS));
         player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }
 
@@ -818,7 +879,7 @@ public class BlockEntityMinoTable extends TileEntity {
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
         // Sent to whoever loads the chunk: hide every hand; ChunkWatchEvent then sends the viewer their own hand
-        if (!ServerConfig.gameplay.allowPeeking) tag = HandMask.maskTableTag(tag, null);
+        if (!peekAll()) tag = HandMask.maskTableTag(tag, null, config.getBool(GameRules.FLIP_BACKS));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag);
     }
 

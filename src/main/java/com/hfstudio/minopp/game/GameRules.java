@@ -74,6 +74,8 @@ public final class GameRules {
     public static final String SHOUT_PENALTY = integer("shoutPenalty", Category.TABLE, 2, 0, 6);
     public static final String BALLOON_PENALTY = integer("balloonPenalty", Category.TABLE, 4, 1, 10);
     public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 10000);
+    public static final String PEEK_HANDS = bool("peekHands", Category.TABLE, false);
+    public static final String FLIP_BACKS = bool("flipBacks", Category.TABLE, true);
 
     private static final Map<String, int[]> PRESETS = Map.of(SCORE_TARGET, new int[] { 0, 200, 300, 500, 750, 1000 });
 

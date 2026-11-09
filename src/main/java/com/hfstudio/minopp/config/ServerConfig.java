@@ -19,15 +19,14 @@ public class ServerConfig {
     @Config.Comment("Gameplay settings (server side)")
     public static class Gameplay {
 
-        @Config.Comment("Allow peeking at other players' cards: when enabled, the inner side of the cards a player holds "
-            + "shows their faces, so you can look over their shoulder. When disabled the server never sends the faces of "
-            + "other players' cards (or the order of the deck) to clients, so they cannot be seen even with a modified "
-            + "client. Default is false.")
-        @Config.DefaultBoolean(false)
-        public boolean allowPeeking = false;
+        @Config.Comment("Let rooms turn on the \"see everyone's hand\" rule. Each table decides for itself (off by "
+            + "default); when this is false no table can, and the server never sends the faces of other players' cards "
+            + "(or the order of the deck) to clients, so they cannot be seen even with a modified client.")
+        @Config.DefaultBoolean(true)
+        public boolean allowPeeking = true;
 
-        @Config.Comment("Let every player add and remove bots from the table lobby. When false (default), only operators "
-            + "(and single player with cheats) can.")
+        @Config.Comment("Let every player add and remove bots from the table lobby. When false (default), only the "
+            + "room's host and operators can.")
         @Config.DefaultBoolean(false)
         public boolean everyoneCanManageBots = false;
     }

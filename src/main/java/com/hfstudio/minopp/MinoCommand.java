@@ -96,7 +96,10 @@ public class MinoCommand extends CommandBase {
                 func_152373_a(sender, this, "Table demo set");
             }
             case "debug" -> {
-                if (!sender.canCommandSenderUseCommand(2, "minopp") && !player.capabilities.isCreativeMode) {
+                net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+                boolean worldOwner = server.isSinglePlayer() && player.getCommandSenderName()
+                    .equals(server.getServerOwner());
+                if (!sender.canCommandSenderUseCommand(2, "minopp") && !worldOwner) {
                     throw new CommandException("commands.generic.permission");
                 }
                 debug(player, args.length >= 2 ? args[1] : "start");

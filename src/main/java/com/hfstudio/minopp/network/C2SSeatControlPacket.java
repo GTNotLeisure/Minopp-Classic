@@ -44,6 +44,18 @@ public class C2SSeatControlPacket {
             player.addChatComponentMessage(Chat.translatable("game.minopp.play.table_in_demo"));
             return;
         }
+        boolean manager = tableEntity.canManage(player);
+        boolean hostOnly = switch (action) {
+            case START, STOP, RESET, RULE, PACK, COUNT, PRESET, APPLY, AUTO_TEAMS -> true;
+            default -> false;
+        };
+        if (hostOnly && !manager) {
+            player.addChatComponentMessage(
+                Chat.translatable(
+                    "game.minopp.play.host_only",
+                    tableEntity.hostName.isEmpty() ? "?" : tableEntity.hostName));
+            return;
+        }
         switch (action) {
             case START -> {
                 if (tableEntity.game == null) {
@@ -114,15 +126,11 @@ public class C2SSeatControlPacket {
                             o -> o.getGameProfile()
                                 .getId()
                                 .equals(target));
-                if (self || bot) tableEntity.setTeam(target, value);
+                if (self || bot && manager) tableEntity.setTeam(target, value);
             }
             case AUTO_TEAMS -> tableEntity.autoTeams();
             case ADD_BOT, FILL_BOTS, CLEAR_BOTS, REMOVE_BOT -> {
-                net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
-                boolean owner = server.isSinglePlayer() && player.getCommandSenderName()
-                    .equals(server.getServerOwner());
-                if (!com.hfstudio.minopp.config.ServerConfig.gameplay.everyoneCanManageBots && !owner
-                    && !player.canCommandSenderUseCommand(2, "minopp")) {
+                if (!com.hfstudio.minopp.config.ServerConfig.gameplay.everyoneCanManageBots && !manager) {
                     player.addChatComponentMessage(Chat.translatable("game.minopp.play.bot_permission"));
                     return;
                 }
