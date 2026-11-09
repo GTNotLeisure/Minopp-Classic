@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
-import com.hfstudio.minopp.game.Card;
-import com.hfstudio.minopp.game.CardType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.resources.IReloadableResourceManager;
@@ -21,7 +19,9 @@ import org.lwjgl.input.Keyboard;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.effect.EffectQueue;
+import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.gui.DecisionScreen;
