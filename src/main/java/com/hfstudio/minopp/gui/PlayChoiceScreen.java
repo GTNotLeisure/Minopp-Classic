@@ -3,6 +3,7 @@ package com.hfstudio.minopp.gui;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
@@ -102,7 +103,7 @@ public class PlayChoiceScreen extends GuiScreen {
     }
 
     private BlockEntityMinoTable table() {
-        return ItemHandCards.getTable(net.minecraft.client.Minecraft.getMinecraft().theWorld, gamePos);
+        return ItemHandCards.getTable(Minecraft.getMinecraft().theWorld, gamePos);
     }
 
     @Override

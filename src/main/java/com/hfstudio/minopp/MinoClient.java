@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
+import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.resources.IReloadableResourceManager;
@@ -134,10 +136,10 @@ public class MinoClient {
             HandScreen.Context ctx = HandScreen.Context.resolve(mc);
             if (ctx != null) {
                 String want = System.getProperty("minopp.previewChoiceCard");
-                com.hfstudio.minopp.game.Card card = ctx.hand.get(0);
-                for (com.hfstudio.minopp.game.Card c : ctx.hand) if (c.face(ctx.game.darkSide)
+                Card card = ctx.hand.get(0);
+                for (Card c : ctx.hand) if (c.face(ctx.game.darkSide)
                     .type().id.equals(want)) card = c;
-                com.hfstudio.minopp.game.CardType.Choice choice = card.face(ctx.game.darkSide)
+                CardType.Choice choice = card.face(ctx.game.darkSide)
                     .type()
                     .choiceFor(false);
                 mc.displayGuiScreen(

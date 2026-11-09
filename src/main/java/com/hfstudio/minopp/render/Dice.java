@@ -2,6 +2,7 @@ package com.hfstudio.minopp.render;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +114,7 @@ final class Dice {
 
     private static double[][] dualOfIcosa(double p, double ip) {
         List<double[]> out = new ArrayList<>();
-        for (double[] c : cube()) out.add(c);
+        Collections.addAll(out, cube());
         for (int a = -1; a <= 1; a += 2) for (int b = -1; b <= 1; b += 2) {
             out.add(new double[] { a * ip, 0, b * p });
             out.add(new double[] { 0, a * p, b * ip });
@@ -124,7 +125,7 @@ final class Dice {
 
     private static double[][] dodeca(double p, double ip) {
         List<double[]> out = new ArrayList<>();
-        for (double[] c : cube()) out.add(c);
+        Collections.addAll(out, cube());
         for (int a = -1; a <= 1; a += 2) for (int b = -1; b <= 1; b += 2) {
             out.add(new double[] { 0, a * ip, b * p });
             out.add(new double[] { a * ip, b * p, 0 });

@@ -399,7 +399,7 @@ public class HandScreen extends GuiScreen {
         if (line.length() > 0) lines.add(line.toString());
         List<String> out = new ArrayList<>();
         for (String l : lines) {
-            for (String o : fontRendererObj.listFormattedStringToWidth(l, maxWidth)) out.add(o);
+            out.addAll(fontRendererObj.listFormattedStringToWidth(l, maxWidth));
         }
         return out;
     }

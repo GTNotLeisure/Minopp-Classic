@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MovingObjectPosition;
@@ -352,7 +353,7 @@ public class GameOverlayLayer {
         }
         return wrappedMessages.computeIfAbsent(message, m -> {
             List<String> out = new ArrayList<>();
-            for (String o : font.listFormattedStringToWidth(m.formattedText(), wrapAt)) out.add(o);
+            out.addAll(font.listFormattedStringToWidth(m.formattedText(), wrapAt));
             return out;
         });
     }
@@ -783,7 +784,7 @@ public class GameOverlayLayer {
         GL11.glScalef(scale, scale, 1);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
-        net.minecraft.client.renderer.Tessellator t = net.minecraft.client.renderer.Tessellator.instance;
+        Tessellator t = Tessellator.instance;
         for (int pass = 0; pass < 2; pass++) {
             float rr = pass == 0 ? r + 1.5f : r;
             int c = pass == 0 ? 0xF0F0F0 : rgb;
