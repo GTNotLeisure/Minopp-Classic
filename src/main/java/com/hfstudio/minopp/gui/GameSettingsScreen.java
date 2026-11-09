@@ -33,6 +33,7 @@ import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.CardTypes;
+import com.hfstudio.minopp.game.Conflicts;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.HandMask;
 import com.hfstudio.minopp.game.TableConfig;
@@ -100,6 +101,10 @@ public class GameSettingsScreen extends GuiScreen {
         String searchExtra = "";
         final List<String> desc = new ArrayList<>();
         final List<String> controls = new ArrayList<>();
+        /** "Not recommended with" lines; set together with conflictKey. */
+        final List<String> warn = new ArrayList<>();
+        String conflictKey;
+        boolean clash;
 
         Tile(String id, Kind kind, Object payload) {
             this.id = id;
@@ -346,6 +351,7 @@ public class GameSettingsScreen extends GuiScreen {
                         if (!linked.isEmpty()) t.desc.add(tr("gui.minopp.cards.enables", linked));
                         String others = sharedWith(pack, faces);
                         if (!others.isEmpty()) t.desc.add(tr("gui.minopp.cards.shared", others));
+                        conflicts(t, Conflicts.card(entry.typeId()), cfg);
                         t.controls.add(tr("gui.minopp.controls.card_left"));
                         t.controls.add(tr("gui.minopp.controls.card_right"));
                         t.controls.add(tr("gui.minopp.controls.card_ctrl"));
@@ -506,6 +512,7 @@ public class GameSettingsScreen extends GuiScreen {
                     }
                 }
                 if (!packs.isEmpty()) t.desc.add(tr("gui.minopp.gallery.packs", String.join(", ", packs)));
+                conflicts(t, Conflicts.card(type.id), null);
                 list.add(t);
             }
             out.put(packName, list);
@@ -809,6 +816,7 @@ public class GameSettingsScreen extends GuiScreen {
             t.desc.add(tr(r.langKey() + ".desc"));
             String needs = ruleNames(TableConfig.requiredRules(r.id()));
             if (!needs.isEmpty()) t.desc.add(tr("gui.minopp.rule.needs", needs));
+            conflicts(t, Conflicts.rule(r.id()), table() == null ? null : table().config);
             if (r.bool()) {
                 t.controls.add(tr("gui.minopp.controls.rule_toggle"));
             } else {
@@ -978,6 +986,7 @@ public class GameSettingsScreen extends GuiScreen {
             List<String> lines = new ArrayList<>();
             lines.add(hovered.title);
             for (String d : hovered.desc) lines.addAll(fontRendererObj.listFormattedStringToWidth(d, 200));
+            lines.addAll(hovered.warn);
             for (String c : hovered.controls) lines.add(EnumChatFormatting.GRAY + c);
             int tx = mouseX, ty = mouseY;
             if (navId != null) {
@@ -1236,6 +1245,40 @@ public class GameSettingsScreen extends GuiScreen {
             valuePill(count, (x1 + x2) / 2, pillY);
         }
         if (locked) UiDraw.image("badge_lock", x1 + 2, four ? y1 + 12 : y1 + 2, 10, 10);
+        if (t.conflictKey != null) UiDraw.image(t.clash ? "badge_warn_on" : "badge_warn", x1 + 2, y2 - 12, 10, 10);
+    }
+
+    // lists what a rule or card is not recommended with, four names to a line; the ones switched on are red
+    private void conflicts(Tile t, String key, TableConfig cfg) {
+        List<String> others = Conflicts.of(key);
+        if (others.isEmpty()) return;
+        t.conflictKey = key;
+        boolean self = cfg != null && Conflicts.isActive(key, cfg);
+        String sep = tr("gui.minopp.conflict.sep");
+        t.warn.add(EnumChatFormatting.GOLD + tr("gui.minopp.conflict.title"));
+        StringBuilder line = new StringBuilder();
+        for (int i = 0; i < others.size(); i++) {
+            String o = others.get(i);
+            boolean on = cfg != null && Conflicts.isActive(o, cfg);
+            if (on && self) t.clash = true;
+            if (i % 4 != 0) line.append(EnumChatFormatting.GOLD)
+                .append(sep);
+            line.append(on ? EnumChatFormatting.RED : EnumChatFormatting.YELLOW)
+                .append(conflictName(o));
+            if (i % 4 == 3 || i == others.size() - 1) {
+                t.warn.add(line.toString());
+                line.setLength(0);
+            }
+        }
+        if (t.clash) t.warn.add(EnumChatFormatting.RED + tr("gui.minopp.conflict.active"));
+    }
+
+    private String conflictName(String key) {
+        if (key.startsWith("rule:")) {
+            GameRules.Rule r = GameRules.get(key.substring(5));
+            return r == null ? key : tr(r.langKey());
+        }
+        return tr("game.minopp.card.type." + key.substring(5));
     }
 
     private boolean customCount;
@@ -1372,6 +1415,10 @@ public class GameSettingsScreen extends GuiScreen {
                 texts.add(d);
                 textColors.add(0xFFFFFFFF);
             }
+            for (String w : t.warn) {
+                texts.add(w);
+                textColors.add(0xFFFFD060);
+            }
             for (String c : t.controls) {
                 texts.add(c);
                 textColors.add(0xFFBBBBBB);
@@ -1379,7 +1426,7 @@ public class GameSettingsScreen extends GuiScreen {
         }
         int py = y1 + 8, ph = Math.min(90, (y2 - y1) / 2);
         float textScale = 1f;
-        int controlStart = t == null ? texts.size() : t.desc.size();
+        int controlStart = t == null ? texts.size() : t.desc.size() + t.warn.size();
         int needed = wrappedHeight(texts, controlStart, infoW - 16, 1f);
         int avail = y2 - 6 - (py + ph + 32);
         if (needed > avail) {
