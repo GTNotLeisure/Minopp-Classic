@@ -34,6 +34,7 @@ import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.CardRenderer;
+import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
@@ -317,6 +318,12 @@ public class GameOverlayLayer {
             Chat.translatable("gui.minopp.play.game_active")
                 .getFormattedText(),
             0xFF7090FF);
+        if (game.debug) {
+            line(
+                Chat.translatable(game.debugHold ? "gui.minopp.debug.hold_on" : "gui.minopp.debug.hold_off")
+                    .getFormattedText(),
+                0xFFFF60FF);
+        }
         if (me != null && me.eliminated) {
             line(
                 Chat.translatable("gui.minopp.play.eliminated")
@@ -467,32 +474,42 @@ public class GameOverlayLayer {
         cardRects.clear();
         if (!ClientConfig.display.classicInteraction) {
             renderHandRow(font, game, realPlayer, hand, clientHandIndex, isMyTurn, myPlayerIndex, theme, width, height);
+            drawDebugDraws(game, realPlayer, theme, width, height);
+            drawCallouts(font, game, realPlayer, width, height);
             return true;
         }
-        int handSize = hand.size();
-        int selectedCardYRaw = height - ((CARD_HEIGHT / 2) + CARD_V_SPACING * (handSize - clientHandIndex));
+        int[] shownIdx = window(hand.size(), clientHandIndex, 24, false);
+        List<Card> shown = new ArrayList<>();
+        int shownSel = 0;
+        for (int k = 0; k < shownIdx.length; k++) {
+            shown.add(hand.get(shownIdx[k]));
+            if (shownIdx[k] == clientHandIndex) shownSel = k;
+        }
+        lastPage = shownIdx.length;
+        int handSize = shown.size();
+        int selectedCardYRaw = height - ((CARD_HEIGHT / 2) + CARD_V_SPACING * (handSize - shownSel));
         int cardDrawOffset = selectedCardYRaw < 20 ? 20 - selectedCardYRaw : 0;
         Random cardRandom = new Random(handSize);
         GL11.glEnable(GL11.GL_BLEND);
         int[] xs = new int[handSize], ys = new int[handSize];
         for (int i = 0; i < handSize; i++) {
-            Card card = hand.get(i);
-            int targetXOff = (i == clientHandIndex ? -30 : 0) + cardRandom.nextInt(7) - 3;
+            Card card = shown.get(i);
+            int targetXOff = (i == shownSel ? -30 : 0) + cardRandom.nextInt(7) - 3;
             Float currentXOffBoxed = handCardCurrentXOff.get(card.uid);
             float currentXOff = currentXOffBoxed == null ? CARD_WIDTH + 10 : currentXOffBoxed;
             xs[i] = width - 10 - CARD_WIDTH + (int) currentXOff;
             handCardCurrentXOff.put(card.uid, (float) Mth.lerp(8 * 0.05 * partialTicks, currentXOff, targetXOff));
             ys[i] = height - ((CARD_HEIGHT / 2) + CARD_V_SPACING * (handSize - i)) + cardDrawOffset;
         }
-        addRect(clientHandIndex, xs[clientHandIndex], ys[clientHandIndex], CARD_WIDTH, CARD_HEIGHT);
+        addRect(shownIdx[shownSel], xs[shownSel], ys[shownSel], CARD_WIDTH, CARD_HEIGHT);
         for (int i = handSize - 1; i >= 0; i--) {
-            if (i != clientHandIndex) addRect(i, xs[i], ys[i], CARD_WIDTH, CARD_HEIGHT);
+            if (i != shownSel) addRect(shownIdx[i], xs[i], ys[i], CARD_WIDTH, CARD_HEIGHT);
         }
         for (int pass = 0; pass < 2; pass++) {
             for (int i = 0; i < handSize; i++) {
-                boolean selected = i == clientHandIndex;
+                boolean selected = i == shownSel;
                 if (pass == 0 ? selected : !selected) continue;
-                Card card = hand.get(i);
+                Card card = shown.get(i);
                 CardFace face = game.face(card);
                 int x = xs[i], y = ys[i];
                 if (selected && isMyTurn) {
@@ -550,6 +567,12 @@ public class GameOverlayLayer {
                 }
             }
         }
+        if (shownIdx.length < hand.size()) {
+            String page = pageLabel(clientHandIndex, hand.size());
+            GuiDraw.drawString(font, page, width - 10 - font.getStringWidth(page), 6, 0xFFFFE070);
+        }
+        drawDebugDraws(game, realPlayer, theme, width, height);
+        drawCallouts(font, game, realPlayer, width, height);
         GL11.glDisable(GL11.GL_BLEND);
         return true;
     }
@@ -579,8 +602,165 @@ public class GameOverlayLayer {
         return -1;
     }
 
-    private void renderHandRow(FontRenderer font, CardGame game, CardPlayer me, List<Card> hand, int selectedIndex,
+    private static int lastPage = 15;
+    private final java.util.Set<Integer> rowKnown = new java.util.HashSet<>();
+    private final List<Object[]> ghosts = new ArrayList<>();
+    private Object ghostGame;
+    private int ghostSeq;
+
+    /** How many cards the hand shows at once; paging keys jump by this much. */
+    public static int pageSize() {
+        return Math.max(1, lastPage);
+    }
+
+    private int rowStart, stackStart;
+
+    // a carousel window of the hand that wraps around both ends; it only turns when the selection leaves it (keys,
+    // wheel, paging), so pointing at a visible card never moves the cards under the cursor
+    private int[] window(int total, int selected, int fit, boolean row) {
+        if (total <= fit) {
+            int[] all = new int[total];
+            for (int i = 0; i < total; i++) all[i] = i;
+            return all;
+        }
+        int start = Math.floorMod(row ? rowStart : stackStart, total);
+        int d = Math.floorMod(selected - start, total);
+        if (d >= fit) {
+            int ahead = d - (fit - 1), behind = total - d;
+            start = ahead <= behind ? Math.floorMod(selected - fit + 1, total) : selected;
+        }
+        if (row) rowStart = start;
+        else stackStart = start;
+        int[] out = new int[fit];
+        for (int i = 0; i < fit; i++) out[i] = Math.floorMod(start + i, total);
+        return out;
+    }
+
+    private static String pageLabel(int selected, int total) {
+        return Chat.translatable("gui.minopp.hand.page", selected + 1, total)
+            .getFormattedText();
+    }
+
+    private Object callGame;
+    private int callTop, callHand, callMove, callDebug;
+    private final List<Object[]> callouts = new ArrayList<>();
+    private static final net.minecraft.util.ResourceLocation SKIP_SIGN = Mino.id("textures/fx/skip.png");
+
+    // over your own hand: a big no-entry sign when you get skipped, "+N" when cards come in
+    private void drawCallouts(FontRenderer font, CardGame game, CardPlayer me, int width, int height) {
+        long now = System.currentTimeMillis();
+        int top = game.topCard == null ? -1 : game.topCard.uid;
+        int size = me.hand.size();
+        if (callGame != game) {
+            callGame = game;
+            callTop = top;
+            callHand = size;
+            callMove = game.handMoveCounter;
+            callDebug = game.debugDrawSeq;
+        }
+        if (top != callTop && game.topCard != null && (game.debug || !me.uuid.equals(game.topCard.owner))) {
+            CardFace face = game.topFace();
+            if ((TableFx.isSkip(face.type().id) || face.type().matchKey.equals("skip")) && TableFx.skippedSeats(game)
+                .contains(me.seat)) {
+                callouts.add(new Object[] { null, now });
+            }
+        }
+        int gained = game.handMoveCounter == callMove ? size - callHand : 0;
+        if (game.isDebugger(me)) gained = game.debugDrawSeq - callDebug;
+        if (gained > 0) callouts.add(new Object[] { "+" + gained, now });
+        callTop = top;
+        callHand = size;
+        callMove = game.handMoveCounter;
+        callDebug = game.debugDrawSeq;
+
+        callouts.removeIf(c -> now - (Long) c[1] > 1200);
+        float cx = width / 2f, cy = height - Math.min(70, height * 0.2f);
+        for (Object[] c : callouts) {
+            float t = (now - (Long) c[1]) / 1200f;
+            float u = Math.min(1f, t / 0.22f), c1 = 1.70158f * 1.5f, v = u - 1;
+            float pop = 1 + (c1 + 1) * v * v * v + c1 * v * v;
+            float alpha = t < 0.75f ? 1f : Math.max(0f, 1f - (t - 0.75f) / 0.25f);
+            GL11.glPushMatrix();
+            GL11.glTranslatef(cx, cy - t * 14, 0);
+            GL11.glScalef(pop, pop, 1);
+            if (c[0] == null) {
+                GL11.glRotatef((float) Math.sin(t * Math.PI * 8) * 10 * (1 - t), 0, 0, 1);
+                GL11.glEnable(GL11.GL_BLEND);
+                Minecraft.getMinecraft()
+                    .getTextureManager()
+                    .bindTexture(SKIP_SIGN);
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+                GL11.glColor4f(1, 1, 1, alpha);
+                GuiDraw.blitBound(-40, -40, 80, 80, 0, 0, 1, 1, 1, 1);
+            } else {
+                String text = (String) c[0];
+                GL11.glScalef(4, 4, 1);
+                int w = font.getStringWidth(text);
+                int a = Math.max(8, (int) (alpha * 255)) << 24;
+                for (int k = 3; k >= 1; k--) font.drawString(text, -w / 2 + k, -4 + k, a | 0x2A1000);
+                for (int[] o : new int[][] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }) {
+                    font.drawString(text, -w / 2 + o[0], -4 + o[1], a | 0x1A0A00);
+                }
+                font.drawString(text, -w / 2, -4, a | 0xFFFFFF);
+            }
+            GL11.glPopMatrix();
+        }
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    // debug games never put drawn cards into the hand: they fly in, show their face and dissolve
+    private void drawDebugDraws(CardGame game, CardPlayer me, String theme, int width, int height) {
+        long now = System.currentTimeMillis();
+        if (ghostGame != game) {
+            ghostGame = game;
+            ghostSeq = game.debugDrawSeq;
+        }
+        if (game.debug && game.isDebugger(me) && game.debugDrawSeq != ghostSeq) {
+            int fresh = Math.min(game.debugDrawn.size(), Math.max(0, game.debugDrawSeq - ghostSeq));
+            for (int k = 0; k < fresh; k++) {
+                Card c = game.debugDrawn.get(game.debugDrawn.size() - fresh + k);
+                ghosts.add(new Object[] { game.face(c), now + k * 120L, k - (fresh - 1) / 2f });
+            }
+        }
+        ghostSeq = game.debugDrawSeq;
+        ghosts.removeIf(g -> now - (Long) g[1] > 900);
+        int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
+        GL11.glEnable(GL11.GL_BLEND);
+        for (Object[] g : ghosts) {
+            float t = (now - (Long) g[1]) / 900f;
+            if (t < 0) continue;
+            float fly = easeOutCubic(Math.min(1f, t / 0.55f));
+            float shrink = t < 0.7f ? 1f : Math.max(0f, 1f - (t - 0.7f) / 0.3f);
+            float x = width * 0.5f + (Float) g[2] * cw * 0.7f;
+            float y = -ch + (height - ch * 0.75f + ch) * fly;
+            GL11.glPushMatrix();
+            GL11.glTranslatef(x, y, 0);
+            GL11.glRotatef((1 - fly) * -25 + (Float) g[2] * 6, 0, 0, 1);
+            GL11.glScalef(shrink, shrink, 1);
+            CardRenderer.drawFace2D((CardFace) g[0], theme, -cw / 2f, -ch / 2f, cw, ch);
+            if (t > 0.55f) {
+                int a = (int) (Math.min(1f, (t - 0.55f) / 0.15f) * 140);
+                UiDraw.roundRect(-cw / 2, -ch / 2, cw / 2, ch / 2, Math.max(1, cw * 3 / 32), (a << 24) | 0xFFFFFF);
+            }
+            GL11.glPopMatrix();
+        }
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private void renderHandRow(FontRenderer font, CardGame game, CardPlayer me, List<Card> fullHand, int selectedFull,
         boolean isMyTurn, int myPlayerIndex, String theme, int width, int height) {
+        int cwFit = Mth.clamp(width / 9, 40, 60);
+        int rowFit = Math.max(cwFit, Math.min(width - 150, (int) (width * 0.62)));
+        int fit = Math.max(3, (int) ((rowFit - cwFit) / (cwFit * 0.34f)) + 1);
+        int[] shownIdx = window(fullHand.size(), selectedFull, fit, true);
+        lastPage = shownIdx.length;
+        List<Card> hand = new ArrayList<>();
+        int selectedIndex = -1;
+        for (int k = 0; k < shownIdx.length; k++) {
+            hand.add(fullHand.get(shownIdx[k]));
+            if (shownIdx[k] == selectedFull) selectedIndex = k;
+        }
         long now = System.nanoTime();
         float dt = Math.min(0.1f, (now - lastRowNanos) / 1e9f);
         lastRowNanos = now;
@@ -610,7 +790,7 @@ public class GameOverlayLayer {
         for (int i = 0; i < n; i++) {
             Card card = hand.get(i);
             playables[i] = isMyTurn && game.canPlay(me, card);
-            float target = i == selectedIndex ? (interactive ? 16 : 8) : (playables[i] ? 5 : 0);
+            float target = i == selectedIndex ? (interactive ? 26 : 10) : (playables[i] ? 5 : 0);
             Float cur = rowLift.get(card.uid);
             float lift = cur == null ? 0 : cur;
             lift += (target - lift) * ease;
@@ -626,14 +806,16 @@ public class GameOverlayLayer {
         if (rowGame == game) {
             for (Map.Entry<Integer, float[]> e : rowLast.entrySet()) {
                 int uid = e.getKey();
-                boolean gone = hand.stream()
+                boolean gone = fullHand.stream()
                     .noneMatch(c -> c.uid == uid);
                 if (gone && game.topCard != null && game.topCard.uid == uid) {
                     flyers.add(new Object[] { game.face(game.topCard), theme, e.getValue(), nowMs });
                 }
             }
-            for (Card c : hand) if (!rowLast.containsKey(c.uid)) rowEnter.put(c.uid, nowMs);
+            for (Card c : fullHand) if (!rowKnown.contains(c.uid)) rowEnter.put(c.uid, nowMs);
         }
+        rowKnown.clear();
+        for (Card c : fullHand) rowKnown.add(c.uid);
         rowGame = game;
         rowLast.clear();
         for (int i = 0; i < n; i++) rowLast.put(hand.get(i).uid, new float[] { cxs[i], cys[i], angs[i], cw, ch });
@@ -659,6 +841,11 @@ public class GameOverlayLayer {
                 GL11.glPushMatrix();
                 GL11.glTranslatef(cxs[i], cys[i], 0);
                 GL11.glRotatef((float) Math.toDegrees(angs[i]), 0, 0, 1);
+                if (selected) {
+                    Float lifted = rowLift.get(card.uid);
+                    float pop = 1f + 0.12f * Math.max(0f, Math.min(1f, (lifted == null ? 0 : lifted) / 26f));
+                    GL11.glScalef(pop, pop, 1);
+                }
                 GL11.glTranslatef(-cw / 2f, -ch / 2f, 0);
                 if (selected) UiDraw.roundRect(2, 3, cw + 2, ch + 3, corner, 0x60000000);
                 if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && game.isIdenticalToTop(card)) {
@@ -693,12 +880,22 @@ public class GameOverlayLayer {
         }
         GL11.glDisable(GL11.GL_BLEND);
 
+        if (shownIdx.length < fullHand.size()) {
+            String page = pageLabel(selectedFull, fullHand.size());
+            int pw = font.getStringWidth(page);
+            int lx = Math.max(4, Math.round(px - maxRow / 2f) - pw - 10);
+            int ly = Math.round(cy) - 4;
+            UiDraw.roundRect(lx - 4, ly - 3, lx + pw + 4, ly + 10, 3, 0xA0000000);
+            font.drawStringWithShadow(page, lx, ly, 0xFFFFE070);
+        }
+
         if (selectedIndex >= 0 && selectedIndex < n) {
             cardRects.add(
-                new float[] { selectedIndex, cxs[selectedIndex], cys[selectedIndex], angs[selectedIndex], cw, ch });
+                new float[] { shownIdx[selectedIndex], cxs[selectedIndex], cys[selectedIndex], angs[selectedIndex], cw,
+                    ch });
         }
         for (int i = n - 1; i >= 0; i--) {
-            if (i != selectedIndex) cardRects.add(new float[] { i, cxs[i], cys[i], angs[i], cw, ch });
+            if (i != selectedIndex) cardRects.add(new float[] { shownIdx[i], cxs[i], cys[i], angs[i], cw, ch });
         }
     }
 

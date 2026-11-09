@@ -11,9 +11,14 @@ import net.minecraft.world.World;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.AutoPlayer;
+import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardColor;
+import com.hfstudio.minopp.game.CardFace;
+import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
@@ -116,7 +121,15 @@ public final class DevPreview {
                 if (table.getPlayersList()
                     .size() >= playerCount() || ticks > 200) {
                     configureMode(table.config);
-                    table.startGame(new CardPlayer(player));
+                    if (System.getProperty("minopp.previewDebug") != null) {
+                        table.config.set(GameRules.FLIP_MODE, 1);
+                        table.startGame(
+                            new CardPlayer(player),
+                            player.getGameProfile()
+                                .getId());
+                    } else {
+                        table.startGame(new CardPlayer(player));
+                    }
                     player.inventory.currentItem = 0;
                     stage = 3;
                     ticks = 0;
@@ -143,6 +156,10 @@ public final class DevPreview {
                 CardPlayer me = table.game.deAmputate(
                     player.getGameProfile()
                         .getId());
+                if (table.game.debug) {
+                    if (ticks % 60 == 0 && me != null) playScripted(table, me, player);
+                    return;
+                }
                 if (me != null && table.game.currentPlayer()
                     .equals(me)) {
                     ActionReport r = ai.playAtGame(table.game, me, server);
@@ -151,6 +168,44 @@ public final class DevPreview {
             }
             default -> {}
         }
+    }
+
+    private static final String[] SCRIPT = { "skip", "reverse", "draw2", "wild", "wild_draw4", "wild_fifty_fifty",
+        "flip", "skip_everyone", "wild_draw2", "flip", "wild_time_balloon", "number", "shout" };
+    private int scriptStep;
+
+    // debug preview: plays one card of each effect in turn, so every table animation can be watched
+    private void playScripted(BlockEntityMinoTable table, CardPlayer me, EntityPlayerMP player) {
+        CardGame game = table.game;
+        String id = SCRIPT[scriptStep++ % SCRIPT.length];
+        if (id.equals("shout")) {
+            for (CardPlayer p : game.players) p.hasShoutedMino = false;
+            CardPlayer bot = game.players.get(scriptStep % game.players.size());
+            bot.hasShoutedMino = true;
+            table.sync();
+            return;
+        }
+        List<CardColor> colors = CardColor.forSide(game.darkSide);
+        Card pick = null;
+        for (Card c : me.hand) {
+            CardFace f = game.face(c);
+            if (f.type().id.equals(id) && (f.isWild() || f.color == colors.get(scriptStep % 4))) {
+                pick = c;
+                break;
+            }
+        }
+        if (pick == null) {
+            for (Card c : me.hand) if (game.face(c)
+                .type().id.equals(id)) {
+                    pick = c;
+                    break;
+                }
+        }
+        if (pick == null) pick = me.hand.get(scriptStep % me.hand.size());
+        PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+        choices.color = colors.get((scriptStep / 2) % 4);
+        ActionReport r = game.playCard(me, pick.uid, choices);
+        table.handleActionResult(r, me, player);
     }
 
     private void configureMode(TableConfig config) {
@@ -177,7 +232,7 @@ public final class DevPreview {
         int px = MathHelper.floor_double(player.posX), py = MathHelper.floor_double(player.boundingBox.minY);
         int pz = MathHelper.floor_double(player.posZ);
         core = new BlockPos(px - 1, py, pz - 6);
-        for (int dx = -4; dx <= 6; dx++) for (int dz = -4; dz <= 6; dz++) {
+        for (int dx = -14; dx <= 16; dx++) for (int dz = -14; dz <= 16; dz++) {
             for (int dy = 0; dy < 4; dy++) world.setBlockToAir(core.x + dx, core.y + dy, core.z + dz);
         }
         world.setBlock(core.x, core.y, core.z, Mino.BLOCK_MINO_TABLE, 0, 3);

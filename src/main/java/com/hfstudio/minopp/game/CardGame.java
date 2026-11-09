@@ -76,6 +76,93 @@ public class CardGame {
         this.players = players;
     }
 
+    public boolean debug;
+    public boolean debugHold;
+    public int debugNext = -1;
+    public UUID debugger;
+    public int debugDrawSeq;
+    public final List<Card> debugDrawn = new ArrayList<>();
+    private final List<Card> debugHand = new ArrayList<>();
+    private int debugUid = 2_000_000;
+
+    public boolean isDebugger(CardPlayer p) {
+        return debug && p != null && p.uuid.equals(debugger);
+    }
+
+    // one card of every face in every pack; the shorter side repeats so both sides show all their faces
+    public static List<CardFace[]> debugCatalog() {
+        Set<CardFace> light = new java.util.LinkedHashSet<>(), dark = new java.util.LinkedHashSet<>();
+        for (CardPack pack : CardPack.all()) {
+            for (CardPack.Entry entry : pack.entries) {
+                (entry.dark() || pack.backSideOnly ? dark : light).addAll(TableConfig.entryFaces(entry));
+            }
+        }
+        List<CardFace> l = new ArrayList<>(light), d = new ArrayList<>(dark);
+        Comparator<CardFace> order = Comparator.comparingInt((CardFace f) -> f.type().sortOrder)
+            .thenComparingInt(f -> f.color.ordinal())
+            .thenComparingInt(f -> f.number);
+        l.sort(order);
+        d.sort(order);
+        List<CardFace[]> out = new ArrayList<>();
+        int n = Math.max(l.size(), d.size());
+        for (int i = 0; i < n; i++) {
+            out.add(new CardFace[] { l.get(i % l.size()), d.isEmpty() ? null : d.get(i % d.size()) });
+        }
+        return out;
+    }
+
+    private void dealDebugHand() {
+        CardPlayer me = deAmputate(debugger);
+        if (me == null) return;
+        deck.addAll(0, me.hand);
+        me.hand.clear();
+        debugHand.clear();
+        for (CardFace[] faces : debugCatalog()) debugHand.add(new Card(debugUid++, faces[0], faces[1]));
+        me.hand.addAll(debugHand);
+        currentPlayerIndex = players.indexOf(me);
+    }
+
+    // the debugger's cards never run out: whatever left the hand comes back as a fresh copy, and whatever came in
+    // goes back to the deck
+    private void restoreDebugHand() {
+        if (!debug) return;
+        CardPlayer me = deAmputate(debugger);
+        if (me == null || debugHand.isEmpty()) return;
+        Set<Integer> held = new HashSet<>();
+        for (Card c : me.hand) held.add(c.uid);
+        Set<Integer> own = new HashSet<>();
+        for (int i = 0; i < debugHand.size(); i++) {
+            Card c = debugHand.get(i);
+            if (!held.contains(c.uid)) debugHand.set(i, c = new Card(debugUid++, c.light, c.dark));
+            own.add(c.uid);
+        }
+        for (Card c : me.hand) if (!own.contains(c.uid)) deck.add(0, c);
+        me.hand.clear();
+        me.hand.addAll(debugHand);
+        me.eliminated = false;
+    }
+
+    private ActionReport debugged(ActionReport report) {
+        restoreDebugHand();
+        return report;
+    }
+
+    public ActionReport playCard(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
+        return debugged(playCardInner(cardPlayer, cardUid, choices));
+    }
+
+    public ActionReport playNoCard(CardPlayer cardPlayer) {
+        return debugged(playNoCardInner(cardPlayer));
+    }
+
+    public ActionReport answerDecision(CardPlayer player, int answer, UUID target) {
+        return debugged(answerDecisionInner(player, answer, target));
+    }
+
+    public ActionReport tickDecisions(long now, Predicate<UUID> isHuman) {
+        return debugged(tickDecisionsInner(now, isHuman));
+    }
+
     public TableConfig detachedConfig;
 
     public TableConfig config() {
@@ -125,7 +212,7 @@ public class CardGame {
     }
 
     public ActionReport initiate(CardPlayer cardPlayer, int initialCardCount) {
-        if (players.size() < 2) return ActionReport.NO_GAME;
+        if (players.size() < (debug ? 1 : 2)) return ActionReport.NO_GAME;
         TableConfig config = config();
         players.sort(Comparator.comparingInt(p -> p.seat));
         currentPlayerIndex = random.nextInt(players.size());
@@ -158,6 +245,7 @@ public class CardGame {
         }
         topCard = tobeTopCard;
         currentColor = topFace().color;
+        if (debug) dealDebugHand();
         if (official) applyOpening(tobeTopCard.light);
         ActionReport report = ActionReport.builder(this, cardPlayer);
         GameSounds.deal(report, initialCardCount + 3);
@@ -190,6 +278,7 @@ public class CardGame {
     }
 
     public String checkPlayable(CardPlayer player, Card card, boolean useFlex) {
+        if (isDebugger(player)) return null;
         CardFace face = face(card);
         CardType type = face.type();
         if (currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN && card.uid != drawnCardUid) {
@@ -293,7 +382,7 @@ public class CardGame {
         return false;
     }
 
-    public ActionReport playCard(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
+    private ActionReport playCardInner(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
@@ -472,11 +561,11 @@ public class CardGame {
 
     private ActionReport checkEndConditions(CardPlayer actor, ActionReport report) {
         for (CardPlayer p : players) {
-            if (!p.eliminated && p.hand.isEmpty() && !relay(p, report)) return win(p, report);
+            if (!p.eliminated && p.hand.isEmpty() && !isDebugger(p) && !relay(p, report)) return win(p, report);
         }
         applyMercy(report);
         List<CardPlayer> active = activePlayers();
-        if (active.size() == 1) return win(active.get(0), report);
+        if (active.size() == 1 && !debug) return win(active.get(0), report);
         if (active.isEmpty()) return report.panic(Chat.translatable("game.minopp.play.deck_depleted"));
         if (players.get(currentPlayerIndex).eliminated) {
             currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
@@ -499,7 +588,7 @@ public class CardGame {
         return report.gameWon(winner, winners);
     }
 
-    public ActionReport playNoCard(CardPlayer cardPlayer) {
+    private ActionReport playNoCardInner(CardPlayer cardPlayer) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
@@ -560,7 +649,7 @@ public class CardGame {
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
 
-        boolean playable = last != null && canPlay(cardPlayer, last);
+        boolean playable = last != null && !isDebugger(cardPlayer) && canPlay(cardPlayer, last);
         if (playable && rule(GameRules.FORCED_PLAY)) {
             PlayContext.PlayChoices choices = AutoPlayer.defaultChoices(this, cardPlayer, last);
             currentPlayerPhase = PlayerActionPhase.DISCARD_DRAWN;
@@ -620,7 +709,7 @@ public class CardGame {
         }
     }
 
-    public ActionReport answerDecision(CardPlayer player, int answer, UUID target) {
+    private ActionReport answerDecisionInner(CardPlayer player, int answer, UUID target) {
         ActionReport report = ActionReport.builder(this, player);
         for (PendingDecision d : decisions) {
             if (d.player.equals(player.uuid) && !d.isAnswered()) {
@@ -638,7 +727,7 @@ public class CardGame {
         return report.fail(Chat.translatable("game.minopp.play.no_decision"));
     }
 
-    public ActionReport tickDecisions(long now, Predicate<UUID> isHuman) {
+    private ActionReport tickDecisionsInner(long now, Predicate<UUID> isHuman) {
         if (decisions.isEmpty()) return null;
         boolean changed = false;
         for (PendingDecision d : decisions) {
@@ -768,6 +857,16 @@ public class CardGame {
             for (int i = 0; i <= skipCount; i++) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         }
         skipCount = 0;
+        debugNext = -1;
+        if (debug && debugHold) {
+            CardPlayer me = deAmputate(debugger);
+            if (me != null && !me.eliminated && players.indexOf(me) != currentPlayerIndex) {
+                debugNext = currentPlayerIndex;
+                // the penalty still lands on whoever would have played, so their draw can be watched
+                if (pendingDraw > 0) takePendingDraw(players.get(debugNext), report);
+                currentPlayerIndex = players.indexOf(me);
+            }
+        }
         CardPlayer current = players.get(currentPlayerIndex);
 
         hiddenCounts.remove(current.uuid);
@@ -1739,8 +1838,16 @@ public class CardGame {
             if (deck.isEmpty()) break;
             Card c = deck.remove(deck.size() - 1);
             c.owner = cardPlayer.uuid;
-            cardPlayer.hand.add(c);
             drawn.add(c);
+            if (isDebugger(cardPlayer)) {
+                // shown as a draw but never kept
+                deck.add(0, c);
+                debugDrawn.add(c);
+                debugDrawSeq++;
+                while (debugDrawn.size() > 12) debugDrawn.remove(0);
+                continue;
+            }
+            cardPlayer.hand.add(c);
         }
         GameSounds.draws(report, drawn.size(), 0);
         if (!drawn.isEmpty() && cardPlayer.hand.size() > 1) cardPlayer.hasShoutedMino = false;
@@ -1755,7 +1862,7 @@ public class CardGame {
         if (!rule(GameRules.MERCY)) return;
         int limit = config().getInt(GameRules.MERCY_LIMIT);
         for (CardPlayer p : players) {
-            if (p.eliminated || p.hand.size() < limit) continue;
+            if (p.eliminated || p.hand.size() < limit || isDebugger(p)) continue;
             p.eliminated = true;
             discardDeck.addAll(0, p.hand);
             p.hand.clear();
@@ -1833,6 +1940,18 @@ public class CardGame {
         turnSerial = tag.getInteger("turnSerial");
         trapArmed = tag.getBoolean("trapArmed");
         hurryTurns = tag.getInteger("hurryTurns");
+        debug = tag.getBoolean("debug");
+        debugHold = tag.getBoolean("debugHold");
+        debugNext = tag.hasKey("debugNext") ? tag.getInteger("debugNext") : -1;
+        debugger = NbtUtil.hasUUID(tag, "debugger") ? NbtUtil.getUUID(tag, "debugger") : null;
+        debugDrawSeq = tag.getInteger("debugDrawSeq");
+        debugUid = Math.max(2_000_000, tag.getInteger("debugUid"));
+        debugDrawn.clear();
+        NBTTagList drawnTag = tag.getTagList("debugDrawn", 10);
+        for (int i = 0; i < drawnTag.tagCount(); i++) debugDrawn.add(Card.fromTag(drawnTag.getCompoundTagAt(i)));
+        debugHand.clear();
+        NBTTagList debugHandTag = tag.getTagList("debugHand", 10);
+        for (int i = 0; i < debugHandTag.tagCount(); i++) debugHand.add(Card.fromTag(debugHandTag.getCompoundTagAt(i)));
         speedLevel = Math.max(1, tag.getInteger("speedLevel"));
         pendingSpeed = tag.getInteger("pendingSpeed");
         playedThisTurn = tag.getInteger("playedThisTurn");
@@ -1893,6 +2012,20 @@ public class CardGame {
         tag.setInteger("turnSerial", turnSerial);
         tag.setBoolean("trapArmed", trapArmed);
         tag.setInteger("hurryTurns", hurryTurns);
+        if (debug) {
+            tag.setBoolean("debug", true);
+            tag.setBoolean("debugHold", debugHold);
+            tag.setInteger("debugNext", debugNext);
+            if (debugger != null) NbtUtil.putUUID(tag, "debugger", debugger);
+            tag.setInteger("debugDrawSeq", debugDrawSeq);
+            tag.setInteger("debugUid", debugUid);
+            NBTTagList drawnTag = new NBTTagList();
+            for (Card c : debugDrawn) drawnTag.appendTag(c.toTag());
+            tag.setTag("debugDrawn", drawnTag);
+            NBTTagList debugHandTag = new NBTTagList();
+            for (Card c : debugHand) debugHandTag.appendTag(c.toTag());
+            tag.setTag("debugHand", debugHandTag);
+        }
         tag.setInteger("speedLevel", speedLevel);
         tag.setInteger("pendingSpeed", pendingSpeed);
         tag.setInteger("playedThisTurn", playedThisTurn);

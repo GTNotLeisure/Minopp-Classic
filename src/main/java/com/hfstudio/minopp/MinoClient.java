@@ -88,6 +88,7 @@ public class MinoClient {
         if (level == null || mc.thePlayer == null) {
             if (DevPreview.enabled() && !worldPreviewLaunched && mc.currentScreen instanceof GuiMainMenu) {
                 worldPreviewLaunched = true;
+                mc.gameSettings.pauseOnLostFocus = false;
                 mc.launchIntegratedServer(
                     "minopp_preview",
                     "Mino Preview",

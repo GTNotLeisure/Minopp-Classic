@@ -2,6 +2,7 @@ package com.hfstudio.minopp;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 import net.minecraft.command.CommandBase;
@@ -20,6 +21,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.Vec3d;
 
 public class MinoCommand extends CommandBase {
 
@@ -30,7 +32,7 @@ public class MinoCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/minopp <shout|force_discard|force_draw [count]|set_table_award|set_table_demo <true|false>>";
+        return "/minopp <shout|force_discard|force_draw [count]|set_table_award|set_table_demo <true|false>|debug [start|hold|stop]>";
     }
 
     @Override
@@ -93,8 +95,64 @@ public class MinoCommand extends CommandBase {
                 tableEntity.sync();
                 func_152373_a(sender, this, "Table demo set");
             }
+            case "debug" -> {
+                if (!sender.canCommandSenderUseCommand(2, "minopp") && !player.capabilities.isCreativeMode) {
+                    throw new CommandException("commands.generic.permission");
+                }
+                debug(player, args.length >= 2 ? args[1] : "start");
+            }
             default -> throw new WrongUsageException(getCommandUsage(sender));
         }
+    }
+
+    private static BlockEntityMinoTable nearestTable(EntityPlayerMP player) {
+        UUID id = player.getGameProfile()
+            .getId();
+        BlockEntityMinoTable best = null;
+        double bestDist = 12 * 12;
+        for (Object o : player.worldObj.loadedTileEntityList) {
+            if (!(o instanceof BlockEntityMinoTable table)) continue;
+            if (table.seatOf(id) >= 0) return table;
+            double dx = table.xCoord + 1.5 - player.posX, dz = table.zCoord + 1.5 - player.posZ;
+            double dy = table.yCoord - player.posY;
+            double d = dx * dx + dy * dy + dz * dz;
+            if (d < bestDist) {
+                bestDist = d;
+                best = table;
+            }
+        }
+        return best;
+    }
+
+    private static void debug(EntityPlayerMP player, String mode) {
+        BlockEntityMinoTable table = nearestTable(player);
+        if (table == null) throw new CommandException("game.minopp.debug.no_table");
+        UUID id = player.getGameProfile()
+            .getId();
+        switch (mode) {
+            case "start" -> {
+                CardPlayer me = new CardPlayer(player);
+                if (table.game != null) table.destroyGame(me);
+                if (table.seatOf(id) < 0) table.joinPlayerToTable(me, new Vec3d(player.posX, player.posY, player.posZ));
+                if (table.seatOf(id) < 0) throw new CommandException("game.minopp.debug.no_seat");
+                table.startGame(me, id);
+                player.addChatComponentMessage(Chat.translatable("game.minopp.debug.started"));
+            }
+            case "hold" -> {
+                if (table.game == null || !table.game.debug) throw new CommandException("game.minopp.debug.not_debug");
+                table.game.debugHold = !table.game.debugHold;
+                player.addChatComponentMessage(
+                    Chat.translatable(
+                        table.game.debugHold ? "game.minopp.debug.hold_on" : "game.minopp.debug.hold_off"));
+            }
+            case "stop" -> {
+                if (table.game == null || !table.game.debug) throw new CommandException("game.minopp.debug.not_debug");
+                table.destroyGame(new CardPlayer(player));
+                player.addChatComponentMessage(Chat.translatable("game.minopp.debug.stopped"));
+            }
+            default -> throw new WrongUsageException("/minopp debug [start|hold|stop]");
+        }
+        table.sync();
     }
 
     private static BlockEntityMinoTable getTableUnder(EntityPlayerMP player) {
@@ -133,7 +191,11 @@ public class MinoCommand extends CommandBase {
                 "force_discard",
                 "force_draw",
                 "set_table_award",
-                "set_table_demo");
+                "set_table_demo",
+                "debug");
+        }
+        if (args.length == 2 && args[0].equals("debug")) {
+            return getListOfStringsMatchingLastWord(args, "start", "hold", "stop");
         }
         if (args.length == 2 && args[0].equals("set_table_demo")) {
             return getListOfStringsMatchingLastWord(args, "true", "false");
@@ -148,5 +210,5 @@ public class MinoCommand extends CommandBase {
 
     @SuppressWarnings("unused")
     private static final List<String> SUBCOMMANDS = Arrays
-        .asList("shout", "force_discard", "force_draw", "set_table_award", "set_table_demo");
+        .asList("shout", "force_discard", "force_draw", "set_table_award", "set_table_demo", "debug");
 }

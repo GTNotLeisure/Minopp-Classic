@@ -25,7 +25,6 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
-import com.hfstudio.minopp.util.Mth;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -148,15 +147,21 @@ public class HandScreen extends GuiScreen {
             mc.displayGuiScreen(null);
         } else if (ctx == null) {
             return;
-        } else if (keyCode == prev || keyCode == Keyboard.KEY_LEFT || keyCode == Keyboard.KEY_UP) {
-            select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - 1);
-        } else if (keyCode == next || keyCode == Keyboard.KEY_RIGHT || keyCode == Keyboard.KEY_DOWN) {
-            select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + 1);
-        } else if (keyCode == Keyboard.KEY_SPACE || keyCode == Keyboard.KEY_RETURN) {
-            play(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer));
-        } else if (keyCode == Keyboard.KEY_Q) {
-            draw(ctx);
-        }
+        } else if (keyCode == Keyboard.KEY_PRIOR
+            || (keyCode == prev || keyCode == Keyboard.KEY_LEFT) && isShiftKeyDown()) {
+                select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - GameOverlayLayer.pageSize());
+            } else if (keyCode == Keyboard.KEY_NEXT
+                || (keyCode == next || keyCode == Keyboard.KEY_RIGHT) && isShiftKeyDown()) {
+                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + GameOverlayLayer.pageSize());
+                } else if (keyCode == prev || keyCode == Keyboard.KEY_LEFT || keyCode == Keyboard.KEY_UP) {
+                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - 1);
+                } else if (keyCode == next || keyCode == Keyboard.KEY_RIGHT || keyCode == Keyboard.KEY_DOWN) {
+                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + 1);
+                } else if (keyCode == Keyboard.KEY_SPACE || keyCode == Keyboard.KEY_RETURN) {
+                    play(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer));
+                } else if (keyCode == Keyboard.KEY_Q) {
+                    draw(ctx);
+                }
     }
 
     @Override
@@ -191,7 +196,7 @@ public class HandScreen extends GuiScreen {
     }
 
     private void select(Context ctx, int index) {
-        int clamped = Mth.clamp(index, 0, ctx.hand.size() - 1);
+        int clamped = Math.floorMod(index, ctx.hand.size());
         if (clamped != ItemHandCards.getClientHandIndex(mc.thePlayer)) {
             ItemDataUtils.setHandIndex(mc.thePlayer.getHeldItem(), clamped);
             mc.getSoundHandler()

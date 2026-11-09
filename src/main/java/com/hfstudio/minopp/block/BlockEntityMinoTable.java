@@ -448,10 +448,14 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     public void startGame(CardPlayer initiator) {
+        startGame(initiator, null);
+    }
+
+    public void startGame(CardPlayer initiator, UUID debugger) {
         if (game != null) return;
         List<CardPlayer> playerList = getPlayersList();
-        if (playerList.size() < 2) return;
-        IChatComponent teamProblem = startProblem();
+        if (playerList.size() < (debugger != null ? 1 : 2)) return;
+        IChatComponent teamProblem = debugger != null ? null : startProblem();
         if (teamProblem != null) {
             state = ActionReport.builder(initiator)
                 .panic(teamProblem).state;
@@ -500,6 +504,11 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         game = new CardGame(gamePlayers);
         game.tableEntity = this;
+        if (debugger != null) {
+            game.debug = true;
+            game.debugger = debugger;
+            game.debugHold = true;
+        }
         settlement.clear();
         matchWinner = "";
         state = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND)).state;
