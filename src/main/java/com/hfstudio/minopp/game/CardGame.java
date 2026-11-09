@@ -72,6 +72,9 @@ public class CardGame {
     public BlockEntityMinoTable tableEntity;
     private final Random random = new Random();
 
+    /** Stays the same for the whole game, also on clients that rebuild the game object on every update. */
+    public long id = new Random().nextLong();
+
     public CardGame(List<CardPlayer> players) {
         this.players = players;
     }
@@ -1971,10 +1974,21 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.trial", player.name, Chat.translatable(color.langKey())));
     }
 
+    /** The last 50/50 toss, for the table animation: who took heads and tails, which face came up, and a counter. */
+    public UUID tossHeads, tossTails;
+    public boolean tossHeadsUp;
+    public int tossSeq;
+
     public void fiftyFifty(CardPlayer player, CardPlayer first, CardPlayer second, int amount, ActionReport report) {
         if (first == null) first = nextPlayer();
         if (second == null || second.equals(first)) second = player;
-        CardPlayer loser = random.nextBoolean() ? first : second;
+        boolean headsUp = random.nextBoolean();
+        // heads up means the tails player draws
+        CardPlayer loser = headsUp ? second : first;
+        tossHeads = first.uuid;
+        tossTails = second.uuid;
+        tossHeadsUp = headsUp;
+        tossSeq++;
         drawCards(loser, amount, report);
         report.messageAll(Chat.translatable("game.minopp.play.fifty_fifty", loser.name, amount));
     }
@@ -2192,6 +2206,11 @@ public class CardGame {
         turnSerial = tag.getInteger("turnSerial");
         trapArmed = tag.getBoolean("trapArmed");
         hurryTurns = tag.getInteger("hurryTurns");
+        if (tag.hasKey("gameId")) id = tag.getLong("gameId");
+        tossHeads = NbtUtil.hasUUID(tag, "tossHeads") ? NbtUtil.getUUID(tag, "tossHeads") : null;
+        tossTails = NbtUtil.hasUUID(tag, "tossTails") ? NbtUtil.getUUID(tag, "tossTails") : null;
+        tossHeadsUp = tag.getBoolean("tossHeadsUp");
+        tossSeq = tag.getInteger("tossSeq");
         debug = tag.getBoolean("debug");
         debugHold = tag.getBoolean("debugHold");
         debugNext = tag.hasKey("debugNext") ? tag.getInteger("debugNext") : -1;
@@ -2267,6 +2286,11 @@ public class CardGame {
         tag.setInteger("turnSerial", turnSerial);
         tag.setBoolean("trapArmed", trapArmed);
         tag.setInteger("hurryTurns", hurryTurns);
+        tag.setLong("gameId", id);
+        if (tossHeads != null) NbtUtil.putUUID(tag, "tossHeads", tossHeads);
+        if (tossTails != null) NbtUtil.putUUID(tag, "tossTails", tossTails);
+        tag.setBoolean("tossHeadsUp", tossHeadsUp);
+        tag.setInteger("tossSeq", tossSeq);
         if (debug) {
             tag.setBoolean("debug", true);
             tag.setBoolean("debugHold", debugHold);

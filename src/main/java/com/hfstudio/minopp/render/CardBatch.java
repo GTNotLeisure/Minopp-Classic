@@ -114,7 +114,12 @@ public final class CardBatch {
     public void face(CardFace face, String theme, float hw, float hh, float z, int color, boolean flipped) {
         ResourceLocation[] tex = textures(face, theme);
         for (int i = 0; i < tex.length; i++) {
-            quad(i, tex[i], hw, hh, z + (flipped ? -0.002f : 0.002f) * i, color, flipped);
+            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i);
+            int c = tint == 0xFFFFFF ? color
+                : ((color >> 16 & 255) * (tint >> 16 & 255) / 255) << 16
+                    | ((color >> 8 & 255) * (tint >> 8 & 255) / 255) << 8
+                    | (color & 255) * (tint & 255) / 255;
+            quad(i, tex[i], hw, hh, z + (flipped ? -0.002f : 0.002f) * i, c, flipped);
         }
     }
 

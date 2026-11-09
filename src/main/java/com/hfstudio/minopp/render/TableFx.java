@@ -44,7 +44,9 @@ public final class TableFx {
         DRAW,
         SHOUT,
         PLUS,
-        CUSTOM
+        CUSTOM,
+        TOSS,
+        ROULETTE
     }
 
     private record Fx(Kind kind, long start, int duration, double x, double y, double z, int color, Object data) {
@@ -57,6 +59,7 @@ public final class TableFx {
     private static final class State {
 
         int topUid = Integer.MIN_VALUE;
+        CardColor color;
         boolean dark, anti;
         UUID balloon;
         int balloonSeat = -1;
@@ -66,11 +69,14 @@ public final class TableFx {
         final Set<UUID> shouted = new HashSet<>();
         int shoutSeq = -1;
         final Set<UUID> coins = new HashSet<>();
+        int tossSeq = -1;
     }
 
     private static final ResourceLocation TEX_DIRECTION = Mino.id("textures/fx/direction.png");
     private static final ResourceLocation TEX_SKIP = Mino.id("textures/fx/skip.png");
     private static final ResourceLocation TEX_COIN = Mino.id("textures/fx/coin.png");
+    private static final ResourceLocation TEX_HEADS = Mino.id("textures/fx/coin_heads.png");
+    private static final ResourceLocation TEX_TAILS = Mino.id("textures/fx/coin_tails.png");
     static final double PILE_Y = 0.95;
 
     private static final Map<BlockEntityMinoTable, State> STATES = new WeakHashMap<>();
@@ -126,6 +132,8 @@ public final class TableFx {
                 case DRAW -> drawSlabs(f, t);
                 case SHOUT -> shoutText(f, t);
                 case PLUS -> plusText(f, t);
+                case TOSS -> toss(f, t);
+                case ROULETTE -> roulette(f, now);
                 case CUSTOM -> {
                     Object[] d = (Object[]) f.data;
                     GL11.glPushMatrix();
@@ -168,6 +176,16 @@ public final class TableFx {
             }
         }
         s.shoutSeq = game.debugShoutSeq;
+        if (!first && game.tossSeq != s.tossSeq && game.tossHeads != null && game.tossTails != null) {
+            int hs = seatOf(game, game.tossHeads), ts = seatOf(game, game.tossTails);
+            if (hs >= 0 && ts >= 0) {
+                Vec3d h = head(table, hs, 1.7), tl = head(table, ts, 1.7);
+                s.fx.add(new Fx(Kind.TOSS, now, 3200, 1.5, PILE_Y, 1.5, 0, new Object[] { h, tl, game.tossHeadsUp }));
+                Vec3d loser = game.tossHeadsUp ? tl : h;
+                s.fx.add(new Fx(Kind.PLUS, now + 2300, 1300, loser.x, loser.y + 0.45, loser.z, 0xFFD040, "+4"));
+            }
+        }
+        s.tossSeq = game.tossSeq;
         for (CardPlayer p : game.players) {
             if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
                 Vec3d at = head(table, p.seat, 1.6);
@@ -222,6 +240,23 @@ public final class TableFx {
                 }
             }
         }
+        // a wild whose color is settled later (a roulette, a decision) gets its color pillar when that happens
+        if (!first && top == s.topUid
+            && game.topCard != null
+            && s.color == CardColor.WILD
+            && game.currentColor != CardColor.WILD
+            && game.topFace()
+                .isWild()
+            && !game.topFace()
+                .type().id.equals("wild_color_roulette")) {
+            Sink sink = new Sink(table, game, s, now);
+            sink.ctx = new CardFxRegistry.Context(table, game, game.topFace(), now, sink);
+            sink.pillar(
+                game.topFace()
+                    .type()
+                    .isDraw());
+        }
+        s.color = game.currentColor;
         if (turned) s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, 0xFFD43A, game.isAntiClockwise));
         s.topUid = top;
         s.dark = game.darkSide;
@@ -268,6 +303,7 @@ public final class TableFx {
     }
 
     private static void particlesFor(String particle, int count, double spread, String... ids) {
+        if (ids.length == 0) return;
         for (String id : ids) CardFxRegistry.register(id, ctx -> ctx.particles(particle, count, spread));
     }
 
@@ -305,7 +341,7 @@ public final class TableFx {
         particlesFor("largesmoke", 30, 1.2, "wild_sudden_death");
         particlesFor("happyVillager", 14, 0.6, "play_again_10");
         particlesFor("flame", 12, 0.6, "wild_hurry_up");
-        CardFxRegistry.register("wild_fifty_fifty", ctx -> ctx.coinToss(new Vec3d(1.5, 1.2, 1.5)));
+        CardFxRegistry.register("wild_color_roulette", ctx -> ctx.sink.roulette());
         CardFxRegistry.register(
             "wild_sudden_death",
             ctx -> ctx.bigText(
@@ -394,6 +430,11 @@ public final class TableFx {
 
         void text(String text, int rgb, Vec3d at, long delay, int duration) {
             s.fx.add(new Fx(Kind.PLUS, now + delay, duration, at.x, at.y, at.z, rgb, text));
+        }
+
+        void roulette() {
+            s.fx.add(
+                new Fx(Kind.ROULETTE, now, 9000, 1.5, PILE_Y + 0.95, 1.5, 0, new Object[] { table, new long[] { 0 } }));
         }
 
         void coin(Vec3d at) {
@@ -573,6 +614,136 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
+    // the 50/50 toss: each chosen player gets a small coin for their side, the big coin climbs over the pile, flips
+    // and lands on the result, then the loser's coin is crossed out and the winner's ticked
+    private static void toss(Fx f, float t) {
+        Object[] d = (Object[]) f.data;
+        Vec3d headsAt = (Vec3d) d[0], tailsAt = (Vec3d) d[1];
+        boolean headsUp = (Boolean) d[2];
+        float pop = Math.min(1f, t / 0.12f);
+        float out = fadeOut(t, 0.9f);
+        smallCoin(headsAt, TEX_HEADS, overshoot(pop) * 0.32f, out, t > 0.72f ? (headsUp ? 1 : -1) : 0, t);
+        smallCoin(tailsAt, TEX_TAILS, overshoot(pop) * 0.32f, out, t > 0.72f ? (headsUp ? -1 : 1) : 0, t);
+        float fly = Math.max(0f, Math.min(1f, (t - 0.15f) / 0.5f));
+        double height = 0.55 + Math.sin(fly * Math.PI) * 0.9;
+        float spins = 5;
+        float angle = (float) (easeOutCubic(fly) * spins * 360 + (headsUp ? 0 : 180));
+        float scale = 0.55f * Math.min(1f, t / 0.15f) * out;
+        GL11.glPushMatrix();
+        GL11.glTranslated(f.x, f.y + height, f.z);
+        billboard();
+        GL11.glRotatef(angle, 1, 0, 0);
+        GL11.glScalef(scale, scale, scale);
+        boolean front = Math.cos(Math.toRadians(angle)) >= 0;
+        for (int i = 0; i < 3; i++) {
+            GL11.glPushMatrix();
+            GL11.glTranslatef(0, 0, (i - 1) * 0.04f);
+            if (!front) GL11.glScalef(1, -1, 1);
+            sprite(front ? TEX_HEADS : TEX_TAILS, 1f, false);
+            GL11.glPopMatrix();
+        }
+        GL11.glPopMatrix();
+    }
+
+    // verdict: 1 ticked, -1 crossed, 0 none yet
+    private static void smallCoin(Vec3d at, ResourceLocation tex, float scale, float alpha, int verdict, float t) {
+        if (scale <= 0.01f) return;
+        GL11.glPushMatrix();
+        GL11.glTranslated(at.x, at.y + Math.sin(t * Math.PI * 4) * 0.03, at.z);
+        billboard();
+        GL11.glScalef(scale, scale, scale);
+        sprite(tex, alpha, false);
+        if (verdict != 0) {
+            float k = Math.min(1f, (t - 0.72f) / 0.08f);
+            Tessellator tes = Tessellator.instance;
+            tes.startDrawingQuads();
+            if (verdict < 0) {
+                box2(tes, 0, 0, Math.PI / 4, 0.95 * k, 0.16, 0.02, 0xE02020, alpha);
+                box2(tes, 0, 0, -Math.PI / 4, 0.95 * k, 0.16, 0.02, 0xE02020, alpha);
+            } else {
+                box2(tes, -0.18, -0.12, -Math.PI / 4, 0.36 * k, 0.16, 0.02, 0x30D040, alpha);
+                box2(tes, 0.12, 0.06, Math.PI / 3.2, 0.72 * k, 0.16, 0.02, 0x30D040, alpha);
+            }
+            tes.draw();
+        }
+        GL11.glPopMatrix();
+    }
+
+    // the color roulette: a four-color wheel spins over the pile until the color is known, then slows down, stops
+    // with that color under the pointer and bursts
+    private static void roulette(Fx f, long now) {
+        Object[] d = (Object[]) f.data;
+        BlockEntityMinoTable table = (BlockEntityMinoTable) d[0];
+        long[] stopAt = (long[]) d[1];
+        CardGame live = table.game;
+        if (live == null) return;
+        boolean dark = live.darkSide;
+        List<CardColor> colors = CardColor.forSide(dark);
+        CardColor result = live.currentColor;
+        if (stopAt[0] == 0 && result != CardColor.WILD && colors.contains(result)) stopAt[0] = now;
+        double spinRate = 0.9;
+        double angle;
+        float after = 0;
+        if (stopAt[0] == 0) {
+            angle = (now - f.start) * spinRate;
+        } else {
+            double atStop = (stopAt[0] - f.start) * spinRate;
+            double center = colors.indexOf(result) * 90 + 45;
+            double target = atStop + 540 + ((90 - center - atStop) % 360 + 720) % 360;
+            float k = Math.min(1f, (now - stopAt[0]) / 1300f);
+            angle = atStop + (target - atStop) * easeOutCubic(k);
+            after = Math.max(0f, (now - stopAt[0] - 1300) / 900f);
+            if (after >= 1f) return;
+        }
+        float appear = overshoot(Math.min(1f, (now - f.start) / 300f));
+        float scale = 0.5f * appear * (1 - after);
+        if (scale > 0.01f) {
+            GL11.glPushMatrix();
+            GL11.glTranslated(f.x, f.y + Math.sin((now - f.start) / 300.0) * 0.03, f.z);
+            GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
+            GL11.glScalef(-1, 1, 1);
+            GL11.glRotatef(RenderManager.instance.playerViewX * 0.4f, 1, 0, 0);
+            GL11.glScalef(scale, scale, scale);
+            Tessellator tes = Tessellator.instance;
+            tes.startDrawingQuads();
+            prism(tes, new double[] { -0.12, 0.12, 0 }, new double[] { 1.2, 1.2, 0.98 }, 0.12, 0xFFFFFF, 1f);
+            tes.draw();
+            GL11.glRotatef((float) angle, 0, 0, 1);
+            tes.startDrawingQuads();
+            for (int q = 0; q < Math.min(4, colors.size()); q++) {
+                int rgb = colors.get(q).rgb & 0xFFFFFF;
+                int seg = 6;
+                for (int i = 0; i < seg; i++) {
+                    double a0 = Math.toRadians(q * 90 + 2 + 86.0 * i / seg),
+                        a1 = Math.toRadians(q * 90 + 2 + 86.0 * (i + 1) / seg);
+                    prism(
+                        tes,
+                        new double[] { 0, Math.cos(a0), Math.cos(a1) },
+                        new double[] { 0, Math.sin(a0), Math.sin(a1) },
+                        0.1,
+                        rgb,
+                        1f);
+                }
+            }
+            tes.draw();
+            GL11.glPopMatrix();
+        }
+        if (stopAt[0] != 0 && now - stopAt[0] > 1300) {
+            int rgb = result.rgb & 0xFFFFFF;
+            cubes(
+                f.x,
+                f.y,
+                f.z,
+                (now - stopAt[0] - 1300) / 1000f,
+                f.start,
+                new int[] { rgb, shade(rgb, 1.3f), 0xFFFFFF },
+                24,
+                0.08f,
+                1.6f,
+                1 - after);
+        }
+    }
+
     // a gold coin tossed above the pile: it climbs, flips end over end and lands
     private static void coin(Fx f, float t) {
         double height = Math.sin(Math.min(1f, t / 0.85f) * Math.PI) * 0.85;
@@ -639,17 +810,31 @@ public final class TableFx {
         tes.startDrawingQuads();
         for (int q = 0; q < Math.min(4, colors.size()); q++) {
             boolean picked = q == pick;
-            double h = (picked ? 0.55 + 0.3 * lift : 0.24) * (1 - 0.85 * pull);
+            double h = (picked ? 0.55 + 0.25 * lift : 0.24) * (1 - 0.85 * pull);
             double y0 = picked ? 0.12 * lift : 0;
             if (h <= 0.005) continue;
             int rgb = colors.get(q).rgb & 0xFFFFFF;
+            double mid = Math.atan2(off[q][1], off[q][0]);
+            double grow = picked ? 1 + 0.22 * lift : 1;
             if (square) {
-                double cx = off[q][0] * 0.44 * (1 - pull), cz = off[q][1] * 0.44 * (1 - pull),
-                    hw = 0.17 * (1 - 0.6 * pull);
-                cuboid(tes, cx - hw, y0, cz - hw, cx + hw, y0 + h, cz + hw, rgb, 1f);
+                double cx = off[q][0] * 0.44 * (1 - pull), cz = off[q][1] * 0.44 * (1 - pull), k = 1 - 0.6 * pull;
+                frustum(tes, cx, cz, 0.15 * k * grow, 0.18 * k * grow * (picked ? 1.15 : 1), y0, y0 + h, rgb);
+                if (pull <= 0f) topArrow(tes, cx, cz, mid, -0.07, 0.09, 0.07, y0 + h + 0.004);
             } else {
-                double mid = Math.toDegrees(Math.atan2(off[q][1], off[q][0])), k = 1 - 0.9 * pull;
-                ringQuarter(tes, mid - 43, mid + 43, 0.03 * k, 0.56 * k, y0, y0 + h, rgb, 1f);
+                double k = 1 - 0.9 * pull, ox = Math.cos(mid) * 0.035 * k, oz = Math.sin(mid) * 0.035 * k;
+                ringPiece(
+                    tes,
+                    ox,
+                    oz,
+                    mid - Math.toRadians(40),
+                    mid + Math.toRadians(40),
+                    0.03 * k,
+                    0.56 * k * grow * (picked ? 1.12 : 1.04),
+                    0.5 * k * grow,
+                    y0,
+                    y0 + h,
+                    rgb);
+                if (pull <= 0f) topArrow(tes, ox, oz, mid, 0.18, 0.36, 0.085, y0 + h + 0.004);
             }
         }
         tes.draw();
@@ -686,6 +871,66 @@ public final class TableFx {
             GL11.glDepthMask(true);
             GL11.glPopMatrix();
         }
+    }
+
+    // a block whose top is a little wider than its foot, like the picker's
+    private static void frustum(Tessellator t, double cx, double cz, double hwBottom, double hwTop, double y0,
+        double y1, int rgb) {
+        color(t, shade(rgb, 1.1f), 1f);
+        t.addVertex(cx - hwTop, y1, cz - hwTop);
+        t.addVertex(cx - hwTop, y1, cz + hwTop);
+        t.addVertex(cx + hwTop, y1, cz + hwTop);
+        t.addVertex(cx + hwTop, y1, cz - hwTop);
+        double[][] c = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        float[] k = { 0.85f, 0.7f, 0.85f, 0.7f };
+        for (int i = 0; i < 4; i++) {
+            double[] p = c[i], q = c[(i + 1) % 4];
+            color(t, shade(rgb, k[i]), 1f);
+            t.addVertex(cx + p[0] * hwTop, y1, cz + p[1] * hwTop);
+            t.addVertex(cx + q[0] * hwTop, y1, cz + q[1] * hwTop);
+            color(t, shade(rgb, k[i] * 0.75f), 1f);
+            t.addVertex(cx + q[0] * hwBottom, y0, cz + q[1] * hwBottom);
+            t.addVertex(cx + p[0] * hwBottom, y0, cz + p[1] * hwBottom);
+        }
+    }
+
+    // a quarter of the color ring with a flared top, like the picker's
+    private static void ringPiece(Tessellator t, double ox, double oz, double a0, double a1, double r0, double r1Top,
+        double r1Bottom, double y0, double y1, int rgb) {
+        int steps = 12;
+        for (int i = 0; i < steps; i++) {
+            double u0 = a0 + (a1 - a0) * i / steps, u1 = a0 + (a1 - a0) * (i + 1) / steps;
+            double c0 = Math.cos(u0), s0 = Math.sin(u0), c1 = Math.cos(u1), s1 = Math.sin(u1);
+            color(t, shade(rgb, 1.1f), 1f);
+            t.addVertex(ox + c0 * r0, y1, oz + s0 * r0);
+            t.addVertex(ox + c0 * r1Top, y1, oz + s0 * r1Top);
+            t.addVertex(ox + c1 * r1Top, y1, oz + s1 * r1Top);
+            t.addVertex(ox + c1 * r0, y1, oz + s1 * r0);
+            color(t, shade(rgb, 0.85f), 1f);
+            t.addVertex(ox + c0 * r1Top, y1, oz + s0 * r1Top);
+            t.addVertex(ox + c1 * r1Top, y1, oz + s1 * r1Top);
+            color(t, shade(rgb, 0.6f), 1f);
+            t.addVertex(ox + c1 * r1Bottom, y0, oz + s1 * r1Bottom);
+            t.addVertex(ox + c0 * r1Bottom, y0, oz + s0 * r1Bottom);
+        }
+        color(t, shade(rgb, 0.7f), 1f);
+        for (double a : new double[] { a0, a1 }) {
+            double c = Math.cos(a), s = Math.sin(a);
+            t.addVertex(ox + c * r0, y1, oz + s * r0);
+            t.addVertex(ox + c * r1Top, y1, oz + s * r1Top);
+            t.addVertex(ox + c * r1Bottom, y0, oz + s * r1Bottom);
+            t.addVertex(ox + c * r0, y0, oz + s * r0);
+        }
+    }
+
+    private static void topArrow(Tessellator t, double cx, double cz, double angle, double from, double to,
+        double halfBase, double y) {
+        double nx = Math.cos(angle), nz = Math.sin(angle), px = -nz, pz = nx;
+        color(t, 0xFF8A1E, 1f);
+        t.addVertex(cx + nx * to, y, cz + nz * to);
+        t.addVertex(cx + nx * from + px * halfBase, y, cz + nz * from + pz * halfBase);
+        t.addVertex(cx + nx * from - px * halfBase, y, cz + nz * from - pz * halfBase);
+        t.addVertex(cx + nx * from - px * halfBase, y, cz + nz * from - pz * halfBase);
     }
 
     private static void cuboid(Tessellator t, double x0, double y0, double z0, double x1, double y1, double z1, int rgb,
@@ -1086,14 +1331,17 @@ public final class TableFx {
     private static void bentFace(CardFace face, String theme, float w, float h, float bend) {
         int cols = 12;
         GL11.glEnable(GL11.GL_TEXTURE_2D);
-        for (ResourceLocation tex : CardBatch.textures(face, theme)) {
+        ResourceLocation[] layers = CardBatch.textures(face, theme);
+        for (int layer = 0; layer < layers.length; layer++) {
+            ResourceLocation tex = layers[layer];
             if (tex == null) continue;
             Minecraft.getMinecraft()
                 .getTextureManager()
                 .bindTexture(tex);
+            int tint = ThemeManager.INSTANCE.layerTint(theme, face, layer);
             Tessellator t = Tessellator.instance;
             t.startDrawingQuads();
-            t.setColorRGBA_F(1, 1, 1, 1);
+            t.setColorRGBA_F((tint >> 16 & 255) / 255f, (tint >> 8 & 255) / 255f, (tint & 255) / 255f, 1);
             for (int i = 0; i < cols; i++) {
                 double u0 = i / (double) cols, u1 = (i + 1) / (double) cols;
                 double x0 = -w / 2 + w * u0, x1 = -w / 2 + w * u1;

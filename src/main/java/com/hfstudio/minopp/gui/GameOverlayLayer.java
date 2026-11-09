@@ -679,8 +679,8 @@ public class GameOverlayLayer {
         coinRect = null;
         if (!enabled || me == null) return;
         long now = System.currentTimeMillis();
-        if (coinGame != game) {
-            coinGame = game;
+        if (!Objects.equals(coinGame, game.id)) {
+            coinGame = game.id;
             coinSide = me.coinNoMercy;
             coinSpent = me.coinUsed;
         }
@@ -741,8 +741,8 @@ public class GameOverlayLayer {
         long now = System.currentTimeMillis();
         int top = game.topCard == null ? -1 : game.topCard.uid;
         int size = me.hand.size();
-        if (callGame != game) {
-            callGame = game;
+        if (!Objects.equals(callGame, game.id)) {
+            callGame = game.id;
             callTop = top;
             callHand = size;
             callMove = game.handMoveCounter;
@@ -799,8 +799,8 @@ public class GameOverlayLayer {
     // debug games never put drawn cards into the hand: they fly in, show their face and dissolve
     private void drawDebugDraws(CardGame game, CardPlayer me, String theme, int width, int height) {
         long now = System.currentTimeMillis();
-        if (ghostGame != game) {
-            ghostGame = game;
+        if (!Objects.equals(ghostGame, game.id)) {
+            ghostGame = game.id;
             ghostSeq = game.debugDrawSeq;
         }
         if (game.debug && game.isDebugger(me) && game.debugDrawSeq != ghostSeq) {
@@ -851,7 +851,7 @@ public class GameOverlayLayer {
         float dt = Math.min(0.1f, (now - lastRowNanos) / 1e9f);
         lastRowNanos = now;
         float ease = 1 - (float) Math.exp(-dt * 14);
-        boolean interactive = HandScreen.isOpen() || Minecraft.getMinecraft().currentScreen instanceof PlayChoiceScreen;
+        boolean interactive = HandScreen.isOpen();
         rowRaise += ((interactive ? 1 : 0) - rowRaise) * ease;
         rowLift.keySet()
             .removeIf(
@@ -889,7 +889,7 @@ public class GameOverlayLayer {
         }
 
         long nowMs = System.currentTimeMillis();
-        if (rowGame == game) {
+        if (Objects.equals(rowGame, game.id)) {
             for (Map.Entry<Integer, float[]> e : rowLast.entrySet()) {
                 int uid = e.getKey();
                 boolean gone = fullHand.stream()
@@ -907,7 +907,7 @@ public class GameOverlayLayer {
         }
         rowKnown.clear();
         for (Card c : fullHand) rowKnown.add(c.uid);
-        rowGame = game;
+        rowGame = game.id;
         rowLast.clear();
         for (int i = 0; i < n; i++) rowLast.put(hand.get(i).uid, new float[] { cxs[i], cys[i], angs[i], cw, ch });
         rowEnter.values()

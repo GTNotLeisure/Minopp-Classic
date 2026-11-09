@@ -40,7 +40,10 @@ public class HandScreen extends GuiScreen {
     private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100;
 
     private static String query = "";
-    private static Card infoCard;
+    /** Shift-click turns the card info band on and off; while on it follows the selected card. */
+    private static boolean infoOn = true;
+    private static final java.util.Set<String> PLAIN = java.util.Set
+        .of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
     private static boolean debugOpen = true;
     private GuiTextField search;
     private int hintBottom;
@@ -167,7 +170,6 @@ public class HandScreen extends GuiScreen {
     public void onGuiClosed() {
         Keyboard.enableRepeatEvents(false);
         if (!resumeAfterChoice) query = "";
-        infoCard = null;
         com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckHot = false;
     }
 
@@ -263,13 +265,13 @@ public class HandScreen extends GuiScreen {
                     .getFormattedText());
             UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
         }
-        if (infoCard != null) {
-            Card live = ctx.hand.stream()
-                .filter(c -> c.uid == infoCard.uid)
-                .findFirst()
-                .orElse(null);
-            if (live == null) infoCard = null;
-            else drawCardInfo(ctx, live);
+        int sel = ItemHandCards.getClientHandIndex(mc.thePlayer);
+        if (infoOn && sel >= 0 && sel < ctx.hand.size()) {
+            Card card = ctx.hand.get(sel);
+            if (!PLAIN.contains(
+                ctx.game.face(card)
+                    .type().id))
+                drawCardInfo(ctx, card);
         }
         if (noticeText != null && System.currentTimeMillis() < noticeUntil) {
             int nw = fontRendererObj.getStringWidth(noticeText);
@@ -406,9 +408,11 @@ public class HandScreen extends GuiScreen {
             return;
         }
         if (hit >= 0 && isShiftKeyDown()) {
-            Card c = ctx.hand.get(hit);
-            infoCard = infoCard != null && infoCard.uid == c.uid ? null : c;
+            infoOn = !infoOn;
             select(ctx, hit);
+            notice(
+                Chat.translatable(infoOn ? "gui.minopp.hand.info_on" : "gui.minopp.hand.info_off")
+                    .getFormattedText());
             return;
         }
         if (hit >= 0) play(ctx, hit);

@@ -1,6 +1,7 @@
 {
   "themes": [
     { "id": "classic", "name": "Classic" },
-    { "id": "winter", "name": "Winter", "fallback": "classic" }
+    { "id": "winter", "name": "Winter", "fallback": "classic" },
+    { "id": "noir", "name": "Noir", "fallback": "classic", "tint": true }
   ]
 }

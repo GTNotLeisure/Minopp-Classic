@@ -53,14 +53,12 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glRotatef(-90, 1, 0, 0);
         int layers = com.hfstudio.minopp.block.BlockMinoTable.deckLayers(game.deck.size());
         float layerH = com.hfstudio.minopp.block.BlockMinoTable.DECK_LAYER_H;
-        for (int ci = 0; ci < layers; ci++) {
-            BATCH.at(jitter(ci, 0) * 0.06f - 0.03f, jitter(ci, 1) * 0.06f - 0.03f, ci * layerH, 0);
-            BATCH.slab(0.32f, 0.5f, -layerH, 0, ci % 2 == 0 ? 0xF4F2EC : 0xD6D2C8);
-            if (ci == layers - 1) {
-                Card top = game.deck.get(game.deck.size() - 1);
-                BATCH.back(top, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
-            }
-        }
+        // one solid block of a fixed height: the pile always looks the same, however many cards are left
+        float total = layers * layerH;
+        BATCH.at(0, 0, total, 0);
+        BATCH.slab(0.32f, 0.5f, -total, 0, 0xECEAE2);
+        Card shown = !game.deck.isEmpty() ? game.deck.get(game.deck.size() - 1) : game.topCard;
+        if (shown != null) BATCH.back(shown, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
         BATCH.flush();
         GL11.glPopMatrix();
         deckHighlight(blockEntity, game, layers, layerH);

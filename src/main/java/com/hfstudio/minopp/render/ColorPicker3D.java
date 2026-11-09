@@ -171,8 +171,10 @@ public final class ColorPicker3D {
             int rgb = colors.get(i).rgb;
             if (ring) {
                 double mid = Math.atan2(offsets[i][1], offsets[i][0]);
-                double a0 = mid - Math.toRadians(43), a1 = mid + Math.toRadians(43);
-                drawQuarter(a0, a1, 0.03, 0.56, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
+                double a0 = mid - Math.toRadians(40), a1 = mid + Math.toRadians(40);
+                double ox = 1.5 + Math.cos(mid) * 0.035, oz = 1.5 + Math.sin(mid) * 0.035;
+                drawQuarter(ox, oz, a0, a1, 0.03, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
+                arrow(ox, oz, mid, 0.18, 0.36, 0.085, y1 + 0.004, hot ? 0.95f : 0.8f);
                 double[][] pts = new double[14][];
                 for (int k = 0; k < 6; k++) {
                     double a = a0 + (a1 - a0) * k / 5;
@@ -186,7 +188,8 @@ public final class ColorPicker3D {
                 continue;
             }
             float alpha = hot ? 0.95f : 0.78f;
-            drawBox(cx - half, y0, cz - half, cx + half, y1, cz + half, rgb, alpha, hot);
+            drawFrustum(cx, cz, 0.15, hot ? 0.21 : 0.18, y0, y1, rgb, alpha, hot);
+            arrow(cx, cz, Math.atan2(offsets[i][1], offsets[i][0]), -0.07, 0.09, 0.07, y1 + 0.004, alpha);
             if (local) screenBounds[i] = project(
                 cx - half,
                 y0,
@@ -253,9 +256,10 @@ public final class ColorPicker3D {
         }
     }
 
-    // one quarter of the ring, smooth enough to read as round, lit from the top
-    private static void drawQuarter(double a0, double a1, double r0, double r1, double y0, double y1, int rgb,
-        float alpha, boolean hot) {
+    // one quarter of the ring, with a gap to its neighbours; its top flares out wider than its foot, more so when it
+    // is the one pointed at
+    private static void drawQuarter(double ox, double oz, double a0, double a1, double r0, double r1Top,
+        double r1Bottom, double y0, double y1, int rgb, float alpha, boolean hot) {
         Tessellator t = Tessellator.instance;
         float r = (rgb >> 16 & 255) / 255f, g = (rgb >> 8 & 255) / 255f, b = (rgb & 255) / 255f;
         if (hot) {
@@ -273,41 +277,95 @@ public final class ColorPicker3D {
                 Math.min(1, g * 1.2f + 0.1f),
                 Math.min(1, b * 1.2f + 0.1f),
                 alpha);
-            t.addVertex(1.5 + c0 * r0, y1, 1.5 + s0 * r0);
-            t.addVertex(1.5 + c0 * r1, y1, 1.5 + s0 * r1);
-            t.addVertex(1.5 + c1 * r1, y1, 1.5 + s1 * r1);
-            t.addVertex(1.5 + c1 * r0, y1, 1.5 + s1 * r0);
+            t.addVertex(ox + c0 * r0, y1, oz + s0 * r0);
+            t.addVertex(ox + c0 * r1Top, y1, oz + s0 * r1Top);
+            t.addVertex(ox + c1 * r1Top, y1, oz + s1 * r1Top);
+            t.addVertex(ox + c1 * r0, y1, oz + s1 * r0);
             t.setColorRGBA_F(r * 0.85f, g * 0.85f, b * 0.85f, alpha);
-            t.addVertex(1.5 + c0 * r1, y1, 1.5 + s0 * r1);
-            t.addVertex(1.5 + c1 * r1, y1, 1.5 + s1 * r1);
+            t.addVertex(ox + c0 * r1Top, y1, oz + s0 * r1Top);
+            t.addVertex(ox + c1 * r1Top, y1, oz + s1 * r1Top);
             t.setColorRGBA_F(r * 0.65f, g * 0.65f, b * 0.65f, alpha * 0.45f);
-            t.addVertex(1.5 + c1 * r1, y0, 1.5 + s1 * r1);
-            t.addVertex(1.5 + c0 * r1, y0, 1.5 + s0 * r1);
+            t.addVertex(ox + c1 * r1Bottom, y0, oz + s1 * r1Bottom);
+            t.addVertex(ox + c0 * r1Bottom, y0, oz + s0 * r1Bottom);
         }
-        t.setColorRGBA_F(r * 0.7f, g * 0.7f, b * 0.7f, alpha);
         for (double a : new double[] { a0, a1 }) {
             double c = Math.cos(a), s = Math.sin(a);
-            t.addVertex(1.5 + c * r0, y1, 1.5 + s * r0);
-            t.addVertex(1.5 + c * r1, y1, 1.5 + s * r1);
-            t.setColorRGBA_F(r * 0.55f, g * 0.55f, b * 0.55f, alpha * 0.45f);
-            t.addVertex(1.5 + c * r1, y0, 1.5 + s * r1);
-            t.addVertex(1.5 + c * r0, y0, 1.5 + s * r0);
             t.setColorRGBA_F(r * 0.7f, g * 0.7f, b * 0.7f, alpha);
+            t.addVertex(ox + c * r0, y1, oz + s * r0);
+            t.addVertex(ox + c * r1Top, y1, oz + s * r1Top);
+            t.setColorRGBA_F(r * 0.55f, g * 0.55f, b * 0.55f, alpha * 0.45f);
+            t.addVertex(ox + c * r1Bottom, y0, oz + s * r1Bottom);
+            t.addVertex(ox + c * r0, y0, oz + s * r0);
         }
         t.draw();
         if (hot) {
             GL11.glLineWidth(2f);
             t.startDrawing(GL11.GL_LINE_STRIP);
             t.setColorRGBA_F(1, 1, 1, 0.9f);
-            t.addVertex(1.5 + Math.cos(a0) * r0, y1 + 0.004, 1.5 + Math.sin(a0) * r0);
+            t.addVertex(ox + Math.cos(a0) * r0, y1 + 0.004, oz + Math.sin(a0) * r0);
             for (int i = 0; i <= steps; i++) {
                 double a = a0 + (a1 - a0) * i / steps;
-                t.addVertex(1.5 + Math.cos(a) * r1, y1 + 0.004, 1.5 + Math.sin(a) * r1);
+                t.addVertex(ox + Math.cos(a) * r1Top, y1 + 0.004, oz + Math.sin(a) * r1Top);
             }
-            t.addVertex(1.5 + Math.cos(a1) * r0, y1 + 0.004, 1.5 + Math.sin(a1) * r0);
+            t.addVertex(ox + Math.cos(a1) * r0, y1 + 0.004, oz + Math.sin(a1) * r0);
             t.draw();
             GL11.glLineWidth(1f);
         }
+    }
+
+    // a block whose top is a little wider than its foot, so its sides lean out
+    private static void drawFrustum(double cx, double cz, double hwBottom, double hwTop, double y0, double y1, int rgb,
+        float alpha, boolean hot) {
+        Tessellator t = Tessellator.instance;
+        float r = (rgb >> 16 & 255) / 255f, g = (rgb >> 8 & 255) / 255f, b = (rgb & 255) / 255f;
+        if (hot) {
+            r = Math.min(1, r * 1.15f + 0.08f);
+            g = Math.min(1, g * 1.15f + 0.08f);
+            b = Math.min(1, b * 1.15f + 0.08f);
+        }
+        t.startDrawingQuads();
+        t.setColorRGBA_F(
+            Math.min(1, r * 1.2f + 0.1f),
+            Math.min(1, g * 1.2f + 0.1f),
+            Math.min(1, b * 1.2f + 0.1f),
+            alpha);
+        t.addVertex(cx - hwTop, y1, cz - hwTop);
+        t.addVertex(cx - hwTop, y1, cz + hwTop);
+        t.addVertex(cx + hwTop, y1, cz + hwTop);
+        t.addVertex(cx + hwTop, y1, cz - hwTop);
+        double[][] top = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        float[] shade = { 0.85f, 0.7f, 0.85f, 0.7f };
+        for (int k = 0; k < 4; k++) {
+            double[] p = top[k], q = top[(k + 1) % 4];
+            t.setColorRGBA_F(r * shade[k], g * shade[k], b * shade[k], alpha);
+            t.addVertex(cx + p[0] * hwTop, y1, cz + p[1] * hwTop);
+            t.addVertex(cx + q[0] * hwTop, y1, cz + q[1] * hwTop);
+            t.setColorRGBA_F(r * shade[k] * 0.8f, g * shade[k] * 0.8f, b * shade[k] * 0.8f, alpha * 0.45f);
+            t.addVertex(cx + q[0] * hwBottom, y0, cz + q[1] * hwBottom);
+            t.addVertex(cx + p[0] * hwBottom, y0, cz + p[1] * hwBottom);
+        }
+        t.draw();
+        if (hot) {
+            GL11.glLineWidth(2f);
+            t.startDrawing(GL11.GL_LINE_LOOP);
+            t.setColorRGBA_F(1, 1, 1, 0.9f);
+            for (double[] p : top) t.addVertex(cx + p[0] * (hwTop + 0.004), y1 + 0.004, cz + p[1] * (hwTop + 0.004));
+            t.draw();
+            GL11.glLineWidth(1f);
+        }
+    }
+
+    // the orange arrow on top of each piece, pointing away from the pile
+    private static void arrow(double cx, double cz, double angle, double from, double to, double halfBase, double y,
+        float alpha) {
+        double nx = Math.cos(angle), nz = Math.sin(angle), px = -nz, pz = nx;
+        Tessellator t = Tessellator.instance;
+        t.startDrawing(GL11.GL_TRIANGLES);
+        t.setColorRGBA_F(1f, 0.55f, 0.12f, alpha);
+        t.addVertex(cx + nx * to, y, cz + nz * to);
+        t.addVertex(cx + nx * from + px * halfBase, y, cz + nz * from + pz * halfBase);
+        t.addVertex(cx + nx * from - px * halfBase, y, cz + nz * from - pz * halfBase);
+        t.draw();
     }
 
     private static float[] projectPoints(double[][] pts, FloatBuffer modelview, FloatBuffer projection,

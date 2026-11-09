@@ -171,14 +171,18 @@ public final class DevPreview {
         }
     }
 
-    private static final String[] SCRIPT = { "wild", "wild_draw4", "draw2", "skip", "reverse", "wild_sudden_death",
-        "flip", "wild", "flip", "wild_final_attack", "play_again_10", "shout" };
+    private static final String[] SCRIPT = { "wild", "wild_fifty_fifty", "draw", "wild_draw4", "wild_color_roulette",
+        "wild", "skip", "draw" };
     private int scriptStep;
 
     // debug preview: plays one card of each effect in turn, so every table animation can be watched
     private void playScripted(BlockEntityMinoTable table, CardPlayer me, EntityPlayerMP player) {
         CardGame game = table.game;
         String id = SCRIPT[scriptStep++ % SCRIPT.length];
+        if (id.equals("draw")) {
+            table.handleActionResult(game.debugAction("draw"), me, player);
+            return;
+        }
         if (id.equals("shout")) {
             for (CardPlayer p : game.players) p.hasShoutedMino = false;
             CardPlayer bot = game.players.get(scriptStep % game.players.size());

@@ -47,14 +47,17 @@ public final class CardRenderer {
     }
 
     public static void drawFace2D(CardFace face, String theme, float x, float y, float w, float h) {
-        GL11.glColor4f(1, 1, 1, 1);
-        for (ResourceLocation tex : CardBatch.textures(face, theme)) {
-            if (tex == null) continue;
+        ResourceLocation[] layers = CardBatch.textures(face, theme);
+        for (int i = 0; i < layers.length; i++) {
+            if (layers[i] == null) continue;
+            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i);
+            GL11.glColor4f((tint >> 16 & 255) / 255f, (tint >> 8 & 255) / 255f, (tint & 255) / 255f, 1);
             Minecraft.getMinecraft()
                 .getTextureManager()
-                .bindTexture(tex);
+                .bindTexture(layers[i]);
             GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
         }
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
     public static void drawCornerSymbol(CardFace face, String theme, float x, float y, float size) {

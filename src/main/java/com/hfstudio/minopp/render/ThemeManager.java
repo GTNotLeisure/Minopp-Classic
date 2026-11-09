@@ -34,7 +34,8 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     public static final ThemeManager INSTANCE = new ThemeManager();
     public static final String DEFAULT = "classic";
 
-    public record ThemeInfo(String id, String name, String fallback) {}
+    /** {@code tint}: the theme's number and symbol layers are white and take the card's color. */
+    public record ThemeInfo(String id, String name, String fallback, boolean tint) {}
 
     private final Map<String, ThemeInfo> themes = new LinkedHashMap<>();
     private final Map<ResourceLocation, Boolean> existsCache = new HashMap<>();
@@ -43,7 +44,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     private String lastSentTheme = null;
 
     private ThemeManager() {
-        themes.put(DEFAULT, new ThemeInfo(DEFAULT, "Classic", null));
+        themes.put(DEFAULT, new ThemeInfo(DEFAULT, "Classic", null, false));
     }
 
     @Override
@@ -52,7 +53,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         existsCache.clear();
         textureCache.clear();
         CardBatch.clearCache();
-        themes.put(DEFAULT, new ThemeInfo(DEFAULT, "Classic", null));
+        themes.put(DEFAULT, new ThemeInfo(DEFAULT, "Classic", null, false));
         try {
             List<?> resources = rm.getAllResources(new ResourceLocation(Mino.MOD_ID, "themes.json"));
             for (Object o : resources) {
@@ -68,7 +69,9 @@ public final class ThemeManager implements IResourceManagerReloadListener {
                             .getAsString() : id;
                         String fallback = t.has("fallback") ? t.get("fallback")
                             .getAsString() : DEFAULT;
-                        themes.put(id, new ThemeInfo(id, name, fallback));
+                        boolean tint = t.has("tint") && t.get("tint")
+                            .getAsBoolean();
+                        themes.put(id, new ThemeInfo(id, name, fallback, tint));
                     }
                 } catch (Exception e) {
                     Mino.LOGGER.warn("Invalid minopp themes.json in a resource pack: {}", e.toString());
@@ -141,6 +144,13 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     public void onDisconnect() {
         lastSentTheme = null;
         playerThemes.clear();
+    }
+
+    /** The color a card layer is drawn in: white, or the card's color for a tinting theme's glyph layers. */
+    public int layerTint(String theme, com.hfstudio.minopp.game.CardFace face, int layer) {
+        if (layer == 0 || face == null || face.color.isWild()) return 0xFFFFFF;
+        ThemeInfo info = themes.get(theme);
+        return info != null && info.tint() ? face.color.rgb & 0xFFFFFF : 0xFFFFFF;
     }
 
     public ResourceLocation texture(String theme, String layer) {

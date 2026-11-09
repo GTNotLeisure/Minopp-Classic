@@ -369,7 +369,8 @@ public class GameSettingsScreen extends GuiScreen {
                 List<Tile> list = new ArrayList<>();
                 for (ThemeManager.ThemeInfo theme : ThemeManager.INSTANCE.getThemes()) {
                     Tile t = new Tile("theme:" + theme.id(), Kind.THEME, theme);
-                    t.title = theme.name();
+                    String nameKey = "gui.minopp.theme." + theme.id();
+                    t.title = net.minecraft.util.StatCollector.canTranslate(nameKey) ? tr(nameKey) : theme.name();
                     t.desc.add(tr("gui.minopp.style.desc"));
                     t.controls.add(tr("gui.minopp.controls.theme"));
                     list.add(t);

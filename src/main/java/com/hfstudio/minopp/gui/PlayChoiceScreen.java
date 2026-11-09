@@ -55,10 +55,15 @@ public class PlayChoiceScreen extends GuiScreen {
         this.colorStep = needsColor;
     }
 
-    // choices sit on a band just above the raised hand instead of covering the whole screen
+    // choices sit along the bottom of the screen, over the lowered hand
     private int bandTop() {
-        int cw = Math.max(40, Math.min(60, width / 9)), ch = Math.round(cw * 8.9f / 5.6f);
-        return Math.max(60, height - ch - 86);
+        return height - 74;
+    }
+
+    // only debug games may back out of a play once its color or targets are being chosen
+    private boolean canCancel() {
+        BlockEntityMinoTable table = table();
+        return table != null && table.game != null && table.game.debug;
     }
 
     private BlockEntityMinoTable table() {
@@ -84,7 +89,7 @@ public class PlayChoiceScreen extends GuiScreen {
                     new UiButton(
                         c.ordinal(),
                         width / 2 - total / 2 + i * (bw + gap),
-                        band + 26,
+                        height - 30,
                         bw,
                         18,
                         EnumChatFormatting.getTextWithoutFormattingCodes(
@@ -92,11 +97,11 @@ public class PlayChoiceScreen extends GuiScreen {
                                 .getFormattedText()),
                         c.rgb));
             }
-            buttonList.add(
+            if (canCancel()) buttonList.add(
                 new UiButton(
                     -1,
                     width / 2 + total / 2 + 10,
-                    band + 26,
+                    height - 30,
                     50,
                     18,
                     Chat.translatable("gui.cancel")
@@ -114,9 +119,9 @@ public class PlayChoiceScreen extends GuiScreen {
             }
             picker = new PlayerPicker(others, sizes, targetCount);
             picker.layout(width / 2, 0, width - 40);
-            int top = Math.max(40, band - picker.height() - 10);
+            int top = Math.max(40, height - 32 - picker.height() - 6);
             picker.layout(width / 2, top, width - 40);
-            int by = Math.min(height - 28, top + picker.height() + 6);
+            int by = height - 28;
             buttonList.add(
                 new UiButton(
                     -2,
@@ -126,7 +131,7 @@ public class PlayChoiceScreen extends GuiScreen {
                     20,
                     Chat.translatable("gui.minopp.choice.confirm")
                         .getFormattedText()));
-            buttonList.add(
+            if (canCancel()) buttonList.add(
                 new UiButton(
                     -1,
                     width / 2 + 4,
@@ -141,7 +146,7 @@ public class PlayChoiceScreen extends GuiScreen {
     @Override
     protected void actionPerformed(GuiButton button) {
         if (button.id == -1) {
-            HandScreen.returnFromChoice();
+            if (canCancel()) HandScreen.returnFromChoice();
             return;
         }
         if (button.id == -2) {
@@ -264,7 +269,7 @@ public class PlayChoiceScreen extends GuiScreen {
             return;
         }
         if (keyCode == Keyboard.KEY_ESCAPE) {
-            HandScreen.returnFromChoice();
+            if (canCancel()) HandScreen.returnFromChoice();
             return;
         }
         super.keyTyped(typedChar, keyCode);
@@ -315,20 +320,18 @@ public class PlayChoiceScreen extends GuiScreen {
         String theme = ThemeManager.INSTANCE.selected();
         int band = bandTop();
         if (colorStep) {
-            UiDraw.gradient(0, band - 6, width, band + 50, 0x00200404, 0xB0200404);
-            GuiDraw.drawCenteredString(
-                fontRendererObj,
-                Chat.translatable("gui.minopp.wild_selection.title")
-                    .getFormattedText(),
-                width / 2,
-                band,
-                0xFFFFE070);
+            UiDraw.gradient(0, height - 84, width, height, 0x00200404, 0xB0200404);
+            String title = Chat.translatable("gui.minopp.wild_selection.title")
+                .getFormattedText();
+            int tw = fontRendererObj.getStringWidth(title);
+            UiDraw.roundRect(width / 2 - tw / 2 - 8, band - 3, width / 2 + tw / 2 + 8, band + 10, 5, 0xC0101010);
+            GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, band, 0xFFFFE070);
             GuiDraw.drawCenteredString(
                 fontRendererObj,
                 Chat.translatable("gui.minopp.wild_selection.hint")
                     .getFormattedText(),
                 width / 2,
-                band + 12,
+                band + 15,
                 0xFFDDDDDD);
             List<CardColor> colors = CardColor.forSide(darkSide);
             if (lastMouseX != Integer.MIN_VALUE && (mouseX != lastMouseX || mouseY != lastMouseY)) keyPick = -1;
@@ -365,7 +368,7 @@ public class PlayChoiceScreen extends GuiScreen {
             }
         } else {
             int top = picker == null ? band : picker.top();
-            UiDraw.gradient(0, top - 22, width, band + 50, 0x80200404, 0xC0200404);
+            UiDraw.gradient(0, top - 22, width, height, 0x80200404, 0xC0200404);
             String title = Chat
                 .translatable(
                     targetCount > 1 ? "gui.minopp.choice.targets" : "gui.minopp.swap_card_selection.title",

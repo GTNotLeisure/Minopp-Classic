@@ -118,10 +118,9 @@ public class BlockMinoTable extends Block {
 
     public static final float DECK_LAYER_H = 1f / 36f;
 
-    /** How many cards thick the draw pile looks: between 15 and 25 however many cards it really holds. */
+    /** How many cards thick the draw pile looks: always the same, drawing does not wear it down. */
     public static int deckLayers(int deckSize) {
-        if (deckSize <= 0) return 0;
-        return Math.max(Math.min(15, deckSize), Math.min(25, 15 + deckSize / 10));
+        return 20;
     }
 
     @SideOnly(Side.CLIENT)
