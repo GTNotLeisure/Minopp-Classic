@@ -237,17 +237,6 @@ Names come from lang keys: `gui.mymod.sound.pack.arcade` (and `.desc`), `gui.mym
 |:---------:|:-----:|:------:|:---------|
 | **1.7.10** | `10.13.4.1614` | ✅ **Supported** | [![Latest](https://img.shields.io/badge/Download-Latest-success)](https://github.com/GTNotLeisure/Minopp-Classic/releases/latest) |
 
-Works with GT New Horizons and with [Angelica](https://github.com/GTNewHorizons/Angelica).
-
-## 🧱 Building
-
-* **Java**: a modern JDK (the build downgrades bytecode for Java 8 with JvmDowngrader)
-* **Gradle wrapper**: use the included `gradlew` / `gradlew.bat`
-* Build: `./gradlew build` (Windows: `gradlew.bat build`)
-* Run the tests: `./gradlew test`
-
-Install the plain `minopp-*.jar` together with GTNHLib. The `-dev`, `-sources` and `-predowngrade` jars are for development.
-
 <hr>
 
 ## 📜 Credits & Attributions
@@ -256,10 +245,6 @@ Install the plain `minopp-*.jar` together with GTNHLib. The `-dev`, `-sources` a
 |:--------|:-------|:--------|
 | **Mino++** (original mod) | [Zbx1425](https://github.com/zbx1425/minopp) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
 | **Mino++: Expanded** | [VengeancePC](https://github.com/VengeancePC/Minopp-Expanded) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
-| **GTNHLib** | [GTNewHorizons](https://github.com/GTNewHorizons/GTNHLib) | [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) |
-
-Mino++: Classic is a 1.7.10 port and continuation of Mino++: Expanded. Code taken from Mino++ remains available under its original MIT license; see [LICENSE-MIT-Zbx1425.txt](./LICENSE-MIT-Zbx1425.txt).
-This project is not affiliated with or endorsed by Mattel or Ubisoft.
 
 ---
 
