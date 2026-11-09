@@ -522,7 +522,10 @@ public final class Dice {
         for (double[] v : p.v) {
             double[] u = apply(m, v);
             boolean found = false;
-            for (double[] w : p.v) if (Math.abs(dot(u, w) - 1) < 1e-6) found = true;
+            for (double[] w : p.v) if (Math.abs(dot(u, w) - 1) < 1e-6) {
+                found = true;
+                break;
+            }
             if (!found) return false;
         }
         return true;

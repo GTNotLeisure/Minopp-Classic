@@ -41,6 +41,7 @@ import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.render.CardRenderer;
+import com.hfstudio.minopp.render.Dice;
 import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
@@ -368,8 +369,7 @@ public class GameOverlayLayer {
             messageWrap = wrapAt;
         }
         return wrappedMessages.computeIfAbsent(message, m -> {
-            List<String> out = new ArrayList<>();
-            out.addAll(font.listFormattedStringToWidth(m.formattedText(), wrapAt));
+            List<String> out = new ArrayList<>(font.listFormattedStringToWidth(m.formattedText(), wrapAt));
             return out;
         });
     }
@@ -778,7 +778,7 @@ public class GameOverlayLayer {
         float scale = (1 + 0.25f * (float) Math.sin(Math.min(1f, in) * Math.PI)) * Math.max(0f, out);
         int x = right - size - 10, y = height - size - 26;
         float cx = x + size / 2f, cy = y + size / 2f;
-        if (scale > 0.02f) com.hfstudio.minopp.render.Dice.drawBadge(diceSides, diceResult, cx, cy, size * scale, 1f);
+        if (scale > 0.02f) Dice.drawBadge(diceSides, diceResult, cx, cy, size * scale, 1f);
         if (scale > 0.05f) {
             String label = "D" + diceSides;
             drawStringWithBackdrop(font, label, (int) cx - font.getStringWidth(label) / 2, y + size + 3, 0xFFE8E8E8);
