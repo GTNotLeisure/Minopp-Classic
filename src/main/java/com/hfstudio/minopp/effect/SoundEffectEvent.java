@@ -45,22 +45,10 @@ public record SoundEffectEvent(int timeOffset, Optional<UUID> target, ResourceLo
 
     @Override
     public void summonClient(World level, BlockPos origin, boolean selfPartOfSourceGame) {
-        String sound = soundId.toString();
-        float p = pitch;
-        if (sound.equals("minopp:game.mino_shout")) {
-            // each player picks how a MINO! shout sounds to them
-            switch (com.hfstudio.minopp.config.ClientConfig.display.shoutSound) {
-                case "off" -> sound = null;
-                case "high" -> p *= 1.35f;
-                case "low" -> p *= 0.75f;
-                case "chime" -> {
-                    sound = "random.orb";
-                    p = 0.8f;
-                }
-                default -> {}
-            }
-        }
-        if (sound != null) level.playSound(origin.x + 0.5, origin.y + 0.5, origin.z + 0.5, sound, volume, p, false);
+        // each player picks the pack every sound plays from, or silences it
+        SoundBank.Sound s = SoundBank.resolve(soundId.toString(), volume, pitch);
+        if (s != null)
+            level.playSound(origin.x + 0.5, origin.y + 0.5, origin.z + 0.5, s.name(), s.volume(), s.pitch(), false);
         if (selfPartOfSourceGame) {
             TurnDeadMan.pedal();
         }

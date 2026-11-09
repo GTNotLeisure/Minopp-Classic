@@ -65,9 +65,9 @@ public class ClientConfig {
         @Config.DefaultBoolean(true)
         public boolean cardInfo = true;
 
-        @Config.Comment("Sound of a MINO! shout: default, high, low, chime or off.")
-        @Config.DefaultString("default")
-        public String shoutSound = "default";
+        @Config.Comment("Sound pack per game sound, as slot=pack;... (packs: mino, minecraft, note, off). Set in the table's Sounds tab.")
+        @Config.DefaultString("")
+        public String soundPacks = "";
 
         @Config.Comment("Play the animations on the table (skip signs, color pillars, coins...). Turn off on slow machines.")
         @Config.DefaultBoolean(true)

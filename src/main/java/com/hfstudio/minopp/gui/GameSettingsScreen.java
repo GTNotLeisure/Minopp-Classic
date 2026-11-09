@@ -25,6 +25,7 @@ import org.lwjgl.opengl.GL11;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.config.DesignStore;
 import com.hfstudio.minopp.config.Prefs;
+import com.hfstudio.minopp.effect.SoundBank;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPack;
@@ -58,6 +59,7 @@ public class GameSettingsScreen extends GuiScreen {
         GALLERY("tab_gallery"),
         TABLE("tab_table"),
         STYLE("tab_style"),
+        SOUNDS("tab_sounds"),
         PERSONAL("tab_personal");
 
         final String icon;
@@ -81,7 +83,9 @@ public class GameSettingsScreen extends GuiScreen {
         THEME,
         INFO,
         PREF,
-        GALLERY
+        GALLERY,
+        SOUND_PACK,
+        SOUND
     }
 
     private static final class Tile {
@@ -403,6 +407,44 @@ public class GameSettingsScreen extends GuiScreen {
                     t.h = 18;
                     tiles.add(t);
                     y += 21;
+                }
+            }
+            case SOUNDS -> {
+                // personal too: which pack each sound plays from, or silence
+                String packsName = tr("gui.minopp.sound.packs");
+                List<Tile> packs = new ArrayList<>();
+                for (String pack : SoundBank.PACKS) {
+                    Tile t = new Tile("soundpack:" + pack, Kind.SOUND_PACK, pack);
+                    t.title = tr("gui.minopp.sound.pack." + pack);
+                    t.desc.add(tr("gui.minopp.sound.pack." + pack + ".desc"));
+                    t.controls.add(tr("gui.minopp.controls.sound_pack"));
+                    packs.add(t);
+                }
+                packs = filter(packs, packsName);
+                if (!packs.isEmpty()) {
+                    y = header(packsName, y);
+                    tiles.addAll(packs);
+                    y = grid(packs, y, 76, 62, 6) + 2;
+                }
+                for (String group : List.of("game", "effects")) {
+                    String groupName = tr("gui.minopp.sound.group." + group);
+                    List<Tile> list = new ArrayList<>();
+                    for (SoundBank.Slot s : SoundBank.SLOTS) {
+                        if (!s.group()
+                            .equals(group)) continue;
+                        Tile t = new Tile("sound:" + s.id(), Kind.SOUND, s);
+                        t.searchExtra = groupName;
+                        t.title = tr("gui.minopp.sound." + s.id());
+                        t.desc
+                            .add(tr("gui.minopp.sound.using", tr("gui.minopp.sound.pack." + SoundBank.choice(s.id()))));
+                        t.controls.add(tr("gui.minopp.controls.sound"));
+                        list.add(t);
+                    }
+                    list = filter(list, groupName);
+                    if (list.isEmpty()) continue;
+                    y = header(groupName, y);
+                    tiles.addAll(list);
+                    y = grid(list, y, 76, 62, 6) + 2;
                 }
             }
             case GALLERY -> {
@@ -1129,6 +1171,23 @@ public class GameSettingsScreen extends GuiScreen {
                 locked = !editable;
                 customCount = cfg.hasOverride(pack, entry);
             }
+            case SOUND_PACK -> {
+                String pack = (String) t.payload;
+                UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
+                UiDraw.icon("sound_" + pack, (x1 + x2) / 2f - 16, y1 + 4, 32);
+                UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
+                checked = SoundBank.allUse(pack);
+            }
+            case SOUND -> {
+                SoundBank.Slot s = (SoundBank.Slot) t.payload;
+                String pack = SoundBank.choice(s.id());
+                UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
+                UiDraw.icon("sound_" + pack, (x1 + x2) / 2f - 16, y1 + 4, 32);
+                UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
+                dim = pack.equals(SoundBank.SILENT);
+                customCount = !pack.equals(SoundBank.DEFAULT);
+                count = tr("gui.minopp.sound.pack." + pack);
+            }
             case GALLERY -> {
                 CardFace face = (CardFace) t.payload;
                 UiDraw.roundRect(x1, y1, x2, y2, 4, 0x80000000);
@@ -1355,6 +1414,13 @@ public class GameSettingsScreen extends GuiScreen {
                         30);
                     CardRenderer.drawBack2D(id, false, x2 - 40, py + 8, 28, 44);
                 }
+                case SOUND_PACK -> UiDraw
+                    .icon("sound_" + t.payload, cx - 32, py + (ph - 64) / 2f, Math.min(64, ph - 8));
+                case SOUND -> UiDraw.icon(
+                    "sound_" + SoundBank.choice(((SoundBank.Slot) t.payload).id()),
+                    cx - 32,
+                    py + (ph - 64) / 2f,
+                    Math.min(64, ph - 8));
                 case PREF -> {
                     Prefs.Pref p = (Prefs.Pref) t.payload;
                     int v = p.value();
@@ -1443,6 +1509,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private int[] pillBack = new int[4];
+    private int[] pillSwitch = new int[4];
 
     private void drawBottomBar(int mouseX, int mouseY) {
         int y = height - 24;
@@ -1456,8 +1523,11 @@ public class GameSettingsScreen extends GuiScreen {
         int searchRight = search.xPosition + search.width + 8;
         String hint = tr(tab == Tab.DESIGNS ? "gui.minopp.settings.hint_designs" : "gui.minopp.settings.hint");
         int hw = UiDraw.pillWidth(fontRendererObj, "Q/E", hint);
+        pillSwitch = new int[4];
         if (x - hw > searchRight) {
-            UiDraw.pill(fontRendererObj, x - hw, y, "Q/E", hint, false);
+            boolean hs = mouseX >= x - hw && mouseX < x && mouseY >= y && mouseY < y + 18;
+            UiDraw.pill(fontRendererObj, x - hw, y, "Q/E", hint, hs);
+            pillSwitch = new int[] { x - hw, y, hw, 18 };
             x -= hw + 6;
             String nav = tr("gui.minopp.settings.hint_nav");
             int nw = UiDraw.pillWidth(fontRendererObj, "WASD", nav);
@@ -1510,6 +1580,12 @@ public class GameSettingsScreen extends GuiScreen {
                 switchTab(t);
                 return;
             }
+        }
+        if (inside(pillSwitch, mouseX, mouseY)) {
+            // left: next tab, right: previous
+            int n = Tab.values().length;
+            switchTab(Tab.values()[(tab.ordinal() + (button == 1 ? n - 1 : 1)) % n]);
+            return;
         }
         if (inside(pillBack, mouseX, mouseY)) {
             mc.displayGuiScreen(parent);
@@ -1756,6 +1832,28 @@ public class GameSettingsScreen extends GuiScreen {
             .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.2f));
     }
 
+    /** Plays a slot the way it now sounds; false when it is silent. */
+    private boolean playPreview(String slot) {
+        SoundBank.Sound s = slot == null ? null : SoundBank.preview(slot);
+        if (s == null) return false;
+        ResourceLocation id = new ResourceLocation(s.name());
+        if (mc.thePlayer != null) {
+            mc.getSoundHandler()
+                .playSound(
+                    new PositionedSoundRecord(
+                        id,
+                        s.volume(),
+                        s.pitch(),
+                        (float) mc.thePlayer.posX,
+                        (float) mc.thePlayer.posY,
+                        (float) mc.thePlayer.posZ));
+        } else {
+            mc.getSoundHandler()
+                .playSound(PositionedSoundRecord.func_147674_a(id, s.pitch()));
+        }
+        return true;
+    }
+
     private void click() {
         mc.getSoundHandler()
             .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0f));
@@ -1774,6 +1872,22 @@ public class GameSettingsScreen extends GuiScreen {
         }
         if (t.kind == Kind.PREF) {
             clickPrefRow(t, button, shift, ctrl);
+            return;
+        }
+        if (t.kind == Kind.SOUND_PACK) {
+            String pack = (String) t.payload;
+            SoundBank.setAll(pack);
+            if (!playPreview(pack.equals(SoundBank.SILENT) ? null : "turn_notice")) click();
+            return;
+        }
+        if (t.kind == Kind.SOUND) {
+            String slot = ((SoundBank.Slot) t.payload).id();
+            List<String> options = SoundBank.options(slot);
+            int i = Math.max(0, options.indexOf(SoundBank.choice(slot)));
+            String next = ctrl ? SoundBank.DEFAULT
+                : options.get(Math.floorMod(i + (button == 1 ? -1 : 1), options.size()));
+            SoundBank.set(slot, next);
+            if (!playPreview(slot)) click();
             return;
         }
         if (t.kind == Kind.GALLERY) return;

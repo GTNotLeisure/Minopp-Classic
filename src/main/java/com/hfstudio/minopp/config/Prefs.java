@@ -40,8 +40,6 @@ public final class Prefs {
         }
     }
 
-    public static final List<String> SHOUT_SOUNDS = List.of("default", "high", "low", "chime", "off");
-
     private static ClientConfig.Display d() {
         return ClientConfig.display;
     }
@@ -72,16 +70,6 @@ public final class Prefs {
             v -> d().classicInteraction = v != 0),
         new Pref("handScale", Type.INT, 100, 70, 150, 10, null, () -> d().handScale, v -> d().handScale = v),
         new Pref("cardInfo", Type.BOOL, 1, 0, 1, 1, null, () -> d().cardInfo ? 1 : 0, v -> d().cardInfo = v != 0),
-        new Pref(
-            "shoutSound",
-            Type.CHOICE,
-            0,
-            0,
-            SHOUT_SOUNDS.size() - 1,
-            1,
-            SHOUT_SOUNDS,
-            () -> Math.max(0, SHOUT_SOUNDS.indexOf(d().shoutSound)),
-            v -> d().shoutSound = SHOUT_SOUNDS.get(v)),
         new Pref(
             "tableEffects",
             Type.BOOL,
