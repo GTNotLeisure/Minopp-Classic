@@ -63,6 +63,7 @@ public final class GameRules {
     public static final String MERCY = bool("mercyRule", Category.NO_MERCY, false);
     public static final String MERCY_LIMIT = integer("mercyLimit", Category.NO_MERCY, 25, 10, 60);
     public static final String STACK_ANY_DRAW = bool("stackAnyDraw", Category.NO_MERCY, false);
+    public static final String COINS = bool("coins", Category.MODES, false);
 
     public static final String FLIP_MODE = bool("flipMode", Category.MODES, false);
     public static final String FLEX_POWER = bool("flexPower", Category.MODES, false);

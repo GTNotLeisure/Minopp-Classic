@@ -39,6 +39,7 @@ public final class CardPack {
     public static final String COMEBACK = "comeback";
     public static final String LOVE_ISLAND = "love_island";
     public static final String BILLIE = "billie";
+    public static final String SHOW_EM = "show_em";
 
     /**
      * One line of a deck composition.
@@ -373,6 +374,14 @@ public final class CardPack {
         .entry("wild_color_challenge", 4)
         .entry("reveal_hands", 1)
         .players(2, 10)
+        .build();
+    public static final CardPack PACK_SHOW_EM = new Builder(SHOW_EM).entry("play_again_10", 2)
+        .entry("wild_discard_all", 4)
+        .entry("wild_reverse_draw8", 4)
+        .entry("wild_final_attack", 4)
+        .entry("wild_sudden_death", 4)
+        .rule(GameRules.COINS, 1)
+        .players(2, 6)
         .build();
 
     public static void init() {

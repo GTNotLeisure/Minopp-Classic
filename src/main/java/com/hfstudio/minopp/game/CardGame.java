@@ -84,6 +84,40 @@ public class CardGame {
     public final List<Card> debugDrawn = new ArrayList<>();
     private final List<Card> debugHand = new ArrayList<>();
     private int debugUid = 2_000_000;
+    private boolean debugSide;
+
+    // every face of the side in play, each backed by its counterpart on the other side (same type where it exists,
+    // the color in the same position: red and pink, yellow and teal, ...)
+    private List<Card> debugCards(boolean dark) {
+        Set<CardFace> light = new java.util.LinkedHashSet<>(), darkFaces = new java.util.LinkedHashSet<>();
+        for (CardFace[] pair : debugCatalog()) {
+            light.add(pair[0]);
+            if (pair[1] != null) darkFaces.add(pair[1]);
+        }
+        Set<CardFace> active = dark ? darkFaces : light, other = dark ? light : darkFaces;
+        List<Card> out = new ArrayList<>();
+        for (CardFace f : active) {
+            CardFace back = other.isEmpty() ? null : counterpart(f, other, !dark);
+            out.add(dark ? new Card(debugUid++, back == null ? f : back, f) : new Card(debugUid++, f, back));
+        }
+        return out;
+    }
+
+    private static CardFace counterpart(CardFace f, Set<CardFace> other, boolean toDark) {
+        CardColor color = f.color.isWild() ? CardColor.WILD
+            : CardColor.forSide(toDark)
+                .get(
+                    Math.max(
+                        0,
+                        CardColor.forSide(!toDark)
+                            .indexOf(f.color)));
+        CardFace same = new CardFace(f.type().id, color, f.number);
+        if (other.contains(same)) return same;
+        for (CardFace o : other) if (o.color == color && o.isNumber() && o.number == Math.max(0, f.number)) return o;
+        for (CardFace o : other) if (o.color == color) return o;
+        return other.iterator()
+            .next();
+    }
 
     public int debugShoutSeq;
     public UUID debugShoutBy;
@@ -173,7 +207,8 @@ public class CardGame {
             }
             case "refill" -> {
                 debugHand.clear();
-                for (CardFace[] faces : debugCatalog()) debugHand.add(new Card(debugUid++, faces[0], faces[1]));
+                debugHand.addAll(debugCards(darkSide));
+                debugSide = darkSide;
                 me.hand.clear();
                 me.hand.addAll(debugHand);
             }
@@ -184,6 +219,7 @@ public class CardGame {
                 return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
             }
         }
+        restoreDebugHand();
         return report
             .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
     }
@@ -220,7 +256,8 @@ public class CardGame {
         deck.addAll(0, me.hand);
         me.hand.clear();
         debugHand.clear();
-        for (CardFace[] faces : debugCatalog()) debugHand.add(new Card(debugUid++, faces[0], faces[1]));
+        debugHand.addAll(debugCards(darkSide));
+        debugSide = darkSide;
         me.hand.addAll(debugHand);
         currentPlayerIndex = players.indexOf(me);
     }
@@ -230,7 +267,19 @@ public class CardGame {
     private void restoreDebugHand() {
         if (!debug) return;
         CardPlayer me = deAmputate(debugger);
-        if (me == null || debugHand.isEmpty()) return;
+        if (me == null) return;
+        if (debugHand.isEmpty()) {
+            debugHand.addAll(debugCards(darkSide));
+            debugSide = darkSide;
+        }
+        if (debugSide != darkSide) {
+            for (Card c : me.hand) if (debugHand.stream()
+                .noneMatch(d -> d.uid == c.uid)) deck.add(0, c);
+            me.hand.clear();
+            debugHand.clear();
+            debugHand.addAll(debugCards(darkSide));
+            debugSide = darkSide;
+        }
         Set<Integer> held = new HashSet<>();
         for (Card c : me.hand) held.add(c.uid);
         Set<Integer> own = new HashSet<>();
@@ -503,6 +552,7 @@ public class CardGame {
 
     private ActionReport playCardInner(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
+        cardPlayer.coinLocked = true;
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
@@ -608,6 +658,12 @@ public class CardGame {
         PlayContext ctx = new PlayContext(this, cardPlayer, card, face, choices, report);
         CardType.Effect effect = useFlex ? type.flexEffect : type.effect;
         if (effect != null) effect.apply(ctx);
+        if (cardPlayer.coinArmed && type.isDraw() && !useFlex) {
+            cardPlayer.coinArmed = false;
+            pendingDraw += type.drawValue;
+            lastDrawValue = Math.max(lastDrawValue, type.drawValue * 2);
+            report.messageAll(Chat.translatable("game.minopp.coin.doubled", cardPlayer.name, pendingDraw));
+        }
 
         if (danceOwner != null && !cardPlayer.uuid.equals(danceOwner) && !face.isNumber()) {
             drawCards(cardPlayer, 2, report);
@@ -709,6 +765,7 @@ public class CardGame {
 
     private ActionReport playNoCardInner(CardPlayer cardPlayer) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
+        cardPlayer.coinLocked = true;
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
@@ -1083,6 +1140,74 @@ public class CardGame {
         } else {
             isAntiClockwise = !isAntiClockwise;
         }
+    }
+
+    // reveal the hand: the next player draws one card per action and wild card in it and loses the turn; seven or
+    // more makes it 25 for them and 5 for everyone else
+    public void finalAttack(CardPlayer player, ActionReport report) {
+        int actions = (int) player.hand.stream()
+            .filter(c -> !face(c).isNumber() || face(c).isWild())
+            .count();
+        int from = players.indexOf(player);
+        CardPlayer next = players.get(nextActiveIndex(from < 0 ? currentPlayerIndex : from));
+        revealTurns = Math.max(revealTurns, 1);
+        report.messageAll(Chat.translatable("game.minopp.play.final_attack", player.name, actions, next.name));
+        if (next.equals(player)) return;
+        if (actions >= 7) {
+            drawCards(next, 25, report);
+            for (CardPlayer p : activePlayers()) if (!p.equals(player) && !p.equals(next)) drawCards(p, 5, report);
+        } else {
+            drawCards(next, actions, report);
+        }
+        skipNext(1);
+    }
+
+    // everyone, the player included, draws up to 24 cards
+    public void suddenDeath(ActionReport report) {
+        for (CardPlayer p : activePlayers()) {
+            if (p.hand.size() < 24) drawCards(p, 24 - p.hand.size(), report);
+        }
+        report.messageAll(Chat.translatable("game.minopp.play.sudden_death"));
+    }
+
+    /**
+     * The coin: {@code flip} turns it to the other side while it is still undeclared (before the holder's first
+     * action); otherwise it is spent. Mercy swaps the whole hand for 7 fresh cards; No Mercy doubles the next draw
+     * card played.
+     */
+    public ActionReport useCoin(CardPlayer player, boolean flip) {
+        ActionReport report = ActionReport.builder(this, player);
+        if (!rule(GameRules.COINS)) return report.fail(Chat.translatable("game.minopp.coin.off"));
+        if (player.coinUsed) return report.fail(Chat.translatable("game.minopp.coin.used"));
+        if (flip) {
+            if (player.coinLocked) return report.fail(Chat.translatable("game.minopp.coin.locked"));
+            player.coinNoMercy = !player.coinNoMercy;
+            report.sound(new ResourceLocation("minecraft", "random.click"), 0, 0.6f, 1.6f);
+            return report.state(
+                Chat.translatable(
+                    player.coinNoMercy ? "game.minopp.coin.side_no_mercy" : "game.minopp.coin.side_mercy"));
+        }
+        if (players.indexOf(player) != currentPlayerIndex || awaitingCutIn) {
+            return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
+        }
+        player.coinUsed = true;
+        player.coinLocked = true;
+        if (player.coinNoMercy) {
+            player.coinArmed = true;
+            report.sound(new ResourceLocation("minecraft", "mob.wither.shoot"), 0, 0.5f, 1.4f);
+            report.messageAll(Chat.translatable("game.minopp.coin.no_mercy", player.name));
+        } else {
+            mercySwap(player, report);
+            report.messageAll(Chat.translatable("game.minopp.coin.mercy", player.name));
+        }
+        return report.state(Chat.translatable("game.minopp.coin.spent", player.name));
+    }
+
+    private void mercySwap(CardPlayer player, ActionReport report) {
+        discardDeck.addAll(0, player.hand);
+        player.hand.clear();
+        drawCards(player, 7, report);
+        report.sound(new ResourceLocation("minecraft", "random.levelup"), 0, 0.6f, 1.2f);
     }
 
     public void giveExtraTurn() {
@@ -1982,6 +2107,14 @@ public class CardGame {
         int limit = config().getInt(GameRules.MERCY_LIMIT);
         for (CardPlayer p : players) {
             if (p.eliminated || p.hand.size() < limit || isDebugger(p)) continue;
+            if (rule(GameRules.COINS) && !p.coinUsed && !p.coinNoMercy) {
+                // an unspent Mercy coin saves its holder from being knocked out
+                p.coinUsed = true;
+                p.coinLocked = true;
+                mercySwap(p, report);
+                report.messageAll(Chat.translatable("game.minopp.coin.saved", p.name));
+                continue;
+            }
             p.eliminated = true;
             discardDeck.addAll(0, p.hand);
             p.hand.clear();
@@ -2067,6 +2200,7 @@ public class CardGame {
         debugShoutSeq = tag.getInteger("debugShoutSeq");
         debugShoutBy = NbtUtil.hasUUID(tag, "debugShoutBy") ? NbtUtil.getUUID(tag, "debugShoutBy") : null;
         debugUid = Math.max(2_000_000, tag.getInteger("debugUid"));
+        debugSide = tag.getBoolean("debugSide");
         debugDrawn.clear();
         NBTTagList drawnTag = tag.getTagList("debugDrawn", 10);
         for (int i = 0; i < drawnTag.tagCount(); i++) debugDrawn.add(Card.fromTag(drawnTag.getCompoundTagAt(i)));
@@ -2142,6 +2276,7 @@ public class CardGame {
             tag.setInteger("debugShoutSeq", debugShoutSeq);
             if (debugShoutBy != null) NbtUtil.putUUID(tag, "debugShoutBy", debugShoutBy);
             tag.setInteger("debugUid", debugUid);
+            tag.setBoolean("debugSide", debugSide);
             NBTTagList drawnTag = new NBTTagList();
             for (Card c : debugDrawn) drawnTag.appendTag(c.toTag());
             tag.setTag("debugDrawn", drawnTag);

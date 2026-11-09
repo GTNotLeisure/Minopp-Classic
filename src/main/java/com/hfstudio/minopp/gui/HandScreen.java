@@ -40,6 +40,7 @@ public class HandScreen extends GuiScreen {
     private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100;
 
     private static String query = "";
+    private static Card infoCard;
     private static boolean debugOpen = true;
     private GuiTextField search;
     private int hintBottom;
@@ -166,6 +167,8 @@ public class HandScreen extends GuiScreen {
     public void onGuiClosed() {
         Keyboard.enableRepeatEvents(false);
         if (!resumeAfterChoice) query = "";
+        infoCard = null;
+        com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckHot = false;
     }
 
     @Override
@@ -205,6 +208,8 @@ public class HandScreen extends GuiScreen {
             lastMouseY = mouseY;
         }
         edgeTurn(ctx, mouseX, mouseY);
+        com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckHot = ctx.isMyTurn()
+            && com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY);
         updateButtons();
         super.drawScreen(mouseX, mouseY, partialTicks);
 
@@ -237,6 +242,34 @@ public class HandScreen extends GuiScreen {
                     total)
                 .getFormattedText();
             fontRendererObj.drawStringWithShadow(page, search.xPosition + 1, search.yPosition + 17, 0xFFFFE070);
+        }
+        int[] coin = GameOverlayLayer.coinRect();
+        if (coin != null && mouseX >= coin[0]
+            && mouseX < coin[0] + coin[2]
+            && mouseY >= coin[1]
+            && mouseY < coin[1] + coin[2]) {
+            List<String> tip = new java.util.ArrayList<>();
+            String side = ctx.me.coinNoMercy ? "gui.minopp.coin.no_mercy" : "gui.minopp.coin.mercy";
+            tip.add(
+                Chat.translatable(side)
+                    .getFormattedText());
+            tip.add(
+                Chat.translatable(side + ".desc")
+                    .getFormattedText());
+            tip.add(
+                Chat.translatable(
+                    ctx.me.coinUsed ? "gui.minopp.coin.spent_label"
+                        : ctx.me.coinLocked ? "gui.minopp.coin.tip_use" : "gui.minopp.coin.tip_flip")
+                    .getFormattedText());
+            UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
+        }
+        if (infoCard != null) {
+            Card live = ctx.hand.stream()
+                .filter(c -> c.uid == infoCard.uid)
+                .findFirst()
+                .orElse(null);
+            if (live == null) infoCard = null;
+            else drawCardInfo(ctx, live);
         }
         if (noticeText != null && System.currentTimeMillis() < noticeUntil) {
             int nw = fontRendererObj.getStringWidth(noticeText);
@@ -336,12 +369,25 @@ public class HandScreen extends GuiScreen {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
         Context ctx = Context.resolve(mc);
-        if (wheel != 0 && ctx != null)
-            select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - Integer.signum(wheel));
+        if (wheel != 0 && ctx != null) {
+            int dir = -Integer.signum(wheel);
+            if (ctx.hand.size() > GameOverlayLayer.pageSize()) GameOverlayLayer.turnCarousel(dir);
+            select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + dir);
+        }
     }
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        int[] coin = GameOverlayLayer.coinRect();
+        if (button == 0 && coin != null
+            && mouseX >= coin[0]
+            && mouseX < coin[0] + coin[2]
+            && mouseY >= coin[1]
+            && mouseY < coin[1] + coin[2]) {
+            Context ctx = Context.resolve(mc);
+            if (ctx != null && !ctx.me.coinUsed) C2SPlayCardPacket.Client.sendCoinC2S(ctx.pos, !ctx.me.coinLocked);
+            return;
+        }
         if (button == 1) {
             mc.displayGuiScreen(null);
             return;
@@ -355,7 +401,51 @@ public class HandScreen extends GuiScreen {
         Context ctx = Context.resolve(mc);
         if (ctx == null) return;
         int hit = GameOverlayLayer.hitTest(mouseX, mouseY);
+        if (hit < 0 && com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY)) {
+            draw(ctx);
+            return;
+        }
+        if (hit >= 0 && isShiftKeyDown()) {
+            Card c = ctx.hand.get(hit);
+            infoCard = infoCard != null && infoCard.uid == c.uid ? null : c;
+            select(ctx, hit);
+            return;
+        }
         if (hit >= 0) play(ctx, hit);
+    }
+
+    // Shift-click: the card's points and what it does, on a band across the hand
+    private void drawCardInfo(Context ctx, Card card) {
+        com.hfstudio.minopp.game.CardFace face = ctx.game.face(card);
+        String title = Chat.translatable(
+            "gui.minopp.hand.card_points",
+            face.getDisplayName()
+                .getFormattedText(),
+            ctx.game.cardPoints(card))
+            .getFormattedText();
+        String key = "game.minopp.card.type." + face.type().id + ".desc";
+        String desc = net.minecraft.util.StatCollector.canTranslate(key) ? Chat.translatable(key)
+            .getFormattedText()
+            : Chat.translatable("gui.minopp.hand.card_number")
+                .getFormattedText();
+        int maxW = Math.min(380, width - 40);
+        List<?> lines = fontRendererObj.listFormattedStringToWidth(desc, maxW);
+        int bandH = 24 + lines.size() * 11;
+        int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
+        int y = Math.max(40, height - ch / 2 - bandH / 2 - 6);
+        UiDraw.gradient(0, y, width, y + bandH, 0xD0181010, 0xD0181010);
+        UiDraw.gradient(0, y - 1, width, y, 0xFFE8B828, 0xFFE8B828);
+        UiDraw.gradient(0, y + bandH, width, y + bandH + 1, 0xFFE8B828, 0xFFE8B828);
+        int tw = fontRendererObj.getStringWidth(title);
+        fontRendererObj.drawStringWithShadow(title, width / 2 - tw / 2, y + 6, 0xFFFFD040);
+        for (int i = 0; i < lines.size(); i++) {
+            String l = (String) lines.get(i);
+            fontRendererObj.drawStringWithShadow(
+                l,
+                width / 2 - fontRendererObj.getStringWidth(l) / 2,
+                y + 19 + i * 11,
+                0xFFF0F0F0);
+        }
     }
 
     @Override

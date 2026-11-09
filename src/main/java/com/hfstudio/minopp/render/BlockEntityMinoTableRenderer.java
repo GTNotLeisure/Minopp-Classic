@@ -51,8 +51,8 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(0.5, 0.94, 0.5);
         GL11.glScalef(0.5f, 0.4f, 0.5f);
         GL11.glRotatef(-90, 1, 0, 0);
-        int layers = Math.min(24, (int) Math.ceil(game.deck.size() / 5f));
-        float layerH = 1f / 48f;
+        int layers = com.hfstudio.minopp.block.BlockMinoTable.deckLayers(game.deck.size());
+        float layerH = com.hfstudio.minopp.block.BlockMinoTable.DECK_LAYER_H;
         for (int ci = 0; ci < layers; ci++) {
             BATCH.at(jitter(ci, 0) * 0.06f - 0.03f, jitter(ci, 1) * 0.06f - 0.03f, ci * layerH, 0);
             BATCH.slab(0.32f, 0.5f, -layerH, 0, ci % 2 == 0 ? 0xF4F2EC : 0xD6D2C8);
@@ -63,6 +63,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         }
         BATCH.flush();
         GL11.glPopMatrix();
+        deckHighlight(blockEntity, game, layers, layerH);
 
         GL11.glPushMatrix();
         GL11.glTranslated(1.5, 0.94, 1.5);
@@ -129,6 +130,76 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     }
 
     private static final CardBatch BATCH = new CardBatch();
+
+    /** The viewer's own table's draw pile on screen last frame {minX, minY, maxX, maxY, cx, cy}, or null. */
+    private static float[] deckBounds;
+    private static long deckBoundsAt;
+    /** Set by the hand screen while the mouse is over the draw pile. */
+    public static boolean deckHot;
+
+    public static float[] deckOnScreen() {
+        return System.currentTimeMillis() - deckBoundsAt < 500 && deckBounds != null
+            ? new float[] { deckBounds[4], deckBounds[5] }
+            : null;
+    }
+
+    public static boolean isOverDeck(int mouseX, int mouseY) {
+        float[] b = System.currentTimeMillis() - deckBoundsAt < 500 ? deckBounds : null;
+        return b != null && mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
+    }
+
+    // the draw pile glows gold while you could draw from it and are pointing at it
+    private static void deckHighlight(BlockEntityMinoTable table, CardGame game, int layers, float layerH) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.thePlayer == null) return;
+        com.hfstudio.minopp.game.CardPlayer me = game
+            .deAmputate(com.hfstudio.minopp.item.ItemHandCards.getCardPlayer(mc.thePlayer));
+        if (me == null) return;
+        double deckH = layers * layerH * 0.4, x0 = 0.24, x1 = 0.76, z0 = 0.24, z1 = 0.76, y0 = 0.94,
+            y1 = 0.94 + deckH + 0.03;
+        float[] b = ColorPicker3D.projectBoxNow(x0, y0, z0, x1, y1, z1);
+        if (b != null) {
+            deckBounds = b;
+            deckBoundsAt = System.currentTimeMillis();
+        }
+        boolean myTurn = game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn;
+        com.hfstudio.minopp.util.BlockPos aimed = com.hfstudio.minopp.block.BlockMinoTable.Client.getCursorPickedGame();
+        boolean pointed = deckHot || mc.currentScreen == null && aimed != null
+            && aimed.equals(table.getBlockPos())
+            && com.hfstudio.minopp.block.BlockMinoTable.Client.isCursorHittingPile();
+        if (!myTurn || !pointed) return;
+        float pulse = 0.65f + 0.35f * (float) Math.sin(System.currentTimeMillis() / 180.0);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDepthMask(false);
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.setColorRGBA_F(1f, 0.82f, 0.2f, 0.18f * pulse);
+        double[][] faces = { { x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0 },
+            { x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0 }, { x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1 },
+            { x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0 }, { x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1 } };
+        for (double[] f : faces) for (int i = 0; i < 12; i += 3) t.addVertex(f[i], f[i + 1], f[i + 2]);
+        t.draw();
+        GL11.glLineWidth(3f);
+        t.startDrawing(GL11.GL_LINES);
+        t.setColorRGBA_F(1f, 0.85f, 0.25f, pulse);
+        double[][] corners = { { x0, z0 }, { x1, z0 }, { x1, z1 }, { x0, z1 } };
+        for (int i = 0; i < 4; i++) {
+            double[] c = corners[i], n = corners[(i + 1) % 4];
+            t.addVertex(c[0], y1, c[1]);
+            t.addVertex(n[0], y1, n[1]);
+            t.addVertex(c[0], y0 + 0.002, c[1]);
+            t.addVertex(n[0], y0 + 0.002, n[1]);
+            t.addVertex(c[0], y0, c[1]);
+            t.addVertex(c[0], y1, c[1]);
+        }
+        t.draw();
+        GL11.glLineWidth(1f);
+        GL11.glDepthMask(true);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
     private static final float[] JITTER = new float[512 * 3];
     static {
         Random r = new Random(1);

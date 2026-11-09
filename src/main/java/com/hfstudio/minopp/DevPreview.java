@@ -171,8 +171,8 @@ public final class DevPreview {
         }
     }
 
-    private static final String[] SCRIPT = { "skip", "reverse", "draw2", "wild", "wild_draw4", "wild_fifty_fifty",
-        "flip", "skip_everyone", "wild_draw2", "flip", "wild_time_balloon", "number", "shout" };
+    private static final String[] SCRIPT = { "wild", "wild_draw4", "draw2", "skip", "reverse", "wild_sudden_death",
+        "flip", "wild", "flip", "wild_final_attack", "play_again_10", "shout" };
     private int scriptStep;
 
     // debug preview: plays one card of each effect in turn, so every table animation can be watched
@@ -202,6 +202,10 @@ public final class DevPreview {
                     break;
                 }
         }
+        if (me.hand.isEmpty()) {
+            table.handleActionResult(game.debugAction("refill"), me, player);
+            return;
+        }
         if (pick == null) pick = me.hand.get(scriptStep % me.hand.size());
         PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
         choices.color = colors.get((scriptStep / 2) % 4);
@@ -219,6 +223,11 @@ public final class DevPreview {
             config.setCount("no_mercy:discard_all", 2);
             config.setCount("weekend:wild_time_balloon", 2);
             config.setCount("jungle:wild_rebound", 2);
+        }
+        for (String spec : System.getProperty("minopp.previewRules", "")
+            .split(",")) {
+            int eq = spec.indexOf('=');
+            if (eq > 0) config.set(spec.substring(0, eq), Integer.parseInt(spec.substring(eq + 1)));
         }
         for (String spec : System.getProperty("minopp.previewDeck", "")
             .split(",")) {

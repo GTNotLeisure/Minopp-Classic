@@ -116,6 +116,14 @@ public class BlockMinoTable extends Block {
         return false;
     }
 
+    public static final float DECK_LAYER_H = 1f / 36f;
+
+    /** How many cards thick the draw pile looks: between 15 and 25 however many cards it really holds. */
+    public static int deckLayers(int deckSize) {
+        if (deckSize <= 0) return 0;
+        return Math.max(Math.min(15, deckSize), Math.min(25, 15 + deckSize / 10));
+    }
+
     @SideOnly(Side.CLIENT)
     public static class Client {
 
@@ -219,7 +227,7 @@ public class BlockMinoTable extends Block {
 
         public static AxisAlignedBB getPileAabb(BlockEntityMinoTable tableEntity) {
             if (tableEntity.game == null) return AxisAlignedBB.getBoundingBox(0, 0, 0, 0, 0, 0);
-            float deckHeight = (float) Math.ceil(tableEntity.game.deck.size() / 5f) * (1f / 48f) * 0.4f;
+            float deckHeight = deckLayers(tableEntity.game.deck.size()) * DECK_LAYER_H * 0.4f;
             double cy = 0.94 + deckHeight / 2;
             return AxisAlignedBB
                 .getBoundingBox(0.25, cy - deckHeight / 2, 0.25, 0.75, cy + deckHeight / 2 + 0.02, 0.75);

@@ -42,6 +42,9 @@ public class TableConfig {
         Map.entry("wild_color_roulette", new String[] { GameRules.MERCY }),
         Map.entry("wild_plus6", new String[] { GameRules.MERCY }),
         Map.entry("wild_reverse_plus6", new String[] { GameRules.MERCY }),
+        Map.entry("wild_reverse_draw8", new String[] { GameRules.MERCY }),
+        Map.entry("wild_sudden_death", new String[] { GameRules.MERCY }),
+        Map.entry("wild_final_attack", new String[] { GameRules.MERCY }),
         Map.entry("power_number", new String[] { GameRules.FLEX_POWER }),
         Map.entry("flex_skip", new String[] { GameRules.FLEX_POWER }),
         Map.entry("flex_reverse", new String[] { GameRules.FLEX_POWER }),
@@ -142,7 +145,10 @@ public class TableConfig {
         counts.clear();
         presetPack = CardPack.alias(presetPack);
         CardPack pack = CardPack.get(presetPack);
-        if (pack != null && pack.isAddon()) setPackEnabled(CardPack.CLASSIC, true);
+        // add-on packs bring their base deck: the No Mercy deck for its expansion, the classic deck for the rest
+        if (pack != null && pack.isAddon()) {
+            setPackEnabled(presetPack.equals(CardPack.SHOW_EM) ? CardPack.NO_MERCY : CardPack.CLASSIC, true);
+        }
         setPackEnabled(presetPack, true);
     }
 

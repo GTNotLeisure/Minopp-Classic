@@ -47,6 +47,10 @@ public class PlayerPicker {
         y0 = top;
     }
 
+    public int top() {
+        return y0;
+    }
+
     public int height() {
         int rows = (players.size() + cols - 1) / Math.max(1, cols);
         return rows * TILE_H + Math.max(0, rows - 1) * GAP;

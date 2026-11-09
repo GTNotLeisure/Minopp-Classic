@@ -21,7 +21,7 @@
   <p>
     <b>Mino++: Classic</b> brings a well-known color-and-number card game to Minecraft 1.7.10.
     <br>
-    Place a table, sit down with friends or bots, mix <strong>26 card packs</strong>, tune <strong>29 rules</strong>
+    Place a table, sit down with friends or bots, mix <strong>27 card packs</strong>, tune <strong>32 rules</strong>
     and play with an animated, controller-style interface.
   </p>
 </div>
@@ -35,6 +35,7 @@
 - [🃏 Card Packs](#-card-packs)
 - [📏 Rules](#-rules)
 - [🎮 Controls](#-controls)
+- [🧩 For Addon Developers](#-for-addon-developers)
 - [🖥️ Server Configuration](#️-server-configuration)
 - [📥 Downloads \& Compatibility](#-downloads--compatibility)
 - [🧱 Building](#-building)
@@ -98,6 +99,7 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 | **Comeback Pack** | 2–10 | Wild Swap Hands, Wild Match the Max, Wild Misery Loves Company. |
 | **Love Island Pack** | 3–10 | Wild Eggs in One Basket, Wild Pull You for a Chat, Wild I've Got a Text. |
 | **Billie Eilish Pack** | 2–10 | Wild Pass Color, Trick Wild, Wild Color Challenge, Reveal Hands. |
+| **Show 'Em No Mercy Expansion** | 2–6 | 10 Play Again, Wild Discard All, Wild Reverse Draw 8, Wild Final Attack, Wild Sudden Death, plus the Mercy / No Mercy coins. Adds the No Mercy deck. |
 
 <details>
 <summary><strong>How mixed packs build the deck (Click to expand)</strong></summary>
@@ -150,6 +152,8 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 <br>
 
 * **Team Mode** with 2 to 10 teams, **Team Relay**, **Flip Mode**, **Flex Power**.
+* **Coins**: every player gets a coin and picks a side before their first move. Mercy swaps the whole hand for 7 fresh cards (and saves you from being knocked out); No Mercy doubles your next draw card. Once per game; works with any deck.
+* **See Everyone's Hand** (off) and **Flip: See Card Backs** (on).
 * **Seats** (2–20), **Starting Hand**, **Deck Copies** (automatic for big tables), **Jump-In Window**, **Mino Penalty**, **Balloon Penalty**.
 * **Points Target**: single round, 200, 300, 500, 750, 1000, or a custom value. The winner of a round scores the cards left in the other hands (numbers at face value, actions 20, wilds 50).
 </details>
@@ -177,6 +181,21 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 * Number tiles: left click −1, right click +1, Shift+left click clears, Shift+right click lets you type a value (Enter or click elsewhere confirms), Ctrl+click restores the default.
 * Type in the search box at the bottom left (or press `/` or Ctrl+F) to filter every tab.
 </details>
+
+<hr>
+
+## 🧩 For Addon Developers
+
+Card types register through `CardTypes.register(CardType.builder(...)...build())`. Table animations for a card register on the client through `CardFxRegistry`:
+
+```java
+CardFxRegistry.register("my_wild_bomb", ctx -> {
+    ctx.bigText("BOOM", 0xFF4020, ctx.pile().add(0, 1.6, 0), 300, 1400);
+    ctx.burst(ctx.pile(), 0xFF4020, 200);
+});
+```
+
+The context can start every built-in animation (skip signs, reverse arrows, the color pillar, flying draw cards, big text, coin, particles) or a custom renderer, and `cancelDefaults()` replaces the generic animation for the card's kind. The mod's own card animations are registered the same way.
 
 <hr>
 

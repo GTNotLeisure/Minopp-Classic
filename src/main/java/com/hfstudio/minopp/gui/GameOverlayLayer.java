@@ -178,7 +178,8 @@ public class GameOverlayLayer {
             zoomAnimationTarget = 0;
         }
 
-        if (mc.gameSettings.hideGUI || !ClientConfig.display.enableGameHistoryGUI) return;
+        if (mc.gameSettings.hideGUI || !ClientConfig.display.enableGameHistoryGUI
+            || mc.currentScreen instanceof PlayChoiceScreen) return;
 
         int x = ClientConfig.display.guiXPosition, y = ClientConfig.display.guiYPosition;
         FontRenderer font = mc.fontRenderer;
@@ -482,6 +483,7 @@ public class GameOverlayLayer {
             renderHandRow(font, game, realPlayer, hand, clientHandIndex, isMyTurn, myPlayerIndex, theme, width, height);
             drawDebugDraws(game, realPlayer, theme, width, height);
             drawCallouts(font, game, realPlayer, width, height);
+            drawCoin(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
             return true;
         }
         rowExtent = null;
@@ -576,6 +578,7 @@ public class GameOverlayLayer {
         }
         drawDebugDraws(game, realPlayer, theme, width, height);
         drawCallouts(font, game, realPlayer, width, height);
+        drawCoin(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
         GL11.glDisable(GL11.GL_BLEND);
         return true;
     }
@@ -588,7 +591,8 @@ public class GameOverlayLayer {
     private final Map<Integer, Long> rowEnter = new HashMap<>();
     private final List<Object[]> flyers = new ArrayList<>();
     private Object rowGame;
-    private static final int FLY_MS = 380, ENTER_MS = 320;
+    private static final int FLY_MS = 380, DRAW_MS = 1000;
+    private static final java.nio.FloatBuffer SHEAR = org.lwjgl.BufferUtils.createFloatBuffer(16);
     private long lastRowNanos = System.nanoTime();
 
     private static void addRect(int index, float x, float y, float w, float h) {
@@ -625,6 +629,12 @@ public class GameOverlayLayer {
 
     private int rowStart, stackStart;
 
+    /** Turns the carousel itself by one card, so the wheel spins the hand instead of walking the selection. */
+    public static void turnCarousel(int dir) {
+        INSTANCE.rowStart += dir;
+        INSTANCE.stackStart += dir;
+    }
+
     // a carousel window of the hand that wraps around both ends; it only turns when the selection leaves it (keys,
     // wheel, paging), so pointing at a visible card never moves the cards under the cursor
     private int[] window(int total, int selected, int fit, boolean row) {
@@ -650,6 +660,81 @@ public class GameOverlayLayer {
     private int callTop, callHand, callMove, callDebug;
     private final List<Object[]> callouts = new ArrayList<>();
     private static final net.minecraft.util.ResourceLocation SKIP_SIGN = Mino.id("textures/fx/skip.png");
+
+    private static final net.minecraft.util.ResourceLocation COIN_MERCY = Mino.id("textures/fx/coin_mercy.png"),
+        COIN_NO_MERCY = Mino.id("textures/fx/coin_no_mercy.png");
+    private static int[] coinRect;
+    private Object coinGame;
+    private boolean coinSide, coinSpent;
+    private long coinFlipAt, coinUseAt;
+
+    /** {x, y, size} of the coin last frame, or null when there is none. */
+    public static int[] coinRect() {
+        return coinRect;
+    }
+
+    // the Show 'Em No Mercy coin in the bottom right corner: it flips over when its side changes, spins and flashes
+    // when spent, then stays grey; an armed No Mercy coin pulses red until the next draw card
+    private void drawCoin(FontRenderer font, CardGame game, CardPlayer me, boolean enabled, int width, int height) {
+        coinRect = null;
+        if (!enabled || me == null) return;
+        long now = System.currentTimeMillis();
+        if (coinGame != game) {
+            coinGame = game;
+            coinSide = me.coinNoMercy;
+            coinSpent = me.coinUsed;
+        }
+        if (me.coinNoMercy != coinSide) {
+            coinSide = me.coinNoMercy;
+            coinFlipAt = now;
+        }
+        if (me.coinUsed && !coinSpent) coinUseAt = now;
+        coinSpent = me.coinUsed;
+        int size = 30, x = width - size - 10, y = height - size - 26;
+        coinRect = new int[] { x, y, size };
+        float flipT = Math.min(1f, (now - coinFlipAt) / 350f), useT = Math.min(1f, (now - coinUseAt) / 900f);
+        float sx = flipT < 1 ? (float) Math.abs(Math.cos(flipT * Math.PI)) : 1;
+        float scale = 1;
+        if (useT < 1) {
+            sx = (float) Math.abs(Math.cos(useT * Math.PI * 6));
+            scale = 1 + 0.45f * (float) Math.sin(useT * Math.PI);
+        }
+        float cx = x + size / 2f, cy = y + size / 2f;
+        GL11.glEnable(GL11.GL_BLEND);
+        if (me.coinArmed) {
+            int a = 0x80 + (int) (0x7F * slowPulse());
+            UiDraw.ring(cx, cy, size / 2f + 1, size / 2f + 4, (a << 24) | 0xFF3020);
+        }
+        if (useT < 1) {
+            float r = size / 2f + useT * 26;
+            UiDraw.ring(cx, cy, r - 2, r, ((int) ((1 - useT) * 220) << 24) | 0xFFE070);
+        }
+        GL11.glPushMatrix();
+        GL11.glTranslatef(cx, cy, 0);
+        GL11.glScalef(scale * Math.max(0.06f, sx), scale, 1);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(me.coinNoMercy ? COIN_NO_MERCY : COIN_MERCY);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        if (me.coinUsed && useT >= 1) GL11.glColor4f(0.45f, 0.45f, 0.45f, 0.8f);
+        else GL11.glColor4f(1, 1, 1, 1);
+        GuiDraw.blitBound(-size / 2f, -size / 2f, size, size, 0, 0, 1, 1, 1, 1);
+        GL11.glPopMatrix();
+        GL11.glColor4f(1, 1, 1, 1);
+        String label = Chat
+            .translatable(
+                me.coinUsed ? "gui.minopp.coin.spent_label"
+                    : me.coinNoMercy ? "gui.minopp.coin.no_mercy" : "gui.minopp.coin.mercy")
+            .getFormattedText();
+        int lw = font.getStringWidth(label);
+        drawStringWithBackdrop(
+            font,
+            label,
+            Math.min(width - lw - 4, (int) cx - lw / 2),
+            y + size + 3,
+            me.coinUsed ? 0xFF909090 : me.coinNoMercy ? 0xFFFF6050 : 0xFFFFD860);
+    }
 
     // over your own hand: a big no-entry sign when you get skipped, "+N" when cards come in
     private void drawCallouts(FontRenderer font, CardGame game, CardPlayer me, int width, int height) {
@@ -703,10 +788,7 @@ public class GameOverlayLayer {
                 GL11.glScalef(4, 4, 1);
                 int w = font.getStringWidth(text);
                 int a = Math.max(8, (int) (alpha * 255)) << 24;
-                for (int k = 3; k >= 1; k--) font.drawString(text, -w / 2 + k, -4 + k, a | 0x2A1000);
-                for (int[] o : new int[][] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }) {
-                    font.drawString(text, -w / 2 + o[0], -4 + o[1], a | 0x1A0A00);
-                }
+                font.drawString(text, -w / 2 + 1, -4 + 1, a | 0x2A1000);
                 font.drawString(text, -w / 2, -4, a | 0xFFFFFF);
             }
             GL11.glPopMatrix();
@@ -729,26 +811,25 @@ public class GameOverlayLayer {
             }
         }
         ghostSeq = game.debugDrawSeq;
-        ghosts.removeIf(g -> now - (Long) g[1] > 900);
+        ghosts.removeIf(g -> now - (Long) g[1] > DRAW_MS);
         int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
         GL11.glEnable(GL11.GL_BLEND);
         for (Object[] g : ghosts) {
-            float t = (now - (Long) g[1]) / 900f;
-            if (t < 0) continue;
-            float fly = easeOutCubic(Math.min(1f, t / 0.55f));
-            float shrink = t < 0.7f ? 1f : Math.max(0f, 1f - (t - 0.7f) / 0.3f);
-            float x = width * 0.5f + (Float) g[2] * cw * 0.7f;
-            float y = -ch + (height - ch * 0.75f + ch) * fly;
-            GL11.glPushMatrix();
-            GL11.glTranslatef(x, y, 0);
-            GL11.glRotatef((1 - fly) * -25 + (Float) g[2] * 6, 0, 0, 1);
-            GL11.glScalef(shrink, shrink, 1);
-            CardRenderer.drawFace2D((CardFace) g[0], theme, -cw / 2f, -ch / 2f, cw, ch);
-            if (t > 0.55f) {
-                int a = (int) (Math.min(1f, (t - 0.55f) / 0.15f) * 140);
-                UiDraw.roundRect(-cw / 2, -ch / 2, cw / 2, ch / 2, Math.max(1, cw * 3 / 32), (a << 24) | 0xFFFFFF);
-            }
-            GL11.glPopMatrix();
+            float u = (now - (Long) g[1]) / (float) DRAW_MS;
+            drawDrawnCard(
+                game,
+                (CardFace) g[0],
+                null,
+                theme,
+                width * 0.5f + (Float) g[2] * cw * 0.7f,
+                height - ch * 0.75f,
+                (Float) g[2] * 0.1f,
+                cw,
+                ch,
+                u,
+                width,
+                height,
+                true);
         }
         GL11.glColor4f(1, 1, 1, 1);
     }
@@ -770,7 +851,7 @@ public class GameOverlayLayer {
         float dt = Math.min(0.1f, (now - lastRowNanos) / 1e9f);
         lastRowNanos = now;
         float ease = 1 - (float) Math.exp(-dt * 14);
-        boolean interactive = HandScreen.isOpen();
+        boolean interactive = HandScreen.isOpen() || Minecraft.getMinecraft().currentScreen instanceof PlayChoiceScreen;
         rowRaise += ((interactive ? 1 : 0) - rowRaise) * ease;
         rowLift.keySet()
             .removeIf(
@@ -817,7 +898,12 @@ public class GameOverlayLayer {
                     flyers.add(new Object[] { game.face(game.topCard), theme, e.getValue(), nowMs });
                 }
             }
-            for (Card c : fullHand) if (!rowKnown.contains(c.uid)) rowEnter.put(c.uid, nowMs);
+            List<Card> fresh = new ArrayList<>();
+            for (Card c : fullHand) if (!rowKnown.contains(c.uid)) fresh.add(c);
+            // a few new cards are draws and fly in one after another; a whole new hand (a swap) just appears
+            if (fresh.size() <= 8 && !game.isDebugger(me)) {
+                for (int k = 0; k < fresh.size(); k++) rowEnter.put(fresh.get(k).uid, nowMs + 140L * k);
+            }
         }
         rowKnown.clear();
         for (Card c : fullHand) rowKnown.add(c.uid);
@@ -825,15 +911,7 @@ public class GameOverlayLayer {
         rowLast.clear();
         for (int i = 0; i < n; i++) rowLast.put(hand.get(i).uid, new float[] { cxs[i], cys[i], angs[i], cw, ch });
         rowEnter.values()
-            .removeIf(t -> nowMs - t > ENTER_MS);
-        for (int i = 0; i < n; i++) {
-            Long enter = rowEnter.get(hand.get(i).uid);
-            if (enter == null) continue;
-            float k = easeOutCubic((nowMs - enter) / (float) ENTER_MS);
-            cxs[i] = width * 0.5f + (cxs[i] - width * 0.5f) * k;
-            cys[i] = -ch + (cys[i] + ch) * k;
-            angs[i] = angs[i] * k + (1 - k) * 0.6f;
-        }
+            .removeIf(t -> nowMs - t > DRAW_MS);
 
         GL11.glEnable(GL11.GL_BLEND);
         for (int pass = 0; pass < 2; pass++) {
@@ -841,6 +919,7 @@ public class GameOverlayLayer {
                 boolean selected = i == selectedIndex;
                 if (pass == 0 ? selected : !selected) continue;
                 Card card = hand.get(i);
+                if (rowEnter.containsKey(card.uid)) continue;
                 CardFace face = game.face(card);
                 boolean playable = playables[i];
                 GL11.glPushMatrix();
@@ -870,6 +949,24 @@ public class GameOverlayLayer {
         }
 
         drawFlyers(width, height, nowMs);
+        for (int i = 0; i < n; i++) {
+            Long enter = rowEnter.get(hand.get(i).uid);
+            if (enter == null) continue;
+            drawDrawnCard(
+                game,
+                game.face(hand.get(i)),
+                hand.get(i),
+                theme,
+                cxs[i],
+                cys[i],
+                angs[i],
+                cw,
+                ch,
+                (nowMs - enter) / (float) DRAW_MS,
+                width,
+                height,
+                false);
+        }
 
         if (selectedIndex >= 0 && selectedIndex < n && interactive) {
             String name = game.face(hand.get(selectedIndex))
@@ -901,6 +998,61 @@ public class GameOverlayLayer {
         for (int i = n - 1; i >= 0; i--) {
             if (i != selectedIndex) cardRects.add(new float[] { shownIdx[i], cxs[i], cys[i], angs[i], cw, ch });
         }
+    }
+
+    // a drawn card leaves the deck, turns from its back to its face with a curl on the way to the middle of the screen,
+    // rests there for a moment and then joins the hand (or, for debug draws, dissolves)
+    private void drawDrawnCard(CardGame game, CardFace face, Card card, String theme, float sx, float sy, float sang,
+        float cw, float ch, float u, int width, int height, boolean dissolve) {
+        if (u < 0 || u >= 1) return;
+        float[] from = com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckOnScreen();
+        float fx = from == null ? width * 0.5f : from[0], fy = from == null ? height * 0.25f : from[1];
+        float mx = width * 0.5f, my = height * 0.42f;
+        float x, y, scale, ang, fade = 1;
+        if (u < 0.45f) {
+            float k = easeOutCubic(u / 0.45f);
+            x = fx + (mx - fx) * k;
+            y = fy + (my - fy) * k - (float) Math.sin(k * Math.PI) * 30;
+            scale = 0.45f + 0.95f * k;
+            ang = (1 - k) * -0.9f;
+        } else if (u < 0.6f) {
+            x = mx;
+            y = my;
+            scale = 1.4f;
+            ang = 0;
+        } else {
+            float k = (u - 0.6f) / 0.4f;
+            k = k < 0.5f ? 4 * k * k * k : 1 - (float) Math.pow(-2 * k + 2, 3) / 2;
+            x = mx + (sx - mx) * k;
+            y = my + (sy - my) * k;
+            scale = 1.4f - 0.4f * k;
+            ang = sang * k;
+            if (dissolve) {
+                scale *= 1 - k;
+                fade = 1 - k;
+            }
+        }
+        float flip = Math.min(1f, u / 0.5f);
+        float turn = (float) Math.abs(Math.cos(flip * Math.PI));
+        float bend = (float) Math.sin(flip * Math.PI) * 0.35f;
+        if (scale <= 0.02f) return;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y, 0);
+        GL11.glRotatef((float) Math.toDegrees(ang), 0, 0, 1);
+        GL11.glScalef(scale * Math.max(0.05f, turn), scale, 1);
+        SHEAR.clear();
+        SHEAR.put(new float[] { 1, bend, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 });
+        SHEAR.flip();
+        GL11.glMultMatrix(SHEAR);
+        GL11.glTranslatef(-cw / 2f, -ch / 2f, 0);
+        if (flip >= 0.5f) CardRenderer.drawFace2D(face, theme, 0, 0, cw, ch);
+        else if (card != null) CardRenderer.drawCardBack2D(card, game.darkSide, theme, 0, 0, cw, ch);
+        else CardRenderer.drawBack2D(theme, game.darkSide, 0, 0, cw, ch);
+        if (fade < 1) {
+            int a = (int) ((1 - fade) * 200);
+            UiDraw.roundRect(0, 0, (int) cw, (int) ch, Math.max(1, (int) cw * 3 / 32), (a << 24) | 0xFFFFFF);
+        }
+        GL11.glPopMatrix();
     }
 
     // a played card leaves the hand toward the middle of the screen, with a ring where it lands

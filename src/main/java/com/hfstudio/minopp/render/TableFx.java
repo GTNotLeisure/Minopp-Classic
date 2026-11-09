@@ -43,7 +43,8 @@ public final class TableFx {
         SKIP_SIGN,
         DRAW,
         SHOUT,
-        PLUS
+        PLUS,
+        CUSTOM
     }
 
     private record Fx(Kind kind, long start, int duration, double x, double y, double z, int color, Object data) {
@@ -64,12 +65,13 @@ public final class TableFx {
         final List<Fx> fx = new ArrayList<>();
         final Set<UUID> shouted = new HashSet<>();
         int shoutSeq = -1;
+        final Set<UUID> coins = new HashSet<>();
     }
 
     private static final ResourceLocation TEX_DIRECTION = Mino.id("textures/fx/direction.png");
     private static final ResourceLocation TEX_SKIP = Mino.id("textures/fx/skip.png");
     private static final ResourceLocation TEX_COIN = Mino.id("textures/fx/coin.png");
-    private static final double PILE_Y = 0.95;
+    static final double PILE_Y = 0.95;
 
     private static final Map<BlockEntityMinoTable, State> STATES = new WeakHashMap<>();
     private static final Random RANDOM = new Random();
@@ -124,6 +126,13 @@ public final class TableFx {
                 case DRAW -> drawSlabs(f, t);
                 case SHOUT -> shoutText(f, t);
                 case PLUS -> plusText(f, t);
+                case CUSTOM -> {
+                    Object[] d = (Object[]) f.data;
+                    GL11.glPushMatrix();
+                    GL11.glTranslated(f.x, f.y, f.z);
+                    ((CardFxRegistry.Renderer) d[0]).render(t, (CardFxRegistry.Context) d[1]);
+                    GL11.glPopMatrix();
+                }
             }
         }
 
@@ -159,6 +168,16 @@ public final class TableFx {
             }
         }
         s.shoutSeq = game.debugShoutSeq;
+        for (CardPlayer p : game.players) {
+            if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
+                Vec3d at = head(table, p.seat, 1.6);
+                s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
+                s.fx.add(
+                    new Fx(Kind.POP, now + 700, 900, at.x, at.y + 0.6, at.z, p.coinNoMercy ? 0xE02020 : 0xFFD040, now));
+            }
+        }
+        s.coins.clear();
+        for (CardPlayer p : game.players) if (p.coinUsed) s.coins.add(p.uuid);
         if (!first && game.darkSide != s.dark && game.topCard != null) {
             CardFace[] faces = { game.topCard.face(s.dark), game.topCard.face(game.darkSide) };
             s.fx.add(new Fx(Kind.FLIP, now, 1500, 1.5, PILE_Y, 1.5, 0, new Object[] { faces, theme }));
@@ -172,66 +191,36 @@ public final class TableFx {
         if (!first && top != s.topUid && game.topCard != null) {
             CardFace face = game.topFace();
             s.fx.add(new Fx(Kind.SHOCK, now, 500, 1.5, PILE_Y, 1.5, game.currentColor.rgb, null));
-            String id = face.type().id;
-            int rgb = game.currentColor.isWild() ? 0xFFFFFF : game.currentColor.rgb;
-            boolean reverseCard = face.type().matchKey.equals("reverse") || id.contains("reverse");
-            if (reverseCard || turned) {
-                s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, rgb, game.isAntiClockwise));
-                turned = false;
-            } else if (isSkip(id) || face.type().matchKey.equals("skip")) {
-                s.fx.add(new Fx(Kind.SKIP_SIGN, now, 1300, 1.5, PILE_Y, 1.5, rgb, null));
-            }
-            int victimIdx = game.debugHold && game.debugNext >= 0 ? game.debugNext : game.currentPlayerIndex;
-            if (face.type()
-                .isDraw()) {
-                int amount = game.pendingDraw > 0 ? game.pendingDraw : face.type().drawValue;
-                Vec3d at = victimIdx >= 0 && victimIdx < game.players.size()
-                    ? head(table, game.players.get(victimIdx).seat, 1.75)
-                    : new Vec3d(1.5, PILE_Y + 1.75, 1.5);
-                s.fx.add(
-                    new Fx(Kind.PLUS, now + (face.isWild() ? 1000 : 250), 1400, at.x, at.y, at.z, rgb, "+" + amount));
-            }
-            if (face.type()
-                .isDraw() && !face.isWild()) {
-                Vec3d victim = null;
-                if (victimIdx >= 0 && victimIdx < game.players.size()) {
-                    Vec3d seat = table.getSeatLocalPos(game.players.get(victimIdx).seat);
-                    victim = new Vec3d(seat.x, seat.y + 0.4, seat.z);
+            Sink sink = new Sink(table, game, s, now);
+            CardFxRegistry.Context ctx = new CardFxRegistry.Context(table, game, face, now, sink);
+            sink.ctx = ctx;
+            CardFxRegistry.dispatch(ctx);
+            if (!ctx.defaultsCancelled) {
+                String id = face.type().id;
+                int rgb = ctx.color();
+                boolean reverseCard = face.type().matchKey.equals("reverse") || id.contains("reverse");
+                if (reverseCard || turned) {
+                    sink.reverse(rgb);
+                    turned = false;
+                } else if (isSkip(id) || face.type().matchKey.equals("skip")) {
+                    sink.skipSymbol(rgb);
                 }
-                s.fx.add(
-                    new Fx(
-                        Kind.DRAW,
-                        now,
-                        1500,
-                        1.5,
-                        PILE_Y,
-                        1.5,
-                        rgb,
-                        new Object[] { Math.max(1, Math.min(5, face.type().drawValue)), victim }));
-            }
-            if (isSkip(id) || id.equals("reverse") && game.activePlayers()
-                .size() == 2) {
-                for (int seat : skippedSeats(game)) {
-                    Vec3d at = head(table, seat, 1.5);
-                    s.fx.add(new Fx(Kind.SKIP, now, 1600, at.x, at.y, at.z, 0, null));
+                if (face.type()
+                    .isDraw()) {
+                    int amount = game.pendingDraw > 0 ? game.pendingDraw : face.type().drawValue;
+                    int seat = ctx.victimSeat();
+                    Vec3d at = seat >= 0 ? head(table, seat, 1.75) : new Vec3d(1.5, PILE_Y + 1.75, 1.5);
+                    sink.text("+" + amount, rgb, at, face.isWild() ? 1000 : 250, 1400);
+                    if (!face.isWild()) sink.slabs(face.type().drawValue, rgb);
+                }
+                if (isSkip(id) || id.equals("reverse") && game.activePlayers()
+                    .size() == 2) sink.skipSigns();
+                if (face.isWild() && !face.type().keepsColor && game.currentColor != CardColor.WILD) {
+                    sink.pillar(
+                        face.type()
+                            .isDraw());
                 }
             }
-            if (id.equals("wild_fifty_fifty")) s.fx.add(new Fx(Kind.COIN, now, 1600, 1.5, 1.2, 1.5, 0, null));
-            if (face.isWild() && !face.type().keepsColor && game.currentColor != CardColor.WILD) {
-                boolean blocks = face.type()
-                    .isDraw();
-                s.fx.add(
-                    new Fx(
-                        Kind.WILD,
-                        now,
-                        1800,
-                        1.5,
-                        PILE_Y,
-                        1.5,
-                        game.currentColor.rgb,
-                        new Object[] { game.currentColor, blocks }));
-            }
-            cardParticles(table, id);
         }
         if (turned) s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, 0xFFD43A, game.isAntiClockwise));
         s.topUid = top;
@@ -241,7 +230,7 @@ public final class TableFx {
     }
 
     // just over the head of whoever sits in that seat
-    private static Vec3d head(BlockEntityMinoTable table, int seat, double lift) {
+    static Vec3d head(BlockEntityMinoTable table, int seat, double lift) {
         Vec3d p = table.getSeatLocalPos(seat);
         double ox = p.x - 1.5, oz = p.z - 1.5, len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
         return new Vec3d(p.x + ox / len * 0.45, p.y + lift, p.z + oz / len * 0.45);
@@ -274,66 +263,151 @@ public final class TableFx {
         return out;
     }
 
-    private static void cardParticles(BlockEntityMinoTable table, String id) {
-        String particle;
-        int count;
-        double spread = 0.6;
-        switch (id) {
-            case "wild_smoke" -> {
-                particle = "largesmoke";
-                count = 24;
-            }
-            case "wild_cyclone", "wild_hand_shuffle", "wild_crossfade", "wild_swap_hands", "trade_hands" -> {
-                particle = "portal";
-                count = 40;
-                spread = 1.2;
-            }
-            case "wild_card_storm", "wild_surprise", "wild_trickster" -> {
-                particle = "fireworksSpark";
-                count = 20;
-            }
-            case "wild_booby_trap", "blaster", "wild_blast_all" -> {
-                particle = "lava";
-                count = 12;
-            }
-            case "wild_shield" -> {
-                particle = "happyVillager";
-                count = 20;
-                spread = 1.2;
-            }
-            case "wild_surge", "wild_echo", "wild_thief" -> {
-                particle = "witchMagic";
-                count = 24;
-            }
-            case "wild_dance_floor" -> {
-                particle = "note";
-                count = 10;
-            }
-            case "gift", "bonus_turn" -> {
-                particle = "heart";
-                count = 8;
-            }
-            case "wild_draw6", "wild_draw10", "wild_plus6", "wild_reverse_plus6", "wild_color_roulette" -> {
-                particle = "angryVillager";
-                count = 8;
-            }
-            case "discard_all", "double_discard_all", "wild_even_out", "wild_pile_up" -> {
-                particle = "crit";
-                count = 24;
-            }
-            case "wild_time_balloon" -> {
-                particle = "cloud";
-                count = 10;
-            }
-            case "wild_hurry_up" -> {
-                particle = "flame";
-                count = 12;
-            }
-            default -> {
-                return;
+    static {
+        registerBuiltins();
+    }
+
+    private static void particlesFor(String particle, int count, double spread, String... ids) {
+        for (String id : ids) CardFxRegistry.register(id, ctx -> ctx.particles(particle, count, spread));
+    }
+
+    // the mod's own card specific animations, registered the same way another mod would register its own
+    private static void registerBuiltins() {
+        particlesFor("largesmoke", 24, 0.6, "wild_smoke");
+        particlesFor(
+            "portal",
+            40,
+            1.2,
+            "wild_cyclone",
+            "wild_hand_shuffle",
+            "wild_crossfade",
+            "wild_swap_hands",
+            "trade_hands");
+        particlesFor("fireworksSpark", 20, 0.6, "wild_card_storm", "wild_surprise", "wild_trickster");
+        particlesFor("lava", 12, 0.6, "wild_booby_trap", "blaster", "wild_blast_all");
+        particlesFor("happyVillager", 20, 1.2, "wild_shield");
+        particlesFor("witchMagic", 24, 0.6, "wild_surge", "wild_echo", "wild_thief");
+        particlesFor("note", 10, 0.6, "wild_dance_floor");
+        particlesFor("heart", 8, 0.6, "gift", "bonus_turn");
+        particlesFor(
+            "angryVillager",
+            8,
+            0.6,
+            "wild_draw6",
+            "wild_draw10",
+            "wild_plus6",
+            "wild_reverse_plus6",
+            "wild_color_roulette");
+        particlesFor("crit", 24, 0.6, "discard_all", "double_discard_all", "wild_even_out", "wild_pile_up");
+        particlesFor("cloud", 10, 0.6, "wild_time_balloon");
+        particlesFor("crit", 30, 0.8, "wild_discard_all");
+        particlesFor("lava", 16, 0.8, "wild_final_attack");
+        particlesFor("largesmoke", 30, 1.2, "wild_sudden_death");
+        particlesFor("happyVillager", 14, 0.6, "play_again_10");
+        particlesFor("flame", 12, 0.6, "wild_hurry_up");
+        CardFxRegistry.register("wild_fifty_fifty", ctx -> ctx.coinToss(new Vec3d(1.5, 1.2, 1.5)));
+        CardFxRegistry.register(
+            "wild_sudden_death",
+            ctx -> ctx.bigText(
+                "24",
+                0xD02020,
+                ctx.pile()
+                    .add(0, 1.75, 0),
+                900,
+                1500));
+        CardFxRegistry.register(
+            "wild_final_attack",
+            ctx -> ctx.bigText(
+                "!!!",
+                0xFF8A1E,
+                ctx.pile()
+                    .add(0, 1.75, 0),
+                900,
+                1400));
+    }
+
+    /** Starts the built-in animations on behalf of {@link CardFxRegistry.Context}. */
+    static final class Sink {
+
+        private final BlockEntityMinoTable table;
+        private final CardGame game;
+        private final State s;
+        private final long now;
+        CardFxRegistry.Context ctx;
+
+        Sink(BlockEntityMinoTable table, CardGame game, State s, long now) {
+            this.table = table;
+            this.game = game;
+            this.s = s;
+            this.now = now;
+        }
+
+        void skipSymbol(int rgb) {
+            s.fx.add(new Fx(Kind.SKIP_SIGN, now, 1300, 1.5, PILE_Y, 1.5, rgb, null));
+        }
+
+        void skipSigns() {
+            for (int seat : skippedSeats(game)) {
+                Vec3d at = head(table, seat, 1.5);
+                s.fx.add(new Fx(Kind.SKIP, now, 1600, at.x, at.y, at.z, 0, null));
             }
         }
-        particles(table, particle, 1.5, 1.05, 1.5, count, spread);
+
+        void reverse(int rgb) {
+            s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, rgb, game.isAntiClockwise));
+        }
+
+        void pillar(boolean blocks) {
+            s.fx.add(
+                new Fx(
+                    Kind.WILD,
+                    now,
+                    1800,
+                    1.5,
+                    PILE_Y,
+                    1.5,
+                    game.currentColor.rgb,
+                    new Object[] { game.currentColor, blocks }));
+        }
+
+        void slabs(int count, int rgb) {
+            int seat = ctx.victimSeat();
+            Vec3d victim = null;
+            if (seat >= 0) {
+                Vec3d p = table.getSeatLocalPos(seat);
+                victim = new Vec3d(p.x, p.y + 0.4, p.z);
+            }
+            s.fx.add(
+                new Fx(
+                    Kind.DRAW,
+                    now,
+                    1500,
+                    1.5,
+                    PILE_Y,
+                    1.5,
+                    rgb,
+                    new Object[] { Math.max(1, Math.min(5, count)), victim }));
+        }
+
+        void text(String text, int rgb, Vec3d at, long delay, int duration) {
+            s.fx.add(new Fx(Kind.PLUS, now + delay, duration, at.x, at.y, at.z, rgb, text));
+        }
+
+        void coin(Vec3d at) {
+            s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
+        }
+
+        void burst(Vec3d at, int rgb, long delay) {
+            s.fx.add(new Fx(Kind.POP, now + delay, 900, at.x, at.y, at.z, rgb, now));
+        }
+
+        void particles(String name, int count, double spread) {
+            TableFx.particles(table, name, 1.5, 1.05, 1.5, count, spread);
+        }
+
+        void custom(Vec3d at, long delay, int duration, CardFxRegistry.Renderer renderer) {
+            s.fx.add(new Fx(Kind.CUSTOM, now + delay, duration, at.x, at.y, at.z, 0, new Object[] { renderer, ctx }));
+        }
     }
 
     private static void particles(BlockEntityMinoTable table, String name, double lx, double ly, double lz, int count,
@@ -541,69 +615,74 @@ public final class TableFx {
         }
     }
 
-    // the wild's color pillar rises from the pile and spins: a ring cut in four for a plain wild, four blocks for a
-    // draw wild; it stops with the chosen color facing the viewer, the other three sink and the chosen one bursts
+    // the wild's color pillar: a see-through ring cut in four for a plain wild, four blocks for a draw wild. It rises
+    // and spins to a stop with the chosen color facing the viewer, the chosen piece pops up, then all four pull in
+    // together and sink into the pile, which bursts with blocks of the chosen color
     private static void wildPillar(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardColor chosen = (CardColor) d[0];
         boolean square = (Boolean) d[1];
         List<CardColor> colors = CardColor.forSide(chosen.side == CardColor.Side.DARK);
         int pick = Math.max(0, colors.indexOf(chosen));
-        float stop = 0.55f;
-        float rise = easeOutCubic(Math.min(1f, t / 0.15f));
-        float k = Math.min(1f, t / stop);
-        float spin = pick * 90 + (square ? 0 : 45) - 270 + (1 - easeOutCubic(k)) * 1080f;
-        float settle = t < stop ? 0f : Math.min(1f, (t - stop) / 0.2f);
-        double height = 0.6 * rise;
+        float stop = 0.42f;
+        float rise = easeOutCubic(Math.min(1f, t / 0.14f));
+        float spin = pick * 90 + (square ? 0 : 45) - 270 + (1 - easeOutCubic(Math.min(1f, t / stop))) * 720f;
+        float pop = easeOutCubic(Math.max(0f, Math.min(1f, (t - stop) / 0.12f)));
+        float pull = Math.max(0f, Math.min(1f, (t - 0.6f) / 0.22f));
+        pull *= pull;
+        double height = (square ? 0.6 : 0.42) * rise;
+        if (pull >= 1f) height = 0;
         GL11.glPushMatrix();
-        GL11.glTranslated(f.x, PILE_Y, f.z);
+        GL11.glTranslated(f.x, PILE_Y - 0.5 * pull, f.z);
         GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
         GL11.glRotatef(spin, 0, 1, 0);
+        GL11.glScalef(1 - 0.9f * pull, 1 - 0.8f * pull, 1 - 0.9f * pull);
         Tessellator tes = Tessellator.instance;
         tes.startDrawingQuads();
         for (int q = 0; q < 4; q++) {
             boolean picked = q == pick;
-            if (!picked && settle >= 1f) continue;
             int rgb = colors.get(q).rgb & 0xFFFFFF;
-            double y0 = picked ? settle * 0.25 : -settle * 0.4;
-            double y1 = y0 + (picked ? height * (1 + settle * 0.3) : height * (1 - settle));
-            float alpha = picked ? fadeOut(t, 0.85f) : 1f - settle;
-            if (y1 - y0 < 0.01 || alpha <= 0.02f) continue;
+            double y0 = picked ? 0.28 * pop : 0;
+            double y1 = y0 + height * (picked ? 1 + 0.2 * pop : 1);
+            float alpha = 1f;
+            if (height <= 0.005) continue;
+            double c = Math.toRadians(q * 90 + (square ? 0 : 45));
             if (square) {
-                double c = Math.toRadians(q * 90), cx = Math.cos(c) * 0.32, cz = Math.sin(c) * 0.32;
-                double s = 0.28;
-                cuboid(tes, cx - s / 2, y0, cz - s / 2, cx + s / 2, y1, cz + s / 2, rgb, alpha);
-                if (settle <= 0f) {
-                    double top = y1 + 0.004, tip = 0.14, base = 0.045;
-                    double nx = Math.cos(c), nz = Math.sin(c), px = -nz, pz = nx;
-                    color(tes, 0xFF8A1E, alpha);
-                    tes.addVertex(nx * (tip + 0.05), top, nz * (tip + 0.05));
-                    tes.addVertex(nx * 0.04 + px * base * 1.6, top, nz * 0.04 + pz * base * 1.6);
-                    tes.addVertex(nx * 0.04 - px * base * 1.6, top, nz * 0.04 - pz * base * 1.6);
-                    tes.addVertex(nx * 0.04 - px * base * 1.6, top, nz * 0.04 - pz * base * 1.6);
-                }
+                double cx = Math.cos(c) * 0.32, cz = Math.sin(c) * 0.32, w = 0.28;
+                cuboid(tes, cx - w / 2, y0, cz - w / 2, cx + w / 2, y1, cz + w / 2, rgb, alpha);
             } else {
                 ringQuarter(tes, q * 90 + 3, q * 90 + 87, 0.03, 0.56, y0, y1, rgb, alpha);
             }
+            if (pull <= 0f) {
+                double top = y1 + 0.004, from = square ? 0.04 : 0.16, tip = square ? 0.19 : 0.36,
+                    base = square ? 0.07 : 0.09;
+                double nx = Math.cos(c), nz = Math.sin(c), px = -nz, pz = nx;
+                color(tes, 0xFF8A1E, Math.min(1f, alpha + 0.2f));
+                tes.addVertex(nx * tip, top, nz * tip);
+                tes.addVertex(nx * from + px * base, top, nz * from + pz * base);
+                tes.addVertex(nx * from - px * base, top, nz * from - pz * base);
+                tes.addVertex(nx * from - px * base, top, nz * from - pz * base);
+            }
         }
         tes.draw();
+        GL11.glDepthMask(true);
         GL11.glPopMatrix();
-        if (t >= stop + 0.12f) {
-            float sec = (t - stop - 0.12f) * f.duration / 1000f;
+        if (t >= 0.78f) {
+            float sec = (t - 0.78f) * f.duration / 1000f;
             int rgb = chosen.rgb & 0xFFFFFF;
-            float alpha = fadeOut(t, 0.85f);
+            float alpha = fadeOut(t, 0.88f);
             cubes(
                 f.x,
-                PILE_Y + 0.6,
+                PILE_Y + 0.2,
                 f.z,
                 sec,
                 f.start,
                 new int[] { rgb, shade(rgb, 1.3f), shade(rgb, 0.75f) },
-                28,
-                0.08f,
-                1.8f,
+                30,
+                0.09f,
+                1.9f,
                 alpha);
-            float grow = Math.min(1f, (t - stop - 0.12f) / 0.12f);
+            float grow = Math.min(1f, (t - 0.78f) / 0.1f);
             GL11.glPushMatrix();
             GL11.glTranslated(f.x, PILE_Y, f.z);
             GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
@@ -652,7 +731,7 @@ public final class TableFx {
     // a quarter of a thick ring, faceted like a block model
     private static void ringQuarter(Tessellator t, double fromDeg, double toDeg, double r0, double r1, double y0,
         double y1, int rgb, float a) {
-        int steps = 4;
+        int steps = 12;
         for (int i = 0; i < steps; i++) {
             double a0 = Math.toRadians(fromDeg + (toDeg - fromDeg) * i / steps);
             double a1 = Math.toRadians(fromDeg + (toDeg - fromDeg) * (i + 1) / steps);
@@ -1007,21 +1086,11 @@ public final class TableFx {
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         int w = font.getStringWidth(text);
         int alpha = Math.max(8, (int) (out * 255)) << 24;
-        for (int layer = 6; layer >= 0; layer--) {
-            GL11.glPushMatrix();
-            GL11.glTranslatef(layer * 0.25f, layer * 0.25f, layer * 0.5f);
-            int rgb = layer == 0 ? face : layer == 1 ? 0xFFFFFF : 0x3A1A00;
-            if (layer == 0) {
-                for (int[] o : new int[][] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }) {
-                    GL11.glPushMatrix();
-                    GL11.glTranslatef(o[0] * 0.6f, o[1] * 0.6f, 0.2f);
-                    font.drawString(text, -w / 2, -4, alpha | 0x1A0A00);
-                    GL11.glPopMatrix();
-                }
-            }
-            font.drawString(text, -w / 2, -4, alpha | rgb);
-            GL11.glPopMatrix();
-        }
+        GL11.glPushMatrix();
+        GL11.glTranslatef(0.9f, 0.9f, 0.3f);
+        font.drawString(text, -w / 2, -4, alpha | 0x2A1000);
+        GL11.glPopMatrix();
+        font.drawString(text, -w / 2, -4, alpha | face);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glPopMatrix();
     }

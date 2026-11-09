@@ -805,5 +805,45 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.revealHands(ctx.player, ctx.report))
             .build());
 
+    // Show 'Em No Mercy expansion
+    public static final CardType PLAY_AGAIN_10 = register(
+        CardType.builder("play_again_10", CardPack.SHOW_EM)
+            .label("10")
+            .sort(121)
+            .effect(ctx -> ctx.game.giveExtraTurn())
+            .build());
+    public static final CardType WILD_DISCARD_ALL = register(
+        CardType.builder("wild_discard_all", CardPack.SHOW_EM)
+            .wild()
+            .label("WDA")
+            .sort(122)
+            .effect(ctx -> ctx.game.discardAllOfColor(ctx.player, ctx.choices.color, ctx.report))
+            .build());
+    public static final CardType WILD_REVERSE_DRAW8 = register(
+        CardType.builder("wild_reverse_draw8", CardPack.SHOW_EM)
+            .wild()
+            .label("⇆+8")
+            .sort(123)
+            .draw(8)
+            .effect(ctx -> {
+                ctx.game.reverse();
+                ctx.game.addPendingDraw(8, ctx.player);
+            })
+            .build());
+    public static final CardType WILD_FINAL_ATTACK = register(
+        CardType.builder("wild_final_attack", CardPack.SHOW_EM)
+            .wild()
+            .label("W⚔")
+            .sort(124)
+            .effect(ctx -> ctx.game.finalAttack(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_SUDDEN_DEATH = register(
+        CardType.builder("wild_sudden_death", CardPack.SHOW_EM)
+            .wild()
+            .label("W24")
+            .sort(125)
+            .effect(ctx -> ctx.game.suddenDeath(ctx.report))
+            .build());
+
     public static void init() {}
 }

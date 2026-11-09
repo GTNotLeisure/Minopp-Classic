@@ -19,7 +19,8 @@ public class C2SPlayCardPacket {
 
     public static final String ID = "minopp:play_card";
 
-    private static final int ACTION_PLAY = 0, ACTION_NO_CARD = 1, ACTION_DOUBT = 2, ACTION_DECISION = 3;
+    private static final int ACTION_PLAY = 0, ACTION_NO_CARD = 1, ACTION_DOUBT = 2, ACTION_DECISION = 3,
+        ACTION_COIN = 4;
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
@@ -47,6 +48,7 @@ public class C2SPlayCardPacket {
                 yield tableEntity.game.playCard(cardPlayer, cardUid, choices);
             }
             case ACTION_NO_CARD -> tableEntity.game.playNoCard(cardPlayer);
+            case ACTION_COIN -> tableEntity.game.useCoin(cardPlayer, packet.readBoolean());
             case ACTION_DOUBT -> tableEntity.game.doubtMino(cardPlayer, Buf.readUUID(packet));
             case ACTION_DECISION -> {
                 int answer = packet.readInt();
@@ -76,6 +78,12 @@ public class C2SPlayCardPacket {
             for (UUID target : choices.targets) Buf.writeUUID(packet, target);
             packet.writeBoolean(choices.useFlex);
             packet.writeBoolean(choices.shout);
+            MinoNetwork.sendPacketToServer(ID, packet);
+        }
+
+        public static void sendCoinC2S(BlockPos gamePos, boolean flip) {
+            ByteBuf packet = header(gamePos, ACTION_COIN);
+            packet.writeBoolean(flip);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 

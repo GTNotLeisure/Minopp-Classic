@@ -24,6 +24,8 @@ public class CardPlayer {
     public boolean eliminated = false;
     public boolean powerOn = true;
     public int team = -1;
+    /** Show 'Em No Mercy coin: which side was declared, whether it is spent, locked in, or armed to double a draw. */
+    public boolean coinNoMercy, coinUsed, coinLocked, coinArmed;
 
     public CardPlayer(EntityPlayer mcPlayer) {
         this.uuid = mcPlayer.getGameProfile()
@@ -48,6 +50,10 @@ public class CardPlayer {
         this.eliminated = tag.getBoolean("eliminated");
         this.powerOn = !tag.hasKey("powerOn") || tag.getBoolean("powerOn");
         this.team = tag.hasKey("team") ? tag.getInteger("team") : -1;
+        this.coinNoMercy = tag.getBoolean("coinNoMercy");
+        this.coinUsed = tag.getBoolean("coinUsed");
+        this.coinLocked = tag.getBoolean("coinLocked");
+        this.coinArmed = tag.getBoolean("coinArmed");
     }
 
     public NBTTagCompound toTag() {
@@ -62,6 +68,10 @@ public class CardPlayer {
         tag.setBoolean("eliminated", eliminated);
         tag.setBoolean("powerOn", powerOn);
         tag.setInteger("team", team);
+        tag.setBoolean("coinNoMercy", coinNoMercy);
+        tag.setBoolean("coinUsed", coinUsed);
+        tag.setBoolean("coinLocked", coinLocked);
+        tag.setBoolean("coinArmed", coinArmed);
         return tag;
     }
 
