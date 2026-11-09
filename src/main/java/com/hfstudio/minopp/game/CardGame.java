@@ -1255,6 +1255,10 @@ public class CardGame {
      * card played.
      */
     public ActionReport useCoin(CardPlayer player, boolean flip) {
+        return debugged(useCoinInner(player, flip));
+    }
+
+    private ActionReport useCoinInner(CardPlayer player, boolean flip) {
         ActionReport report = ActionReport.builder(this, player);
         if (!rule(GameRules.COINS)) return report.fail(Chat.translatable("game.minopp.coin.off"));
         if (player.coinUsed) return report.fail(Chat.translatable("game.minopp.coin.used"));
@@ -1283,6 +1287,12 @@ public class CardGame {
     }
 
     private void mercySwap(CardPlayer player, ActionReport report) {
+        // the debugger's cards never leave: the new hand is only shown, like every debug draw
+        if (isDebugger(player)) {
+            drawCards(player, 7, report);
+            report.sound(new ResourceLocation("minecraft", "random.levelup"), 0, 0.6f, 1.2f);
+            return;
+        }
         discardDeck.addAll(0, player.hand);
         player.hand.clear();
         drawCards(player, 7, report);

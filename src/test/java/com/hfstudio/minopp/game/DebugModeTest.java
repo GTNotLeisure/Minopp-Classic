@@ -130,4 +130,18 @@ public class DebugModeTest {
                 .allMatch(c -> c.dark == null));
         assertEquals(CardColor.Side.LIGHT, game.currentColor.side);
     }
+
+    @Test
+    public void mercyCoinKeepsTheDebugHand() {
+        CardGame game = start(3, true);
+        game.config()
+            .set(GameRules.COINS, 1);
+        CardPlayer me = game.players.get(0);
+        int size = me.hand.size();
+        int discards = game.discardDeck.size();
+        assertFalse(game.useCoin(me, false).isFail);
+        assertTrue(me.coinUsed);
+        assertEquals(size, me.hand.size());
+        assertEquals(discards, game.discardDeck.size());
+    }
 }
