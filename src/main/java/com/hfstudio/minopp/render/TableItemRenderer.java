@@ -89,38 +89,72 @@ public class TableItemRenderer implements IItemRenderer {
         GL11.glPopMatrix();
     }
 
+    // each face takes the texture at its real size (16 pixels a block), like a block, so nothing stretches
+    private static final int UP = 0, DOWN = 1, NORTH = 2, SOUTH = 3, WEST = 4, EAST = 5;
+
+    private static void v(Tessellator t, IIcon icon, int face, double x, double y, double z) {
+        double px = (x + 0.5) * 16, py = (y + 0.5) * 16, pz = (z + 0.5) * 16;
+        double u, w;
+        switch (face) {
+            case UP -> {
+                u = px;
+                w = pz;
+            }
+            case DOWN -> {
+                u = px;
+                w = 16 - pz;
+            }
+            case NORTH -> {
+                u = 16 - px;
+                w = 16 - py;
+            }
+            case SOUTH -> {
+                u = px;
+                w = 16 - py;
+            }
+            case WEST -> {
+                u = pz;
+                w = 16 - py;
+            }
+            default -> {
+                u = 16 - pz;
+                w = 16 - py;
+            }
+        }
+        t.addVertexWithUV(x, y, z, icon.getInterpolatedU(u), icon.getInterpolatedV(w));
+    }
+
     private static void box(Tessellator t, IIcon icon, double x0, double y0, double z0, double x1, double y1,
         double z1) {
-        double u0 = icon.getMinU(), v0 = icon.getMinV(), u1 = icon.getMaxU(), v1 = icon.getMaxV();
         t.setNormal(0, 1, 0);
-        t.addVertexWithUV(x0, y1, z1, u0, v1);
-        t.addVertexWithUV(x1, y1, z1, u1, v1);
-        t.addVertexWithUV(x1, y1, z0, u1, v0);
-        t.addVertexWithUV(x0, y1, z0, u0, v0);
+        v(t, icon, UP, x0, y1, z1);
+        v(t, icon, UP, x1, y1, z1);
+        v(t, icon, UP, x1, y1, z0);
+        v(t, icon, UP, x0, y1, z0);
         t.setNormal(0, -1, 0);
-        t.addVertexWithUV(x0, y0, z0, u0, v0);
-        t.addVertexWithUV(x1, y0, z0, u1, v0);
-        t.addVertexWithUV(x1, y0, z1, u1, v1);
-        t.addVertexWithUV(x0, y0, z1, u0, v1);
+        v(t, icon, DOWN, x0, y0, z0);
+        v(t, icon, DOWN, x1, y0, z0);
+        v(t, icon, DOWN, x1, y0, z1);
+        v(t, icon, DOWN, x0, y0, z1);
         t.setNormal(0, 0, -1);
-        t.addVertexWithUV(x0, y1, z0, u0, v0);
-        t.addVertexWithUV(x1, y1, z0, u1, v0);
-        t.addVertexWithUV(x1, y0, z0, u1, v1);
-        t.addVertexWithUV(x0, y0, z0, u0, v1);
+        v(t, icon, NORTH, x0, y1, z0);
+        v(t, icon, NORTH, x1, y1, z0);
+        v(t, icon, NORTH, x1, y0, z0);
+        v(t, icon, NORTH, x0, y0, z0);
         t.setNormal(0, 0, 1);
-        t.addVertexWithUV(x0, y0, z1, u0, v1);
-        t.addVertexWithUV(x1, y0, z1, u1, v1);
-        t.addVertexWithUV(x1, y1, z1, u1, v0);
-        t.addVertexWithUV(x0, y1, z1, u0, v0);
+        v(t, icon, SOUTH, x0, y0, z1);
+        v(t, icon, SOUTH, x1, y0, z1);
+        v(t, icon, SOUTH, x1, y1, z1);
+        v(t, icon, SOUTH, x0, y1, z1);
         t.setNormal(-1, 0, 0);
-        t.addVertexWithUV(x0, y0, z0, u0, v1);
-        t.addVertexWithUV(x0, y0, z1, u1, v1);
-        t.addVertexWithUV(x0, y1, z1, u1, v0);
-        t.addVertexWithUV(x0, y1, z0, u0, v0);
+        v(t, icon, WEST, x0, y0, z0);
+        v(t, icon, WEST, x0, y0, z1);
+        v(t, icon, WEST, x0, y1, z1);
+        v(t, icon, WEST, x0, y1, z0);
         t.setNormal(1, 0, 0);
-        t.addVertexWithUV(x1, y1, z0, u0, v0);
-        t.addVertexWithUV(x1, y1, z1, u1, v0);
-        t.addVertexWithUV(x1, y0, z1, u1, v1);
-        t.addVertexWithUV(x1, y0, z0, u0, v1);
+        v(t, icon, EAST, x1, y1, z0);
+        v(t, icon, EAST, x1, y1, z1);
+        v(t, icon, EAST, x1, y0, z1);
+        v(t, icon, EAST, x1, y0, z0);
     }
 }
