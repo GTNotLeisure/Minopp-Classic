@@ -1,5 +1,8 @@
 package com.hfstudio.minopp.gui.ui;
 
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -11,6 +14,7 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
@@ -162,8 +166,8 @@ public final class UiDraw {
         }
     }
 
-    private static final java.nio.IntBuffer SCISSOR_BOX = org.lwjgl.BufferUtils.createIntBuffer(16);
-    private static final java.nio.FloatBuffer MODELVIEW = org.lwjgl.BufferUtils.createFloatBuffer(16);
+    private static final IntBuffer SCISSOR_BOX = BufferUtils.createIntBuffer(16);
+    private static final FloatBuffer MODELVIEW = BufferUtils.createFloatBuffer(16);
     private static final long MARQUEE_PAUSE = 1200;
     private static final float MARQUEE_SPEED = 0.022f;
 
@@ -513,11 +517,11 @@ public final class UiDraw {
         int screenH) {
         if (lines.isEmpty()) return;
         int maxW = Math.max(80, Math.min(240, screenW - 24));
-        List<String> wrapped = new java.util.ArrayList<>();
-        List<Boolean> title = new java.util.ArrayList<>();
+        List<String> wrapped = new ArrayList<>();
+        List<Boolean> title = new ArrayList<>();
         for (int i = 0; i < lines.size(); i++) {
-            for (Object o : font.listFormattedStringToWidth(lines.get(i), maxW)) {
-                wrapped.add((String) o);
+            for (String o : font.listFormattedStringToWidth(lines.get(i), maxW)) {
+                wrapped.add(o);
                 title.add(i == 0);
             }
         }

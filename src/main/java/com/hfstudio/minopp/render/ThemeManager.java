@@ -23,6 +23,7 @@ import com.google.gson.JsonParser;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.config.ClientConfig;
+import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
 
 import cpw.mods.fml.relauncher.Side;
@@ -147,7 +148,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     }
 
     /** The color a card layer is drawn in: white, or the card's color for a tinting theme's glyph layers. */
-    public int layerTint(String theme, com.hfstudio.minopp.game.CardFace face, int layer) {
+    public int layerTint(String theme, CardFace face, int layer) {
         if (layer == 0 || face == null || face.color.isWild()) return 0xFFFFFF;
         ThemeInfo info = themes.get(theme);
         return info != null && info.tint() ? face.color.rgb & 0xFFFFFF : 0xFFFFFF;

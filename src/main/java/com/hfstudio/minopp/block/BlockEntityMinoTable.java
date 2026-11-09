@@ -1,10 +1,13 @@
 package com.hfstudio.minopp.block;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.entity.Entity;
@@ -15,6 +18,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
@@ -79,10 +83,10 @@ public class BlockEntityMinoTable extends TileEntity {
     public UUID currentHost() {
         MinecraftServer server = MinecraftServer.getServer();
         if (server == null) return hostUuid;
-        java.util.Set<UUID> online = new java.util.HashSet<>();
-        for (Object o : server.getConfigurationManager().playerEntityList) {
+        Set<UUID> online = new HashSet<>();
+        for (EntityPlayerMP o : server.getConfigurationManager().playerEntityList) {
             online.add(
-                ((EntityPlayerMP) o).getGameProfile()
+                o.getGameProfile()
                     .getId());
         }
         if (ownerUuid != null && online.contains(ownerUuid)) {
@@ -237,7 +241,7 @@ public class BlockEntityMinoTable extends TileEntity {
                 entry);
         }
         compoundTag.setTag("scores", scoresTag);
-        net.minecraft.nbt.NBTTagList settleTag = new net.minecraft.nbt.NBTTagList();
+        NBTTagList settleTag = new NBTTagList();
         for (Settlement s : settlement) settleTag.appendTag(s.toTag());
         compoundTag.setTag("settlement", settleTag);
         compoundTag.setInteger("settleTarget", settleTarget);
@@ -259,7 +263,7 @@ public class BlockEntityMinoTable extends TileEntity {
             } catch (IllegalArgumentException ignored) {}
         }
         settlement.clear();
-        net.minecraft.nbt.NBTTagList settleTag = compoundTag.getTagList("settlement", 10);
+        NBTTagList settleTag = compoundTag.getTagList("settlement", 10);
         for (int i = 0; i < settleTag.tagCount() && i < MAX_SEATS; i++)
             settlement.add(Settlement.fromTag(settleTag.getCompoundTagAt(i)));
         settleTarget = compoundTag.getInteger("settleTarget");
@@ -439,7 +443,7 @@ public class BlockEntityMinoTable extends TileEntity {
         "Pebble" };
 
     private String freeBotName() {
-        java.util.Set<String> used = new java.util.HashSet<>();
+        Set<String> used = new HashSet<>();
         for (CardPlayer p : getPlayersList()) used.add(p.name);
         for (String n : BOT_NAMES) if (!used.contains(n)) return n;
         return "MinoBot #" + (100 + worldObj.rand.nextInt(900));
@@ -479,7 +483,7 @@ public class BlockEntityMinoTable extends TileEntity {
         return removed;
     }
 
-    public boolean leaveSeat(java.util.UUID uuid) {
+    public boolean leaveSeat(UUID uuid) {
         if (game != null) return false;
         for (int i = 0; i < MAX_SEATS; i++) {
             if (seats[i] != null && seats[i].uuid.equals(uuid)) {
@@ -711,7 +715,7 @@ public class BlockEntityMinoTable extends TileEntity {
                 best = w;
             }
         }
-        losers.sort(java.util.Comparator.comparingInt(p -> game.handPoints(List.of(p))));
+        losers.sort(Comparator.comparingInt(p -> game.handPoints(List.of(p))));
         for (CardPlayer p : losers) {
             int own = game.handPoints(List.of(p));
             settlement.add(new Settlement(p.name, p.hand.size(), own, 0, scores.getOrDefault(p.uuid, 0), false));
@@ -784,7 +788,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     private static final long ABSENT_GRACE_MS = 15_000, STAND_IN_DELAY_MS = 2_000;
     private final AutoPlayer standIn = new AutoPlayer();
-    private final java.util.Set<UUID> standingIn = new java.util.HashSet<>();
+    private final Set<UUID> standingIn = new HashSet<>();
     private UUID absentId;
     private long absentSince;
 

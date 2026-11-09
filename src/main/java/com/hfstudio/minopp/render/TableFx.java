@@ -1,6 +1,8 @@
 package com.hfstudio.minopp.render;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -10,9 +12,12 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 
@@ -20,6 +25,8 @@ import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.config.ClientConfig;
+import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
@@ -86,30 +93,30 @@ public final class TableFx {
 
     private TableFx() {}
 
-    private static final Map<UUID, java.lang.ref.WeakReference<net.minecraft.entity.Entity>> HOLDERS = new java.util.HashMap<>();
+    private static final Map<UUID, WeakReference<Entity>> HOLDERS = new HashMap<>();
     private static long holderScan;
 
     // the player or bot behind a card player, looked up from the client world at most every couple of seconds
-    private static net.minecraft.entity.Entity holderEntity(UUID uuid) {
-        java.lang.ref.WeakReference<net.minecraft.entity.Entity> ref = HOLDERS.get(uuid);
-        net.minecraft.entity.Entity e = ref == null ? null : ref.get();
+    private static Entity holderEntity(UUID uuid) {
+        WeakReference<Entity> ref = HOLDERS.get(uuid);
+        Entity e = ref == null ? null : ref.get();
         if (e != null && !e.isDead) return e;
         long now = System.currentTimeMillis();
         if (now - holderScan < 2000) return null;
         holderScan = now;
         World w = Minecraft.getMinecraft().theWorld;
         if (w == null) return null;
-        for (Object o : w.playerEntities) {
-            net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
+        for (EntityPlayer o : w.playerEntities) {
+            EntityPlayer p = o;
             if (uuid.equals(
                 p.getGameProfile()
                     .getId()))
                 e = p;
         }
         if (e == null) for (Object o : w.loadedEntityList) {
-            if (o instanceof com.hfstudio.minopp.entity.EntityAutoPlayer bot && uuid.equals(bot.getUniqueID())) e = bot;
+            if (o instanceof EntityAutoPlayer bot && uuid.equals(bot.getUniqueID())) e = bot;
         }
-        if (e != null) HOLDERS.put(uuid, new java.lang.ref.WeakReference<>(e));
+        if (e != null) HOLDERS.put(uuid, new WeakReference<>(e));
         return e;
     }
 
@@ -143,7 +150,7 @@ public final class TableFx {
                 Vec3d seatPos = table.getSeatLocalPos(seat);
                 double bx = seatPos.x + (seatPos.x - 1.5) * 0.15, bz = seatPos.z + (seatPos.z - 1.5) * 0.15,
                     by = seatPos.y + 2.15;
-                net.minecraft.entity.Entity holder = holderEntity(game.balloonHolder);
+                Entity holder = holderEntity(game.balloonHolder);
                 if (holder != null && holder.getDistanceSq(table.xCoord + 1.5, table.yCoord, table.zCoord + 1.5) < 64) {
                     // follows its holder, interpolated between ticks so it never stutters
                     bx = holder.prevPosX + (holder.posX - holder.prevPosX) * partialTick - table.xCoord;
@@ -159,7 +166,7 @@ public final class TableFx {
         }
 
         s.fx.removeIf(f -> f.t(now) >= 1f);
-        if (!com.hfstudio.minopp.config.ClientConfig.display.tableEffects) s.fx.clear();
+        if (!ClientConfig.display.tableEffects) s.fx.clear();
         for (Fx f : s.fx) {
             float t = f.t(now);
             if (now < f.start) continue;
@@ -348,7 +355,6 @@ public final class TableFx {
     }
 
     private static void particlesFor(String particle, int count, double spread, String... ids) {
-        if (ids.length == 0) return;
         for (String id : ids) CardFxRegistry.register(id, ctx -> ctx.particles(particle, count, spread));
     }
 
@@ -534,7 +540,7 @@ public final class TableFx {
         }
 
         void particles(String name, int count, double spread) {
-            if (!com.hfstudio.minopp.config.ClientConfig.display.tableEffects) return;
+            if (!ClientConfig.display.tableEffects) return;
             TableFx.particles(table, name, 1.5, 1.05, 1.5, count, spread);
         }
 
@@ -774,7 +780,7 @@ public final class TableFx {
         float fly = Math.max(0f, Math.min(1f, (t - 0.15f) / 0.5f));
         double height = 0.55 + Math.sin(fly * Math.PI) * 0.9;
         float spins = 5;
-        float angle = (float) (easeOutCubic(fly) * spins * 360 + (headsUp ? 0 : 180));
+        float angle = easeOutCubic(fly) * spins * 360 + (headsUp ? 0 : 180);
         float scale = 0.55f * Math.min(1f, t / 0.15f) * out;
         GL11.glPushMatrix();
         GL11.glTranslated(f.x, f.y + height, f.z);
@@ -1476,7 +1482,7 @@ public final class TableFx {
 
     // thick letters facing the viewer: the face color over a dark extrusion
     private static void bigText(String text, double x, double y, double z, float t, float size, int face, float tilt) {
-        net.minecraft.client.gui.FontRenderer font = Minecraft.getMinecraft().fontRenderer;
+        FontRenderer font = Minecraft.getMinecraft().fontRenderer;
         float out = fadeOut(t, 0.8f);
         float s = size * overshoot(Math.min(1f, t / 0.25f)) * (0.7f + 0.3f * out);
         GL11.glPushMatrix();

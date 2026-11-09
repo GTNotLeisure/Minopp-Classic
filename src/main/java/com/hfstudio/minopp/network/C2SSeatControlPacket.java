@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
@@ -130,7 +131,7 @@ public class C2SSeatControlPacket {
             }
             case AUTO_TEAMS -> tableEntity.autoTeams();
             case ADD_BOT, FILL_BOTS, CLEAR_BOTS, REMOVE_BOT -> {
-                if (!com.hfstudio.minopp.config.ServerConfig.gameplay.everyoneCanManageBots && !manager) {
+                if (!ServerConfig.gameplay.everyoneCanManageBots && !manager) {
                     player.addChatComponentMessage(Chat.translatable("game.minopp.play.bot_permission"));
                     return;
                 }

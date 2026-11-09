@@ -1,5 +1,6 @@
 package com.hfstudio.minopp;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -11,6 +12,7 @@ import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.MathHelper;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
@@ -96,7 +98,7 @@ public class MinoCommand extends CommandBase {
                 func_152373_a(sender, this, "Table demo set");
             }
             case "debug" -> {
-                net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+                MinecraftServer server = MinecraftServer.getServer();
                 boolean worldOwner = server.isSinglePlayer() && player.getCommandSenderName()
                     .equals(server.getServerOwner());
                 if (!sender.canCommandSenderUseCommand(2, "minopp") && !worldOwner) {
@@ -203,7 +205,7 @@ public class MinoCommand extends CommandBase {
                 "debug");
         }
         if (args.length == 2 && args[0].equals("debug")) {
-            List<String> modes = new java.util.ArrayList<>(CardGame.DEBUG_ACTIONS);
+            List<String> modes = new ArrayList<>(CardGame.DEBUG_ACTIONS);
             modes.add(0, "start");
             return getListOfStringsMatchingLastWord(args, modes.toArray(new String[0]));
         }

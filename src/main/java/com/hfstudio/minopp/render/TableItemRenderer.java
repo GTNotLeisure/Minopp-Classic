@@ -7,10 +7,12 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.IIcon;
 import net.minecraftforge.client.IItemRenderer;
+import net.minecraftforge.client.MinecraftForgeClient;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
+import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 
@@ -28,9 +30,9 @@ public class TableItemRenderer implements IItemRenderer {
      * the table item invisible (it has no item model). Called every client tick to take the item back.
      */
     public static void keepRegistered() {
-        if (probe == null) probe = new ItemStack(com.hfstudio.minopp.Mino.BLOCK_MINO_TABLE);
-        if (net.minecraftforge.client.MinecraftForgeClient.getItemRenderer(probe, ItemRenderType.INVENTORY) != INSTANCE)
-            net.minecraftforge.client.MinecraftForgeClient.registerItemRenderer(probe.getItem(), INSTANCE);
+        if (probe == null) probe = new ItemStack(Mino.BLOCK_MINO_TABLE);
+        if (MinecraftForgeClient.getItemRenderer(probe, ItemRenderType.INVENTORY) != INSTANCE)
+            MinecraftForgeClient.registerItemRenderer(probe.getItem(), INSTANCE);
     }
 
     private static final CardBatch BATCH = new CardBatch();

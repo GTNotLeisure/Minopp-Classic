@@ -1,12 +1,16 @@
 package com.hfstudio.minopp.gui;
 
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
@@ -15,8 +19,10 @@ import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.Mino;
@@ -33,6 +39,7 @@ import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
+import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.ThemeManager;
@@ -208,8 +215,8 @@ public class GameOverlayLayer {
                     wrappedColors.add(0);
                     continue;
                 }
-                for (Object part : font.listFormattedStringToWidth(text, wrapAt)) {
-                    wrappedLines.add((String) part);
+                for (String part : font.listFormattedStringToWidth(text, wrapAt)) {
+                    wrappedLines.add(part);
                     wrappedColors.add(infoColors.get(i));
                 }
             }
@@ -321,13 +328,13 @@ public class GameOverlayLayer {
 
     private static final int PULSE = 0x01000000;
     private Object infoGame, infoState;
-    private final List<String> infoLines = new java.util.ArrayList<>();
-    private final List<Integer> infoColors = new java.util.ArrayList<>();
+    private final List<String> infoLines = new ArrayList<>();
+    private final List<Integer> infoColors = new ArrayList<>();
 
     private int infoWrap;
-    private final List<String> wrappedLines = new java.util.ArrayList<>();
-    private final List<Integer> wrappedColors = new java.util.ArrayList<>();
-    private final Map<ActionMessage, List<String>> wrappedMessages = new java.util.WeakHashMap<>();
+    private final List<String> wrappedLines = new ArrayList<>();
+    private final List<Integer> wrappedColors = new ArrayList<>();
+    private final Map<ActionMessage, List<String>> wrappedMessages = new WeakHashMap<>();
     private int messageWrap;
 
     private List<String> wrapMessage(FontRenderer font, ActionMessage message, int wrapAt) {
@@ -336,8 +343,8 @@ public class GameOverlayLayer {
             messageWrap = wrapAt;
         }
         return wrappedMessages.computeIfAbsent(message, m -> {
-            List<String> out = new java.util.ArrayList<>();
-            for (Object o : font.listFormattedStringToWidth(m.formattedText(), wrapAt)) out.add((String) o);
+            List<String> out = new ArrayList<>();
+            for (String o : font.listFormattedStringToWidth(m.formattedText(), wrapAt)) out.add(o);
             return out;
         });
     }
@@ -630,7 +637,7 @@ public class GameOverlayLayer {
     private final List<Object[]> flyers = new ArrayList<>();
     private Object rowGame;
     private static final int FLY_MS = 380, DRAW_MS = 1000;
-    private static final java.nio.FloatBuffer SHEAR = org.lwjgl.BufferUtils.createFloatBuffer(16);
+    private static final FloatBuffer SHEAR = BufferUtils.createFloatBuffer(16);
     private long lastRowNanos = System.nanoTime();
 
     private static void addRect(int index, float x, float y, float w, float h) {
@@ -655,7 +662,7 @@ public class GameOverlayLayer {
         return rowExtent;
     }
 
-    private final java.util.Set<Integer> rowKnown = new java.util.HashSet<>();
+    private final Set<Integer> rowKnown = new HashSet<>();
     private final List<Object[]> ghosts = new ArrayList<>();
     private Object ghostGame;
     private int ghostSeq;
@@ -697,9 +704,9 @@ public class GameOverlayLayer {
     private Object callGame;
     private int callTop, callHand, callMove, callDebug;
     private final List<Object[]> callouts = new ArrayList<>();
-    private static final net.minecraft.util.ResourceLocation SKIP_SIGN = Mino.id("textures/fx/skip.png");
+    private static final ResourceLocation SKIP_SIGN = Mino.id("textures/fx/skip.png");
 
-    private static final net.minecraft.util.ResourceLocation COIN_MERCY = Mino.id("textures/fx/coin_mercy.png"),
+    private static final ResourceLocation COIN_MERCY = Mino.id("textures/fx/coin_mercy.png"),
         COIN_NO_MERCY = Mino.id("textures/fx/coin_no_mercy.png");
     private static int[] coinRect;
     private Object coinGame;
@@ -1043,7 +1050,7 @@ public class GameOverlayLayer {
     private void drawDrawnCard(CardGame game, CardFace face, Card card, String theme, float sx, float sy, float sang,
         float cw, float ch, float u, int width, int height, boolean dissolve) {
         if (u < 0 || u >= 1) return;
-        float[] from = com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckOnScreen();
+        float[] from = BlockEntityMinoTableRenderer.deckOnScreen();
         float fx = from == null ? width * 0.5f : from[0], fy = from == null ? height * 0.25f : from[1];
         float mx = width * 0.5f, my = height * 0.42f;
         float x, y, scale, ang, fade = 1;

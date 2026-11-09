@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.CardTypes;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.HandMask;
 import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.gui.ui.SearchMatch;
 import com.hfstudio.minopp.gui.ui.SmoothScroll;
@@ -379,7 +381,7 @@ public class GameSettingsScreen extends GuiScreen {
                 for (ThemeManager.ThemeInfo theme : ThemeManager.INSTANCE.getThemes()) {
                     Tile t = new Tile("theme:" + theme.id(), Kind.THEME, theme);
                     String nameKey = "gui.minopp.theme." + theme.id();
-                    t.title = net.minecraft.util.StatCollector.canTranslate(nameKey) ? tr(nameKey) : theme.name();
+                    t.title = StatCollector.canTranslate(nameKey) ? tr(nameKey) : theme.name();
                     t.desc.add(tr("gui.minopp.style.desc"));
                     t.controls.add(tr("gui.minopp.controls.theme"));
                     list.add(t);
@@ -473,11 +475,11 @@ public class GameSettingsScreen extends GuiScreen {
     private Map<String, List<Tile>> galleryCache;
 
     private Map<String, List<Tile>> buildGallery() {
-        Map<String, List<Tile>> out = new java.util.LinkedHashMap<>();
-        Map<String, List<CardType>> byPack = new java.util.LinkedHashMap<>();
+        Map<String, List<Tile>> out = new LinkedHashMap<>();
+        Map<String, List<CardType>> byPack = new LinkedHashMap<>();
         for (CardPack pack : CardPack.all()) byPack.put(pack.id, new ArrayList<>());
         for (CardType type : CardTypes.all()) {
-            if (type.id.equals(com.hfstudio.minopp.game.HandMask.HIDDEN_TYPE)) continue;
+            if (type.id.equals(HandMask.HIDDEN_TYPE)) continue;
             List<CardType> into = byPack.get(CardPack.alias(type.packId));
             if (into != null) into.add(type);
         }
@@ -983,8 +985,7 @@ public class GameSettingsScreen extends GuiScreen {
             && System.currentTimeMillis() - hoverStart > 350) {
             List<String> lines = new ArrayList<>();
             lines.add(hovered.title);
-            for (String d : hovered.desc)
-                for (String l : fontRendererObj.listFormattedStringToWidth(d, 200)) lines.add(l);
+            for (String d : hovered.desc) lines.addAll(fontRendererObj.listFormattedStringToWidth(d, 200));
             for (String c : hovered.controls) lines.add(EnumChatFormatting.GRAY + c);
             int tx = mouseX, ty = mouseY;
             if (navId != null) {
@@ -1502,9 +1503,9 @@ public class GameSettingsScreen extends GuiScreen {
                     textColors.get(i));
                 ty += lineH;
             } else {
-                for (Object o : fontRendererObj.listFormattedStringToWidth(text, wrapW)) {
+                for (String o : fontRendererObj.listFormattedStringToWidth(text, wrapW)) {
                     if (ty + lineH > y2 - 4) break;
-                    UiDraw.scaledCentered(fontRendererObj, (String) o, cx, ty, textScale, textColors.get(i));
+                    UiDraw.scaledCentered(fontRendererObj, o, cx, ty, textScale, textColors.get(i));
                     ty += lineH;
                 }
             }

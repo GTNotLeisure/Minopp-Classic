@@ -24,6 +24,7 @@ import com.gtnewhorizon.gtnhlib.blockstate.properties.IntegerBlockProperty;
 import com.gtnewhorizon.gtnhlib.blockstate.registry.BlockPropertyRegistry;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
+import com.hfstudio.minopp.block.ItemMinoTable;
 import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.config.ServerConfig;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
@@ -89,7 +90,7 @@ public final class Mino {
         CardPack.init();
 
         BLOCK_MINO_TABLE = new BlockMinoTable().setCreativeTab(MinoCreativeTab.INSTANCE);
-        GameRegistry.registerBlock(BLOCK_MINO_TABLE, com.hfstudio.minopp.block.ItemMinoTable.class, "mino_table");
+        GameRegistry.registerBlock(BLOCK_MINO_TABLE, ItemMinoTable.class, "mino_table");
         GameRegistry.registerTileEntity(BlockEntityMinoTable.class, "minopp:mino_table");
         BlockPropertyRegistry.registerProperty(
             BLOCK_MINO_TABLE,

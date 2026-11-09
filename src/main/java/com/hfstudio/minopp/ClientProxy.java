@@ -23,6 +23,7 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.render.EntityAutoPlayerRenderer;
 import com.hfstudio.minopp.render.HandCardsItemRenderer;
+import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Mth;
 
@@ -49,7 +50,7 @@ public class ClientProxy extends CommonProxy {
         MinoClient.init();
         ClientRegistry.bindTileEntitySpecialRenderer(BlockEntityMinoTable.class, new BlockEntityMinoTableRenderer());
         RenderingRegistry.registerEntityRenderingHandler(EntityAutoPlayer.class, new EntityAutoPlayerRenderer());
-        com.hfstudio.minopp.render.TableItemRenderer.keepRegistered();
+        TableItemRenderer.keepRegistered();
         MinecraftForgeClient.registerItemRenderer(Mino.ITEM_HAND_CARDS, new HandCardsItemRenderer());
 
         ClientEvents events = new ClientEvents();

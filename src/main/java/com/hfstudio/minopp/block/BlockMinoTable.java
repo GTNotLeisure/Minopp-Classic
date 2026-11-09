@@ -8,6 +8,8 @@ import java.util.stream.Collectors;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.particle.EffectRenderer;
+import net.minecraft.client.particle.EntityDiggingFX;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -235,34 +237,22 @@ public class BlockMinoTable extends Block {
 
     @Override
     @SideOnly(Side.CLIENT)
-    public boolean addDestroyEffects(World world, int x, int y, int z, int meta,
-        net.minecraft.client.particle.EffectRenderer effectRenderer) {
+    public boolean addDestroyEffects(World world, int x, int y, int z, int meta, EffectRenderer effectRenderer) {
         for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
             double px = x + (i + 0.5) / 4, py = y + (j + 0.5) / 4, pz = z + (k + 0.5) / 4;
             effectRenderer.addEffect(
-                new net.minecraft.client.particle.EntityDiggingFX(
-                    world,
-                    px,
-                    py,
-                    pz,
-                    px - x - 0.5,
-                    py - y - 0.5,
-                    pz - z - 0.5,
-                    Blocks.planks,
-                    1));
+                new EntityDiggingFX(world, px, py, pz, px - x - 0.5, py - y - 0.5, pz - z - 0.5, Blocks.planks, 1));
         }
         return true;
     }
 
     @Override
     @SideOnly(Side.CLIENT)
-    public boolean addHitEffects(World world, net.minecraft.util.MovingObjectPosition target,
-        net.minecraft.client.particle.EffectRenderer effectRenderer) {
+    public boolean addHitEffects(World world, MovingObjectPosition target, EffectRenderer effectRenderer) {
         int x = target.blockX, y = target.blockY, z = target.blockZ;
         double px = x + world.rand.nextDouble(), py = y + 0.9, pz = z + world.rand.nextDouble();
         effectRenderer.addEffect(
-            new net.minecraft.client.particle.EntityDiggingFX(world, px, py, pz, 0, 0, 0, Blocks.planks, 1)
-                .multiplyVelocity(0.2F)
+            new EntityDiggingFX(world, px, py, pz, 0, 0, 0, Blocks.planks, 1).multiplyVelocity(0.2F)
                 .multipleParticleScaleBy(0.6F));
         return true;
     }

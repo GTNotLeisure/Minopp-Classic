@@ -1,8 +1,10 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +80,7 @@ public class TableConfig {
             for (String req : requiredRules(rule)) if (getInt(req) == 0) set(req, 1);
         } else {
             for (Map.Entry<String, String[]> e : RULE_REQUIRES.entrySet()) {
-                if (java.util.Arrays.asList(e.getValue())
+                if (Arrays.asList(e.getValue())
                     .contains(rule) && getInt(e.getKey()) != 0) set(e.getKey(), 0);
             }
         }
@@ -153,8 +155,8 @@ public class TableConfig {
     }
 
     public List<CardFace> buildFaces(boolean backSide) {
-        Map<CardFace, Integer> defaults = new java.util.LinkedHashMap<>();
-        Map<CardFace, Integer> overridden = new java.util.LinkedHashMap<>();
+        Map<CardFace, Integer> defaults = new LinkedHashMap<>();
+        Map<CardFace, Integer> overridden = new LinkedHashMap<>();
         for (CardPack pack : CardPack.all()) {
             if (pack.backSideOnly != backSide) continue;
             for (CardPack.Entry entry : pack.entries) {
@@ -165,7 +167,7 @@ public class TableConfig {
                 for (CardFace face : entryFaces(entry)) target.merge(face, count, Math::max);
             }
         }
-        Map<CardFace, Integer> merged = new java.util.LinkedHashMap<>(defaults);
+        Map<CardFace, Integer> merged = new LinkedHashMap<>(defaults);
         merged.putAll(overridden);
         List<CardFace> faces = new ArrayList<>();
         for (Map.Entry<CardFace, Integer> e : merged.entrySet()) {

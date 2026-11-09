@@ -33,6 +33,7 @@ import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
+import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.WorldUtil;
@@ -84,7 +85,7 @@ public class MinoClient {
                 rm.registerReloadListener(ThemeManager.INSTANCE);
             }
         }
-        com.hfstudio.minopp.render.TableItemRenderer.keepRegistered();
+        TableItemRenderer.keepRegistered();
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
             if (DevPreview.enabled() && !worldPreviewLaunched && mc.currentScreen instanceof GuiMainMenu) {

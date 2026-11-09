@@ -1,11 +1,14 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -92,7 +95,7 @@ public class CardGame {
     // every face of the side in play, each backed by its counterpart on the other side (same type where it exists,
     // the color in the same position: red and pink, yellow and teal, ...)
     private List<Card> debugCards(boolean dark) {
-        Set<CardFace> light = new java.util.LinkedHashSet<>(), darkFaces = new java.util.LinkedHashSet<>();
+        Set<CardFace> light = new LinkedHashSet<>(), darkFaces = new LinkedHashSet<>();
         for (CardFace[] pair : debugCatalog()) {
             light.add(pair[0]);
             if (pair[1] != null) darkFaces.add(pair[1]);
@@ -127,7 +130,7 @@ public class CardGame {
     private int debugShoutCursor;
 
     /** Mechanics the debug toolbar can switch during a game. */
-    public static final List<String> DEBUG_RULES = java.util.Arrays.asList(
+    public static final List<String> DEBUG_RULES = Arrays.asList(
         GameRules.COINS,
         GameRules.FLIP_MODE,
         GameRules.FLEX_POWER,
@@ -138,7 +141,7 @@ public class CardGame {
         GameRules.BRING_CARD,
         GameRules.MULTI_PLAY);
 
-    public static final List<String> DEBUG_ACTIONS = java.util.Arrays.asList(
+    public static final List<String> DEBUG_ACTIONS = Arrays.asList(
         "turn",
         "next",
         "hold",
@@ -254,7 +257,7 @@ public class CardGame {
 
     // one card of every face in every pack; the shorter side repeats so both sides show all their faces
     public static List<CardFace[]> debugCatalog() {
-        Set<CardFace> light = new java.util.LinkedHashSet<>(), dark = new java.util.LinkedHashSet<>();
+        Set<CardFace> light = new LinkedHashSet<>(), dark = new LinkedHashSet<>();
         for (CardPack pack : CardPack.all()) {
             for (CardPack.Entry entry : pack.entries) {
                 (entry.dark() || pack.backSideOnly ? dark : light).addAll(TableConfig.entryFaces(entry));
@@ -320,7 +323,7 @@ public class CardGame {
         for (CardPlayer p : players) {
             if (p == me) continue;
             int taken = 0;
-            for (java.util.Iterator<Card> it = p.hand.iterator(); it.hasNext();) {
+            for (Iterator<Card> it = p.hand.iterator(); it.hasNext();) {
                 if (it.next().uid >= 2_000_000) {
                     it.remove();
                     taken++;

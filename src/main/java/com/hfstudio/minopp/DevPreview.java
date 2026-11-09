@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
@@ -105,7 +106,7 @@ public final class DevPreview {
                         player.rotationPitch);
                 }
                 table.addBots(BlockEntityMinoTable.MAX_SEATS);
-                player.inventory.setInventorySlotContents(8, new net.minecraft.item.ItemStack(Mino.BLOCK_MINO_TABLE));
+                player.inventory.setInventorySlotContents(8, new ItemStack(Mino.BLOCK_MINO_TABLE));
                 stage = 2;
                 ticks = 0;
             }

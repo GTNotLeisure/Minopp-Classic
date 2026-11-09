@@ -11,6 +11,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.StatCollector;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
@@ -245,7 +246,7 @@ public class SeatControlScreen extends GuiScreen {
                 act.label
                     + (actionKey(act.id) != null ? EnumChatFormatting.GRAY + "  [" + actionKey(act.id) + "]" : ""));
             String desc = "gui.minopp.seats.tip." + act.id;
-            if (net.minecraft.util.StatCollector.canTranslate(desc)) tip.add(EnumChatFormatting.GRAY + tr(desc));
+            if (StatCollector.canTranslate(desc)) tip.add(EnumChatFormatting.GRAY + tr(desc));
             UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
         }
         if (te.game == null && Teams.enabled(te.config)) {

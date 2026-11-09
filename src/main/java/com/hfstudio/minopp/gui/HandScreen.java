@@ -1,6 +1,9 @@
 package com.hfstudio.minopp.gui;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
@@ -8,6 +11,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.StatCollector;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -16,7 +20,9 @@ import com.hfstudio.minopp.MinoClient;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.config.ClientConfig;
+import com.hfstudio.minopp.config.Prefs;
 import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
@@ -26,6 +32,7 @@ import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
+import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
@@ -41,8 +48,7 @@ public class HandScreen extends GuiScreen {
     private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100, BTN_RULE = 200;
 
     private static String query = "";
-    private static final java.util.Set<String> PLAIN = java.util.Set
-        .of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
+    private static final Set<String> PLAIN = Set.of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
     private static boolean debugOpen = true;
     private GuiTextField search;
     private int hintBottom;
@@ -53,7 +59,7 @@ public class HandScreen extends GuiScreen {
     public static List<Card> visibleHand(CardGame game, CardPlayer me) {
         List<Card> hand = ItemHandCards.sortedHand(game, me);
         if (query.isEmpty() || !isOpen()) return hand;
-        List<Card> out = new java.util.ArrayList<>();
+        List<Card> out = new ArrayList<>();
         for (Card c : hand) {
             if (SearchMatch.matches(
                 game.face(c)
@@ -191,7 +197,7 @@ public class HandScreen extends GuiScreen {
     public void onGuiClosed() {
         Keyboard.enableRepeatEvents(false);
         if (!resumeAfterChoice) query = "";
-        com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckHot = false;
+        BlockEntityMinoTableRenderer.deckHot = false;
     }
 
     @Override
@@ -239,8 +245,8 @@ public class HandScreen extends GuiScreen {
             lastMouseY = mouseY;
         }
         edgeTurn(ctx, mouseX, mouseY);
-        com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.deckHot = ctx.isMyTurn()
-            && com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY);
+        BlockEntityMinoTableRenderer.deckHot = ctx.isMyTurn()
+            && BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY);
         updateButtons();
         super.drawScreen(mouseX, mouseY, partialTicks);
 
@@ -279,7 +285,7 @@ public class HandScreen extends GuiScreen {
             && mouseX < coin[0] + coin[2]
             && mouseY >= coin[1]
             && mouseY < coin[1] + coin[2]) {
-            List<String> tip = new java.util.ArrayList<>();
+            List<String> tip = new ArrayList<>();
             String side = ctx.me.coinNoMercy ? "gui.minopp.coin.no_mercy" : "gui.minopp.coin.mercy";
             tip.add(
                 Chat.translatable(side)
@@ -333,10 +339,10 @@ public class HandScreen extends GuiScreen {
 
     // keeps "key: action" pairs whole and breaks between them, so the hint never runs off the screen
     private List<String> hintLines(String text, int maxWidth) {
-        List<String> lines = new java.util.ArrayList<>();
+        List<String> lines = new ArrayList<>();
         String sep = "  ·  ";
         StringBuilder line = new StringBuilder();
-        for (String part : text.split(java.util.regex.Pattern.quote(sep))) {
+        for (String part : text.split(Pattern.quote(sep))) {
             String next = line.length() == 0 ? part : line + sep + part;
             if (line.length() > 0 && fontRendererObj.getStringWidth(next) > maxWidth) {
                 lines.add(line.toString());
@@ -346,9 +352,9 @@ public class HandScreen extends GuiScreen {
             }
         }
         if (line.length() > 0) lines.add(line.toString());
-        List<String> out = new java.util.ArrayList<>();
+        List<String> out = new ArrayList<>();
         for (String l : lines) {
-            for (Object o : fontRendererObj.listFormattedStringToWidth(l, maxWidth)) out.add((String) o);
+            for (String o : fontRendererObj.listFormattedStringToWidth(l, maxWidth)) out.add(o);
         }
         return out;
     }
@@ -432,13 +438,13 @@ public class HandScreen extends GuiScreen {
         Context ctx = Context.resolve(mc);
         if (ctx == null) return;
         int hit = GameOverlayLayer.hitTest(mouseX, mouseY);
-        if (hit < 0 && com.hfstudio.minopp.render.BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY)) {
+        if (hit < 0 && BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY)) {
             draw(ctx);
             return;
         }
         if (hit >= 0 && isShiftKeyDown()) {
             ClientConfig.display.cardInfo = !ClientConfig.display.cardInfo;
-            com.hfstudio.minopp.config.Prefs.save();
+            Prefs.save();
             select(ctx, hit);
             notice(
                 Chat.translatable(
@@ -451,7 +457,7 @@ public class HandScreen extends GuiScreen {
 
     // Shift-click: the card's points and what it does, on a band across the hand
     private void drawCardInfo(Context ctx, Card card) {
-        com.hfstudio.minopp.game.CardFace face = ctx.game.face(card);
+        CardFace face = ctx.game.face(card);
         String title = Chat.translatable(
             "gui.minopp.hand.card_points",
             face.getDisplayName()
@@ -459,7 +465,7 @@ public class HandScreen extends GuiScreen {
             ctx.game.cardPoints(card))
             .getFormattedText();
         String key = "game.minopp.card.type." + face.type().id + ".desc";
-        String desc = net.minecraft.util.StatCollector.canTranslate(key) ? Chat.translatable(key)
+        String desc = StatCollector.canTranslate(key) ? Chat.translatable(key)
             .getFormattedText()
             : Chat.translatable("gui.minopp.hand.card_number")
                 .getFormattedText();

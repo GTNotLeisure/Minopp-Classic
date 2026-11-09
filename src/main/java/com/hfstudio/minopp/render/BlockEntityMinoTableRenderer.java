@@ -2,6 +2,7 @@ package com.hfstudio.minopp.render;
 
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.WeakHashMap;
 
 import net.minecraft.client.Minecraft;
@@ -18,11 +19,17 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
+import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
+import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.item.ItemHandCards;
+import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
+import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -51,8 +58,8 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(0.5, 0.94, 0.5);
         GL11.glScalef(0.5f, 0.4f, 0.5f);
         GL11.glRotatef(-90, 1, 0, 0);
-        int layers = com.hfstudio.minopp.block.BlockMinoTable.deckLayers(game.deck.size());
-        float layerH = com.hfstudio.minopp.block.BlockMinoTable.DECK_LAYER_H;
+        int layers = BlockMinoTable.deckLayers(game.deck.size());
+        float layerH = BlockMinoTable.DECK_LAYER_H;
         // one solid block of a fixed height: the pile always looks the same, however many cards are left
         float total = layers * layerH;
         BATCH.at(0, 0, total, 0);
@@ -96,7 +103,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
         // the color picker faces the chooser's seat, for the chooser and for everyone watching
         EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
-        com.hfstudio.minopp.util.BlockPos pos = blockEntity.getBlockPos();
+        BlockPos pos = blockEntity.getBlockPos();
         if (ColorPicker3D.isActiveFor(pos)) {
             double[] dir = seatDir(
                 blockEntity,
@@ -111,7 +118,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
             if (dir != null) ColorPicker3D.renderRemote(
                 dir[0],
                 dir[1],
-                com.hfstudio.minopp.game.CardColor.forSide(game.darkSide),
+                CardColor.forSide(game.darkSide),
                 blockEntity.choosingRing,
                 blockEntity.choosingHover,
                 blockEntity.choosingSeenAt);
@@ -150,11 +157,11 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     private static final CardBatch BATCH = new CardBatch();
 
     /** From the table's center toward a player's seat, or null when they are not seated in this game. */
-    static double[] seatDir(BlockEntityMinoTable table, CardGame game, java.util.UUID uuid) {
+    static double[] seatDir(BlockEntityMinoTable table, CardGame game, UUID uuid) {
         if (uuid == null) return null;
-        for (com.hfstudio.minopp.game.CardPlayer p : game.players) {
+        for (CardPlayer p : game.players) {
             if (!p.uuid.equals(uuid)) continue;
-            com.hfstudio.minopp.util.Vec3d s = table.getSeatLocalPos(p.seat);
+            Vec3d s = table.getSeatLocalPos(p.seat);
             double dx = s.x - 1.5, dz = s.z - 1.5;
             return dx * dx + dz * dz < 1e-6 ? null : new double[] { dx, dz };
         }
@@ -182,8 +189,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     private static void deckHighlight(BlockEntityMinoTable table, CardGame game, int layers, float layerH) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) return;
-        com.hfstudio.minopp.game.CardPlayer me = game
-            .deAmputate(com.hfstudio.minopp.item.ItemHandCards.getCardPlayer(mc.thePlayer));
+        CardPlayer me = game.deAmputate(ItemHandCards.getCardPlayer(mc.thePlayer));
         if (me == null) return;
         double deckH = layers * layerH * 0.4, x0 = 0.24, x1 = 0.76, z0 = 0.24, z1 = 0.76, y0 = 0.94,
             y1 = 0.94 + deckH + 0.03;
@@ -193,10 +199,10 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
             deckBoundsAt = System.currentTimeMillis();
         }
         boolean myTurn = game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn;
-        com.hfstudio.minopp.util.BlockPos aimed = com.hfstudio.minopp.block.BlockMinoTable.Client.getCursorPickedGame();
+        BlockPos aimed = BlockMinoTable.Client.getCursorPickedGame();
         boolean pointed = deckHot || mc.currentScreen == null && aimed != null
             && aimed.equals(table.getBlockPos())
-            && com.hfstudio.minopp.block.BlockMinoTable.Client.isCursorHittingPile();
+            && BlockMinoTable.Client.isCursorHittingPile();
         if (!myTurn || !pointed) return;
         float pulse = 0.65f + 0.35f * (float) Math.sin(System.currentTimeMillis() / 180.0);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
