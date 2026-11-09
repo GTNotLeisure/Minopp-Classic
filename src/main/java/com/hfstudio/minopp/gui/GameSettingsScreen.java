@@ -614,16 +614,9 @@ public class GameSettingsScreen extends GuiScreen {
             .fittedCentered(fontRendererObj, text, (x1 + x2) / 2f, y1 + (y2 - y1 - 8) / 2f + 1, x2 - x1 - 6, color);
     }
 
-    // the switch button shows what it switches to: a slider, or a text box with a cursor
+    // the switch button shows what it switches to: a slider, or a text box
     private void modeGlyph(int cx, int cy, boolean typing) {
-        if (typing) {
-            drawRect(cx - 5, cy, cx + 5, cy + 1, 0xFFE8E8E8);
-            drawRect(cx - 1, cy - 3, cx + 2, cy + 4, 0xFFFFE070);
-        } else {
-            drawRect(cx - 6, cy - 4, cx + 6, cy + 4, 0xFFE8E8E8);
-            drawRect(cx - 5, cy - 3, cx + 5, cy + 3, 0xFF101010);
-            drawRect(cx - 3, cy - 2, cx - 2, cy + 2, 0xFFFFE070);
-        }
+        UiDraw.icon(typing ? "mode_slider" : "mode_text", cx - 8, cy - 8, 16);
         GL11.glColor4f(1, 1, 1, 1);
     }
 
