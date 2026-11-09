@@ -15,12 +15,15 @@ import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardColor;
+import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
+import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
@@ -42,6 +45,14 @@ public class PlayChoiceScreen extends GuiScreen {
 
     private boolean colorStep;
     private PlayerPicker picker;
+    /** The steps after the color: a number, the targets, the cards to discard. */
+    private final boolean needsNumber;
+    private final int pickCount;
+    private boolean numberStep, targetsDone, pickStep;
+    private final List<Card> pickable = new ArrayList<>();
+    private final List<Integer> picked = new ArrayList<>();
+    /** Card rects of the pick grid last frame: {index, x, y, w, h}. */
+    private final List<int[]> pickRects = new ArrayList<>();
 
     public PlayChoiceScreen(BlockPos gamePos, CardPlayer player, Card card, PlayContext.PlayChoices choices,
         boolean needsColor, int targetCount, boolean darkSide) {
@@ -53,6 +64,31 @@ public class PlayChoiceScreen extends GuiScreen {
         this.targetCount = targetCount;
         this.darkSide = darkSide;
         this.colorStep = needsColor;
+        CardType type = card.face(darkSide)
+            .type();
+        this.needsNumber = type.choiceFor(choices.useFlex)
+            .needsNumber();
+        this.pickCount = type.pickCount(Math.max(0, player.hand.size() - 1));
+        if (!needsColor) advance(false);
+    }
+
+    /** Moves to the first step still open; sends the play once every step is done. */
+    private void advance(boolean init) {
+        numberStep = pickStep = false;
+        if (needsNumber && choices.number < 1) numberStep = true;
+        else if (targetCount > 0 && !targetsDone) {} else
+            if (pickCount > 0 && picked.size() < pickCount && choices.picks.isEmpty()) pickStep = true;
+            else if (init) {
+                send();
+                return;
+            }
+        if (pickStep && pickable.isEmpty()) {
+            BlockEntityMinoTable table = table();
+            List<Card> hand = table != null && table.game != null ? ItemHandCards.sortedHand(table.game, player)
+                : player.hand;
+            for (Card c : hand) if (c.uid != card.uid) pickable.add(c);
+        }
+        if (init) initGui();
     }
 
     private int bandTop() {
@@ -66,7 +102,7 @@ public class PlayChoiceScreen extends GuiScreen {
     }
 
     private BlockEntityMinoTable table() {
-        return ItemHandCards.getTable(mc.theWorld, gamePos);
+        return ItemHandCards.getTable(net.minecraft.client.Minecraft.getMinecraft().theWorld, gamePos);
     }
 
     @Override
@@ -103,6 +139,47 @@ public class PlayChoiceScreen extends GuiScreen {
                     height - 30,
                     50,
                     18,
+                    Chat.translatable("gui.cancel")
+                        .getFormattedText()));
+        } else if (numberStep) {
+            int bw = 22, gap = 4, total = 9 * bw + 8 * gap;
+            for (int n = 1; n <= 9; n++) buttonList.add(
+                new UiButton(
+                    300 + n,
+                    width / 2 - total / 2 + (n - 1) * (bw + gap),
+                    height - 30,
+                    bw,
+                    18,
+                    String.valueOf(n),
+                    0xFFE0A21A));
+            if (canCancel()) buttonList.add(
+                new UiButton(
+                    -1,
+                    width / 2 + total / 2 + 10,
+                    height - 30,
+                    50,
+                    18,
+                    Chat.translatable("gui.cancel")
+                        .getFormattedText()));
+        } else if (pickStep) {
+            int by = height - 26;
+            UiButton ok = new UiButton(
+                -3,
+                width / 2 - 84,
+                by,
+                80,
+                20,
+                Chat.translatable("gui.minopp.choice.confirm")
+                    .getFormattedText());
+            ok.enabled = picked.size() == pickCount;
+            buttonList.add(ok);
+            if (canCancel()) buttonList.add(
+                new UiButton(
+                    -1,
+                    width / 2 + 4,
+                    by,
+                    80,
+                    20,
                     Chat.translatable("gui.cancel")
                         .getFormattedText()));
         } else {
@@ -152,7 +229,20 @@ public class PlayChoiceScreen extends GuiScreen {
             if (picker.selected.size() < targetCount) return;
             choices.targets.clear();
             choices.targets.addAll(picker.selected);
-            send();
+            targetsDone = true;
+            advance(true);
+            return;
+        }
+        if (button.id == -3) {
+            if (picked.size() != pickCount) return;
+            choices.picks.clear();
+            choices.picks.addAll(picked);
+            advance(true);
+            return;
+        }
+        if (button.id > 300 && button.id <= 309) {
+            choices.number = button.id - 300;
+            advance(true);
             return;
         }
         chooseColor(CardColor.values()[button.id]);
@@ -161,12 +251,8 @@ public class PlayChoiceScreen extends GuiScreen {
     private void chooseColor(CardColor color) {
         ColorPicker3D.close();
         choices.color = color;
-        if (targetCount > 0) {
-            colorStep = false;
-            initGui();
-        } else {
-            send();
-        }
+        colorStep = false;
+        advance(true);
     }
 
     private void send() {
@@ -261,6 +347,11 @@ public class PlayChoiceScreen extends GuiScreen {
                 default -> {}
             }
         }
+        if (numberStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_9) {
+            choices.number = keyCode - Keyboard.KEY_1 + 1;
+            advance(true);
+            return;
+        }
         if (colorStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_4) {
             List<CardColor> colors = CardColor.forSide(darkSide);
             int i = keyCode - Keyboard.KEY_1;
@@ -276,7 +367,19 @@ public class PlayChoiceScreen extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
-        if (!colorStep && picker != null && picker.click(mouseX, mouseY)) return;
+        if (pickStep && button == 0) {
+            for (int[] r : pickRects) {
+                if (mouseX < r[1] || mouseX >= r[1] + r[3] || mouseY < r[2] || mouseY >= r[2] + r[4]) continue;
+                int uid = pickable.get(r[0]).uid;
+                if (picked.contains(uid)) picked.remove((Integer) uid);
+                else if (picked.size() < pickCount) picked.add(uid);
+                mc.getSoundHandler()
+                    .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("random.click"), 1.6F));
+                for (GuiButton b : buttonList) if (b.id == -3) b.enabled = picked.size() == pickCount;
+                return;
+            }
+        }
+        if (!colorStep && !pickStep && !numberStep && picker != null && picker.click(mouseX, mouseY)) return;
         if (colorStep && button == 0) {
             int hit = ColorPicker3D.hitTest(mouseX, mouseY);
             List<CardColor> colors = CardColor.forSide(darkSide);
@@ -365,6 +468,15 @@ public class PlayChoiceScreen extends GuiScreen {
                 UiDraw.roundRect(tx + 8, ty - 14, tx + 16 + w, ty - 2, 3, 0xC0000000);
                 fontRendererObj.drawStringWithShadow(name, tx + 12, ty - 12, colors.get(hit).rgb | 0xFF000000);
             }
+        } else if (numberStep) {
+            UiDraw.gradient(0, height - 84, width, height, 0x00200404, 0xB0200404);
+            String title = Chat.translatable("gui.minopp.choice.number")
+                .getFormattedText();
+            int tw = fontRendererObj.getStringWidth(title);
+            UiDraw.roundRect(width / 2 - tw / 2 - 8, band - 3, width / 2 + tw / 2 + 8, band + 10, 5, 0xC0101010);
+            GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, band, 0xFFFFE070);
+        } else if (pickStep) {
+            drawPickGrid(theme, mouseX, mouseY);
         } else {
             int top = picker == null ? band : picker.top();
             UiDraw.gradient(0, top - 22, width, height, 0x80200404, 0xC0200404);
@@ -395,6 +507,44 @@ public class PlayChoiceScreen extends GuiScreen {
                 0xFFFFD040);
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    // the hand laid out in rows over the lowered hand; picked cards lift and get a gold rim
+    private void drawPickGrid(String theme, int mouseX, int mouseY) {
+        pickRects.clear();
+        int n = pickable.size();
+        int avail = width - 40;
+        int cw = 30, gap = 4;
+        int rows = 1;
+        while (true) {
+            int perRow = Math.max(1, (avail + gap) / (cw + gap));
+            rows = (n + perRow - 1) / perRow;
+            int ch = Math.round(cw * 8.9f / 5.6f);
+            if (rows * (ch + gap) <= height / 2 || cw <= 14) break;
+            cw -= 2;
+        }
+        int perRow = Math.max(1, (avail + gap) / (cw + gap));
+        int ch = Math.round(cw * 8.9f / 5.6f);
+        int gridH = rows * (ch + gap) - gap;
+        int top = height - 34 - gridH;
+        UiDraw.gradient(0, top - 26, width, height, 0x80200404, 0xD0200404);
+        String title = Chat.translatable("gui.minopp.choice.pick", pickCount, picked.size(), pickCount)
+            .getFormattedText();
+        GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, top - 18, 0xFFFFE070);
+        for (int i = 0; i < n; i++) {
+            int row = i / perRow, col = i % perRow;
+            int inRow = Math.min(perRow, n - row * perRow);
+            int x0 = width / 2 - (inRow * (cw + gap) - gap) / 2;
+            int x = x0 + col * (cw + gap), y = top + row * (ch + gap);
+            Card c = pickable.get(i);
+            boolean sel = picked.contains(c.uid);
+            boolean hover = mouseX >= x && mouseX < x + cw && mouseY >= y && mouseY < y + ch;
+            if (sel) y -= 5;
+            if (sel || hover) UiDraw.roundRect(x - 2, y - 2, x + cw + 2, y + ch + 2, 3, sel ? 0xFFFFC020 : 0x90FFFFFF);
+            CardFace face = c.face(darkSide);
+            CardRenderer.drawFace2D(face, theme, x, y, cw, ch);
+            pickRects.add(new int[] { i, x, y, cw, ch });
+        }
     }
 
     @Override

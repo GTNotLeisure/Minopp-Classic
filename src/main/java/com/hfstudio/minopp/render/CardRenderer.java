@@ -28,6 +28,7 @@ public final class CardRenderer {
         layers.add("frame_" + face.color.id());
         if (face.flexColor != null) layers.add("flex_" + face.flexColor.id());
         CardType type = face.type();
+        if (type.fast) layers.add("fast_overlay");
         if (type.numbered) {
             layers.add("num_" + Math.max(0, Math.min(9, face.number)));
             if (type == CardTypes.POWER_NUMBER) layers.add("mark_power");

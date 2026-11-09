@@ -51,6 +51,11 @@ public class C2SPlayCardPacket {
                 for (int i = 0; i < targets; i++) choices.targets.add(Buf.readUUID(packet));
                 choices.useFlex = packet.readBoolean();
                 choices.shout = packet.readBoolean();
+                if (packet.isReadable()) {
+                    choices.number = packet.readByte();
+                    int picks = Math.min(packet.readUnsignedByte(), 120);
+                    for (int i = 0; i < picks; i++) choices.picks.add(packet.readInt());
+                }
                 yield tableEntity.game.playCard(cardPlayer, cardUid, choices);
             }
             case ACTION_NO_CARD -> tableEntity.game.playNoCard(cardPlayer);
@@ -102,6 +107,10 @@ public class C2SPlayCardPacket {
             for (UUID target : choices.targets) Buf.writeUUID(packet, target);
             packet.writeBoolean(choices.useFlex);
             packet.writeBoolean(choices.shout);
+            packet.writeByte(choices.number);
+            int picks = Math.min(choices.picks.size(), 120);
+            packet.writeByte(picks);
+            for (int i = 0; i < picks; i++) packet.writeInt(choices.picks.get(i));
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 

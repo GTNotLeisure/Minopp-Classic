@@ -163,7 +163,8 @@ public class BlockMinoTable extends Block {
                 targets = Math.max(targets, 1);
             }
             boolean answeringDraw = game.pendingDraw > 0;
-            if ((needsColor || targets > 0)
+            boolean moreChoices = choice.needsNumber() || type.pickCount(realPlayer.hand.size() - 1) > 0;
+            if ((needsColor || targets > 0 || moreChoices)
                 && (game.checkPlayable(realPlayer, card, useFlex) == null || answeringDraw)) {
                 Minecraft.getMinecraft()
                     .displayGuiScreen(
