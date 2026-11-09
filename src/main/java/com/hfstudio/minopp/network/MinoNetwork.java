@@ -2,6 +2,9 @@ package com.hfstudio.minopp.network;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -9,6 +12,8 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.util.Buf;
 
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -29,6 +34,46 @@ public final class MinoNetwork {
     }
 
     private static SimpleNetworkWrapper channel;
+
+    /*
+     * FML hands messages over on the netty thread. Game state, worlds and screens belong to the main threads, so every
+     * message is queued and handled at the start of the next tick. The queues are capped so a flood of packets can
+     * not pile up memory.
+     */
+    private static final int QUEUE_CAP = 4096;
+    private static final Queue<Runnable> SERVER_QUEUE = new ConcurrentLinkedQueue<>();
+    private static final Queue<Runnable> CLIENT_QUEUE = new ConcurrentLinkedQueue<>();
+    private static final AtomicInteger SERVER_PENDING = new AtomicInteger(), CLIENT_PENDING = new AtomicInteger();
+
+    private static void enqueue(Queue<Runnable> queue, AtomicInteger pending, Runnable task) {
+        if (pending.incrementAndGet() > QUEUE_CAP) {
+            pending.decrementAndGet();
+            return;
+        }
+        queue.add(task);
+    }
+
+    private static void drain(Queue<Runnable> queue, AtomicInteger pending) {
+        Runnable task;
+        while ((task = queue.poll()) != null) {
+            pending.decrementAndGet();
+            task.run();
+        }
+    }
+
+    /** Handles the client's queued messages; called from the client tick. */
+    public static void runClientQueue() {
+        drain(CLIENT_QUEUE, CLIENT_PENDING);
+    }
+
+    public static class ServerTicker {
+
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent event) {
+            if (event.phase == TickEvent.Phase.START) drain(SERVER_QUEUE, SERVER_PENDING);
+        }
+    }
+
     private static final Map<String, C2SPacketHandler> SERVER_HANDLERS = new HashMap<>();
     private static final Map<String, Consumer<ByteBuf>> CLIENT_HANDLERS = new HashMap<>();
 
@@ -111,13 +156,17 @@ public final class MinoNetwork {
         @Override
         public IMessage onMessage(C2SMessage message, MessageContext ctx) {
             C2SPacketHandler handler = SERVER_HANDLERS.get(message.id);
-            if (handler != null) {
+            EntityPlayerMP player = ctx.getServerHandler().playerEntity;
+            if (handler == null || player == null) return null;
+            enqueue(SERVER_QUEUE, SERVER_PENDING, () -> {
+                if (player.isDead || player.playerNetServerHandler == null) return;
                 try {
-                    handler.handlePacket(ctx.getServerHandler().playerEntity, message.data);
+                    handler.handlePacket(player, message.data);
                 } catch (Exception e) {
-                    Mino.LOGGER.error("Error handling packet {}", message.id, e);
+                    Mino.LOGGER
+                        .warn("Bad {} packet from {}: {}", message.id, player.getCommandSenderName(), e.toString());
                 }
-            }
+            });
             return null;
         }
     }
@@ -127,13 +176,14 @@ public final class MinoNetwork {
         @Override
         public IMessage onMessage(S2CMessage message, MessageContext ctx) {
             Consumer<ByteBuf> handler = CLIENT_HANDLERS.get(message.id);
-            if (handler != null) {
+            if (handler == null) return null;
+            enqueue(CLIENT_QUEUE, CLIENT_PENDING, () -> {
                 try {
                     handler.accept(message.data);
                 } catch (Exception e) {
                     Mino.LOGGER.error("Error handling packet {}", message.id, e);
                 }
-            }
+            });
             return null;
         }
     }

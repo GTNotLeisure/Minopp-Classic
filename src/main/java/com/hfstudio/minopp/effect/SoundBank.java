@@ -83,7 +83,6 @@ public final class SoundBank {
     private static final Map<String, Slot> SLOT_BY_ID = new HashMap<>();
     private static final List<Pack> PACKS = new ArrayList<>();
     private static final Map<String, Pack> PACK_BY_ID = new HashMap<>();
-    // every sound the game sends, by the slot it belongs to
     private static final Map<String, String> SOUND_SLOT = new HashMap<>();
 
     static {
@@ -91,7 +90,6 @@ public final class SoundBank {
             "turn_notice_continuous", "win", "mino_shout", "mino_shout_invalid", "doubt_success", "hand_change" }) {
             registerSlot(id, "game", "minopp:game." + id, "minopp:game." + id);
         }
-        // the vanilla sounds the special cards make
         registerSlot("skip", "effects", "note.snare", "note.snare");
         registerSlot("reverse", "effects", "random.bow", "random.bow");
         registerSlot("draw_hit", "effects", "random.bowhit", "random.bowhit");
@@ -165,8 +163,6 @@ public final class SoundBank {
         return sound.startsWith("minecraft:") ? sound.substring("minecraft:".length()) : sound;
     }
 
-    // ------------------------------------------------------------------ registration
-
     public static PackBuilder pack(String id, ResourceLocation icon) {
         return new PackBuilder(id, icon);
     }
@@ -206,8 +202,6 @@ public final class SoundBank {
     public static Pack getPack(String id) {
         return PACK_BY_ID.get(id);
     }
-
-    // ------------------------------------------------------------------ choices
 
     private static boolean covers(Pack pack, String slot) {
         return pack.id()
@@ -289,8 +283,6 @@ public final class SoundBank {
         parsedFrom = null;
         Prefs.save();
     }
-
-    // ------------------------------------------------------------------ playing
 
     public static String slotOf(String sound) {
         return SOUND_SLOT.getOrDefault(bare(sound), "misc");

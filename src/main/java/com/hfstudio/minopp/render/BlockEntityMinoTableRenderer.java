@@ -40,7 +40,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     @Override
     public void renderTileEntityAt(TileEntity te, double x, double y, double z, float partialTick) {
         BlockEntityMinoTable blockEntity = (BlockEntityMinoTable) te;
-        BlockEntityMinoTable.activeAnimations.removeIf(BlockEntityMinoTable.HandSwapAnimation::isDone);
+        blockEntity.activeAnimations.removeIf(BlockEntityMinoTable.HandSwapAnimation::isDone);
         CardGame game = blockEntity.game;
         if (game == null) return;
         String viewerTheme = ThemeManager.INSTANCE.selected();
@@ -60,7 +60,6 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glRotatef(-90, 1, 0, 0);
         int layers = BlockMinoTable.deckLayers(game.deck.size());
         float layerH = BlockMinoTable.DECK_LAYER_H;
-        // one solid block of a fixed height: the pile always looks the same, however many cards are left
         float total = layers * layerH;
         BATCH.at(0, 0, total, 0);
         BATCH.slab(0.32f, 0.5f, -total, 0, 0xECEAE2);
@@ -101,7 +100,6 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         BATCH.flush();
         GL11.glPopMatrix();
 
-        // the color picker faces the chooser's seat, for the chooser and for everyone watching
         EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
         BlockPos pos = blockEntity.getBlockPos();
         if (ColorPicker3D.isActiveFor(pos)) {
@@ -127,7 +125,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
         TableFx.render(blockEntity, game, partialTick);
 
-        for (BlockEntityMinoTable.HandSwapAnimation anim : BlockEntityMinoTable.activeAnimations) {
+        for (BlockEntityMinoTable.HandSwapAnimation anim : blockEntity.activeAnimations) {
             int stackSize = Math.max(1, Math.min(anim.cardCount, 10));
             double dx = anim.toPos.x - anim.fromPos.x;
             double dz = anim.toPos.z - anim.fromPos.z;
@@ -151,6 +149,8 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
         GL11.glEnable(GL11.GL_CULL_FACE);
         GL11.glDisable(GL12.GL_RESCALE_NORMAL);
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glColor4f(1, 1, 1, 1);
         GL11.glPopMatrix();
     }
 
@@ -185,7 +185,6 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         return b != null && mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
     }
 
-    // the draw pile glows gold while you could draw from it and are pointing at it
     private static void deckHighlight(BlockEntityMinoTable table, CardGame game, int layers, float layerH) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) return;
@@ -210,7 +209,6 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glDepthMask(false);
         Tessellator t = Tessellator.instance;
         t.startDrawingQuads();
-        // a gold outline hugging the pile: a frame around its top card, one around its foot, and its four corners
         double cx0 = 0.335, cx1 = 0.665, cz0 = 0.245, cz1 = 0.755, w = 0.022;
         frame(t, cx0, cz0, cx1, cz1, w, y1 + 0.003, pulse);
         frame(t, cx0, cz0, cx1, cz1, w, y0 + 0.003, pulse * 0.7f);

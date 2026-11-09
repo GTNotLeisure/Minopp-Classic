@@ -118,7 +118,6 @@ public class HandScreen extends GuiScreen {
         updateButtons();
     }
 
-    // debug games get a toolbar for bending the game state; it sizes itself to fit between the hint and the hand
     private void addDebugButtons() {
         Context ctx = Context.resolve(mc);
         if (ctx == null || !ctx.game.isDebugger(ctx.me)) return;
@@ -316,7 +315,6 @@ public class HandScreen extends GuiScreen {
         }
     }
 
-    // resting the cursor right at either end of a long fanned hand turns the carousel that way, one card at a time
     private void edgeTurn(Context ctx, int mouseX, int mouseY) {
         float[] ext = GameOverlayLayer.rowExtent();
         int dir = 0;
@@ -337,7 +335,6 @@ public class HandScreen extends GuiScreen {
         }
     }
 
-    // keeps "key: action" pairs whole and breaks between them, so the hint never runs off the screen
     private List<String> hintLines(String text, int maxWidth) {
         List<String> lines = new ArrayList<>();
         String sep = "  ·  ";
@@ -455,7 +452,6 @@ public class HandScreen extends GuiScreen {
         if (hit >= 0) play(ctx, hit);
     }
 
-    // Shift-click: the card's points and what it does, on a band across the hand
     private void drawCardInfo(Context ctx, Card card) {
         CardFace face = ctx.game.face(card);
         String title = Chat.translatable(

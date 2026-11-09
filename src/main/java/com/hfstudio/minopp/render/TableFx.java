@@ -152,7 +152,6 @@ public final class TableFx {
                     by = seatPos.y + 2.15;
                 Entity holder = holderEntity(game.balloonHolder);
                 if (holder != null && holder.getDistanceSq(table.xCoord + 1.5, table.yCoord, table.zCoord + 1.5) < 64) {
-                    // follows its holder, interpolated between ticks so it never stutters
                     bx = holder.prevPosX + (holder.posX - holder.prevPosX) * partialTick - table.xCoord;
                     bz = holder.prevPosZ + (holder.posZ - holder.prevPosZ) * partialTick - table.zCoord;
                     by = holder.prevPosY + (holder.posY - holder.prevPosY) * partialTick
@@ -316,7 +315,6 @@ public final class TableFx {
         s.balloon = game.balloonHolder;
     }
 
-    // just over the head of whoever sits in that seat
     static Vec3d head(BlockEntityMinoTable table, int seat, double lift) {
         Vec3d p = table.getSeatLocalPos(seat);
         double ox = p.x - 1.5, oz = p.z - 1.5, len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
@@ -358,7 +356,6 @@ public final class TableFx {
         for (String id : ids) CardFxRegistry.register(id, ctx -> ctx.particles(particle, count, spread));
     }
 
-    // the mod's own card specific animations, registered the same way another mod would register its own
     private static void registerBuiltins() {
         particlesFor("largesmoke", 24, 0.6, "wild_smoke");
         particlesFor(
@@ -393,7 +390,6 @@ public final class TableFx {
         particlesFor("happyVillager", 14, 0.6, "play_again_10");
         particlesFor("flame", 12, 0.6, "wild_hurry_up");
         CardFxRegistry.register("wild_color_roulette", ctx -> ctx.sink.roulette());
-        // every special card without an animation of its own shows its symbol over the pile
         CardFxRegistry.register(
             face -> !face.type().numbered && !OWN_FX.contains(face.type().id)
                 && !isSkip(face.type().id)
@@ -666,7 +662,6 @@ public final class TableFx {
         }
     }
 
-    // block-like bits flying out of a point and falling back
     private static void cubes(double x, double y, double z, float sec, long seed, int[] colors, int count, float size,
         float speed, float alpha) {
         Random r = new Random(seed);
@@ -683,7 +678,6 @@ public final class TableFx {
         t.draw();
     }
 
-    // the play direction: two pixel arrows lying on the table around the discard pile
     private static void directionRing(float angle, float speed, boolean anti) {
         GL11.glPushMatrix();
         GL11.glTranslated(1.5, PILE_Y - 0.005, 1.5);
@@ -696,7 +690,6 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    // the "no entry" sign bouncing over a skipped seat
     private static void skipMark(Fx f, float t) {
         float scale = 0.55f * overshoot(Math.min(1f, t / 0.25f));
         double bounce = Math.abs(Math.sin(t * Math.PI * 4)) * (1 - t) * 0.25;
@@ -719,7 +712,6 @@ public final class TableFx {
         "wild_sudden_death",
         "wild_final_attack");
 
-    // a card's own symbol pops up on a disc of its color, wobbles and fades
     private static void symbolPop(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardFace face = (CardFace) d[0];
@@ -767,8 +759,6 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    // the 50/50 toss: each chosen player gets a small coin for their side, the big coin climbs over the pile, flips
-    // and lands on the result, then the loser's coin is crossed out and the winner's ticked
     private static void toss(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         Vec3d headsAt = (Vec3d) d[0], tailsAt = (Vec3d) d[1];
@@ -822,8 +812,6 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    // the color roulette: a four-color wheel spins over the pile until the color is known, then slows down, stops
-    // with that color under the pointer and bursts
     private static void roulette(Fx f, long now) {
         Object[] d = (Object[]) f.data;
         BlockEntityMinoTable table = (BlockEntityMinoTable) d[0];
@@ -897,7 +885,6 @@ public final class TableFx {
         }
     }
 
-    // a gold coin tossed above the pile: it climbs, flips end over end and lands
     private static void coin(Fx f, float t) {
         double height = Math.sin(Math.min(1f, t / 0.85f) * Math.PI) * 0.85;
         float alpha = fadeOut(t, 0.85f);
@@ -915,9 +902,6 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    // the top card rises, turns over to its other side and drops back onto the pile
-    // the top card lifts, turns over in one smooth motion to the side now in play (curling a little as it turns, like
-    // card stock) and settles back onto the pile
     private static void flipCard(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardFace[] faces = (CardFace[]) d[0];
@@ -964,8 +948,6 @@ public final class TableFx {
         }
     }
 
-    // picks up where the color picker left off (same layout, facing the chooser's seat): the chosen piece lifts,
-    // then all four pull together and sink into the pile, which bursts with blocks of the chosen color
     private static void wildPillar(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardColor chosen = (CardColor) d[0];
@@ -1048,7 +1030,6 @@ public final class TableFx {
         }
     }
 
-    // a block whose top is a little wider than its foot, like the picker's
     private static void frustum(Tessellator t, double cx, double cz, double hwBottom, double hwTop, double y0,
         double y1, int rgb) {
         color(t, shade(rgb, 1.1f), 1f);
@@ -1069,7 +1050,6 @@ public final class TableFx {
         }
     }
 
-    // a quarter of the color ring with a flared top, like the picker's
     private static void ringPiece(Tessellator t, double ox, double oz, double a0, double a1, double r0, double r1Top,
         double r1Bottom, double y0, double y1, int rgb) {
         int steps = 12;
@@ -1135,7 +1115,6 @@ public final class TableFx {
         t.addVertex(x1, y0, z1);
     }
 
-    // a quarter of a thick ring, faceted like a block model
     private static void ringQuarter(Tessellator t, double fromDeg, double toDeg, double r0, double r1, double y0,
         double y1, int rgb, float a) {
         int steps = 12;
@@ -1169,7 +1148,6 @@ public final class TableFx {
         }
     }
 
-    // a ring of pixel squares in the new color spreading out from the pile
     private static void shockwave(Fx f, float t) {
         float e = 1 - (1 - t) * (1 - t);
         double r = 0.2 + e * 0.8;
@@ -1237,7 +1215,6 @@ public final class TableFx {
         return (long) (x + 64) << 16 | (long) (y + 64) << 8 | (z + 64);
     }
 
-    // the time balloon, built from blocks, floats over its holder and swells as the fuse runs down
     // kept above and behind the holder; it turns see-through while another effect plays or the camera is right at it
     private static void balloon(BlockEntityMinoTable table, Vec3d at, int fuse, long now, boolean busy) {
         double x = at.x, z = at.z;
@@ -1308,7 +1285,6 @@ public final class TableFx {
         prism(t, xs, ys, depth, rgb, a);
     }
 
-    // stands over the pile facing the viewer, tipped back a little so its thickness shows
     private static void symbolFrame(Fx f, float t, float spin) {
         float up = Math.min(1f, t / 0.22f);
         float s = 1.05f * overshoot(up) * (t > 0.8f ? 1 - easeOutCubic((t - 0.8f) / 0.2f) : 1);
@@ -1320,7 +1296,6 @@ public final class TableFx {
         GL11.glScalef(s, s, s);
     }
 
-    // the skip sign as a thick block shape in the current color
     private static void skipSymbol(Fx f, float t) {
         int rgb = f.color & 0xFFFFFF;
         GL11.glPushMatrix();
@@ -1361,7 +1336,6 @@ public final class TableFx {
             a);
     }
 
-    // two thick arrows chasing each other, turning half a circle in the new direction
     private static void reverseSymbol(Fx f, float t) {
         boolean anti = (Boolean) f.data;
         int rgb = f.color & 0xFFFFFF;
@@ -1397,7 +1371,6 @@ public final class TableFx {
         prism(t, inner[0], inner[1], depth + 0.012, rgb, a);
     }
 
-    // draw cards: thick cards of the current color fan out over the pile, then fly to whoever has to take them
     private static void drawSlabs(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         int count = (Integer) d[0];
@@ -1430,7 +1403,6 @@ public final class TableFx {
         }
     }
 
-    // "MINO!" in thick letters over the shouting player, with a few stars
     private static void shoutText(Fx f, float t) {
         float out = fadeOut(t, 0.8f);
         bigText(
@@ -1446,7 +1418,6 @@ public final class TableFx {
         cubes(f.x, f.y, f.z, sec, f.start, new int[] { 0xFFE040, 0xFFFFFF, 0xFFB020 }, 14, 0.05f, 1.3f, out);
     }
 
-    // the penalty total in big letters over the head of whoever takes it, inside a beam of the current color
     private static void plusText(Fx f, float t) {
         float out = fadeOut(t, 0.75f);
         int rgb = f.color & 0xFFFFFF;
@@ -1480,7 +1451,6 @@ public final class TableFx {
             out);
     }
 
-    // thick letters facing the viewer: the face color over a dark extrusion
     private static void bigText(String text, double x, double y, double z, float t, float size, int face, float tilt) {
         FontRenderer font = Minecraft.getMinecraft().fontRenderer;
         float out = fadeOut(t, 0.8f);
@@ -1502,7 +1472,6 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    // a card face built as a strip of columns so it can curl like real card stock
     private static void bentFace(CardFace face, String theme, float w, float h, float bend) {
         bentFace(face, theme, w, h, bend, false);
     }
@@ -1514,7 +1483,6 @@ public final class TableFx {
         bentLayers(layers, tints, w, h, bend, mirror);
     }
 
-    // a card built as a strip of columns so it can curl like real card stock; mirror reads it from behind
     private static void bentLayers(ResourceLocation[] layers, int[] tints, float w, float h, float bend,
         boolean mirror) {
         int cols = 12;

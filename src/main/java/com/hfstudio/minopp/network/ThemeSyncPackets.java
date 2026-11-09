@@ -21,14 +21,20 @@ public final class ThemeSyncPackets {
     public static final String S2C_ID = "minopp:theme_sync";
 
     private static final Map<UUID, String> SERVER_THEMES = new HashMap<>();
+    private static final Map<UUID, Long> LAST_CHANGE = new HashMap<>();
+    private static final java.util.regex.Pattern THEME_ID = java.util.regex.Pattern.compile("[a-z0-9_.:-]{1,64}");
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         String theme = Buf.readString(packet);
-        if (theme.length() > 64) return;
-        SERVER_THEMES.put(
-            player.getGameProfile()
-                .getId(),
-            theme);
+        if (!THEME_ID.matcher(theme)
+            .matches()) return;
+        UUID id = player.getGameProfile()
+            .getId();
+        // each change goes to every player: ignore repeats and changes faster than one a second
+        long now = System.currentTimeMillis();
+        if (theme.equals(SERVER_THEMES.get(id)) || now - LAST_CHANGE.getOrDefault(id, 0L) < 1000) return;
+        LAST_CHANGE.put(id, now);
+        SERVER_THEMES.put(id, theme);
         broadcast(
             Map.of(
                 player.getGameProfile()
@@ -78,9 +84,10 @@ public final class ThemeSyncPackets {
 
         @SubscribeEvent
         public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-            SERVER_THEMES.remove(
-                event.player.getGameProfile()
-                    .getId());
+            UUID id = event.player.getGameProfile()
+                .getId();
+            SERVER_THEMES.remove(id);
+            LAST_CHANGE.remove(id);
         }
     }
 }

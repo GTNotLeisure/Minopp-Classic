@@ -45,7 +45,6 @@ public record SoundEffectEvent(int timeOffset, Optional<UUID> target, ResourceLo
 
     @Override
     public void summonClient(World level, BlockPos origin, boolean selfPartOfSourceGame) {
-        // each player picks the pack every sound plays from, or silences it
         SoundBank.Sound s = SoundBank.resolve(soundId.toString(), volume, pitch);
         if (s != null)
             level.playSound(origin.x + 0.5, origin.y + 0.5, origin.z + 0.5, s.name(), s.volume(), s.pitch(), false);

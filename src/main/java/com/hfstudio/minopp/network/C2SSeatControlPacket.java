@@ -28,6 +28,11 @@ public class C2SSeatControlPacket {
     private static final int STOP = 0, START = 1, RESET = -1, RULE = 2, PACK = 3, COUNT = 4, PRESET = 5, APPLY = 6,
         TEAM = 7, AUTO_TEAMS = 8, ADD_BOT = 9, FILL_BOTS = 10, CLEAR_BOTS = 11, LEAVE = 12, REMOVE_BOT = 13;
 
+    /** Close enough to the table to use it, checked before the table is looked up so no chunk gets loaded. */
+    static boolean inReach(EntityPlayerMP player, BlockPos gamePos) {
+        return gamePos != null && player.getDistanceSq(gamePos.x + 1.5, gamePos.y + 0.5, gamePos.z + 1.5) <= 16 * 16;
+    }
+
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
         int action = packet.readInt();
@@ -36,9 +41,9 @@ public class C2SSeatControlPacket {
             ? Buf.readString(packet)
             : null;
         int value = (action == RULE || action == PACK || action == COUNT || action == TEAM) ? packet.readInt() : 0;
+        if (!inReach(player, gamePos)) return;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null) return;
-        if (player.getDistanceSq(gamePos.x + 1.5, gamePos.y + 0.5, gamePos.z + 1.5) > 16 * 16) return;
         List<CardPlayer> playersList = tableEntity.getPlayersList();
         CardPlayer cardPlayer = ItemHandCards.getCardPlayer(player);
         if (tableEntity.demo) {

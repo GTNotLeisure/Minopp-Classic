@@ -120,6 +120,7 @@ public class EntityAutoPlayer extends EntityLiving {
                 for (int dz = -2; dz <= 2 && !tableFound; dz++) {
                     for (int dy = -1; dy <= 1; dy++) {
                         int tx = bx + dx, ty = by + dy, tz = bz + dz;
+                        if (!worldObj.blockExists(tx, ty, tz)) continue;
                         Block tobeTableBlock = worldObj.getBlock(tx, ty, tz);
                         if (tobeTableBlock == Mino.BLOCK_MINO_TABLE) {
                             BlockPos corePos = BlockMinoTable.getCore(worldObj, tx, ty, tz);
@@ -147,6 +148,8 @@ public class EntityAutoPlayer extends EntityLiving {
             }
         }
 
+        // the table's chunk is not loaded: wait for it rather than forgetting the seat
+        if (!ItemHandCards.isLoaded(worldObj, tablePos)) return;
         lookAt(tablePos.x + 1.5, tablePos.y + 1, tablePos.z + 1.5);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(worldObj, tablePos);
         if (tableEntity != null) {
@@ -273,8 +276,8 @@ public class EntityAutoPlayer extends EntityLiving {
         super.onLivingUpdate();
     }
 
-    // bots stay at their table: pulled back when moved away, and lobby-summoned bots vanish once they lose their seat
     private void leash() {
+        if (tablePos != null && !ItemHandCards.isLoaded(worldObj, tablePos)) return;
         BlockEntityMinoTable table = tablePos == null ? null : ItemHandCards.getTable(worldObj, tablePos);
         if (table == null) {
             if (summoned && ++homelessSeconds >= 10) setDead();

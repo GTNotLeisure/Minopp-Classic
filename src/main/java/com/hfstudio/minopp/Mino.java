@@ -141,6 +141,9 @@ public final class Mino {
             .register(TaskScheduler.Holder.INSTANCE);
         FMLCommonHandler.instance()
             .bus()
+            .register(new MinoNetwork.ServerTicker());
+        FMLCommonHandler.instance()
+            .bus()
             .register(new ThemeSyncPackets.ServerEvents());
         if (DevPreview.enabled()) FMLCommonHandler.instance()
             .bus()
@@ -161,6 +164,8 @@ public final class Mino {
     @SubscribeEvent
     public void onChunkWatch(ChunkWatchEvent.Watch event) {
         EntityPlayerMP player = event.player;
+        if (!player.worldObj.getChunkProvider()
+            .chunkExists(event.chunk.chunkXPos, event.chunk.chunkZPos)) return;
         Chunk chunk = player.worldObj.getChunkFromChunkCoords(event.chunk.chunkXPos, event.chunk.chunkZPos);
         for (Object te : chunk.chunkTileEntityMap.values()) {
             if (te instanceof BlockEntityMinoTable table && table.game != null && !table.peekAll())

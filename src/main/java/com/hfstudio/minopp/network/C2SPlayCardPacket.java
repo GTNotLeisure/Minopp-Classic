@@ -28,12 +28,17 @@ public class C2SPlayCardPacket {
             .getId();
         int actionType = packet.readInt();
 
+        if (!C2SSeatControlPacket.inReach(player, gamePos)) return;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null || tableEntity.game == null) return;
         CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
         if (cardPlayer == null) return;
-        tableEntity.lastPlayedByUuid = playerUuid;
+        if (actionType == ACTION_PLAY || actionType == ACTION_NO_CARD) tableEntity.lastPlayedByUuid = playerUuid;
 
+        if (actionType == ACTION_CHOOSING) {
+            choosing(tableEntity, cardPlayer, packet);
+            return;
+        }
         ActionReport result = switch (actionType) {
             case ACTION_PLAY -> {
                 int cardUid = packet.readInt();
@@ -41,7 +46,7 @@ public class C2SPlayCardPacket {
                 int colorOrdinal = packet.readByte();
                 choices.color = colorOrdinal < 0 || colorOrdinal >= CardColor.values().length ? null
                     : CardColor.values()[colorOrdinal];
-                int targets = packet.readByte();
+                int targets = Math.min(packet.readByte(), BlockEntityMinoTable.MAX_SEATS);
                 for (int i = 0; i < targets; i++) choices.targets.add(Buf.readUUID(packet));
                 choices.useFlex = packet.readBoolean();
                 choices.shout = packet.readBoolean();
@@ -49,15 +54,6 @@ public class C2SPlayCardPacket {
             }
             case ACTION_NO_CARD -> tableEntity.game.playNoCard(cardPlayer);
             case ACTION_COIN -> tableEntity.game.useCoin(cardPlayer, packet.readBoolean());
-            case ACTION_CHOOSING -> {
-                // the wild's color picker as the player sees it, so everyone at the table can watch the choice
-                boolean active = packet.readBoolean(), ring = packet.readBoolean();
-                int hover = packet.readByte();
-                tableEntity.choosingUuid = active ? cardPlayer.uuid : null;
-                tableEntity.choosingRing = ring;
-                tableEntity.choosingHover = Math.max(-1, Math.min(3, hover));
-                yield null;
-            }
             case ACTION_DOUBT -> tableEntity.game.doubtMino(cardPlayer, Buf.readUUID(packet));
             case ACTION_DECISION -> {
                 int answer = packet.readInt();
@@ -67,6 +63,24 @@ public class C2SPlayCardPacket {
             default -> null;
         };
         tableEntity.handleActionResult(result, cardPlayer, player);
+    }
+
+    private static void choosing(BlockEntityMinoTable tableEntity, CardPlayer cardPlayer, ByteBuf packet) {
+        boolean active = packet.readBoolean(), ring = packet.readBoolean();
+        int hover = Math.max(-1, Math.min(3, packet.readByte()));
+        // only whoever is choosing right now may show a picker, and only changes go out to the table
+        boolean mayChoose = tableEntity.game.currentPlayer()
+            .equals(cardPlayer)
+            || tableEntity.game.decisions.stream()
+                .anyMatch(d -> d.player.equals(cardPlayer.uuid));
+        UUID who = active && mayChoose ? cardPlayer.uuid : null;
+        if (who == null && !cardPlayer.uuid.equals(tableEntity.choosingUuid)) return;
+        if (java.util.Objects.equals(who, tableEntity.choosingUuid) && ring == tableEntity.choosingRing
+            && hover == tableEntity.choosingHover) return;
+        tableEntity.choosingUuid = who;
+        tableEntity.choosingRing = ring;
+        tableEntity.choosingHover = hover;
+        tableEntity.sync();
     }
 
     public static class Client {

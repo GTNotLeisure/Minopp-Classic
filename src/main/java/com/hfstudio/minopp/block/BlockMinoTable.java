@@ -283,6 +283,10 @@ public class BlockMinoTable extends Block {
     public void onNeighborBlockChange(World level, int x, int y, int z, Block neighbor) {
         BlockPos core = getCore(level, x, y, z);
         for (TablePartType part : TablePartType.values()) {
+            // a table can straddle chunks; a part in an unloaded chunk is not missing
+            if (!level.blockExists(core.x + part.xOff, core.y, core.z + part.zOff)) return;
+        }
+        for (TablePartType part : TablePartType.values()) {
             if (level.getBlock(core.x + part.xOff, core.y, core.z + part.zOff) != this
                 || level.getBlockMetadata(core.x + part.xOff, core.y, core.z + part.zOff) != part.ordinal()) {
                 level.setBlockToAir(x, y, z);
@@ -291,7 +295,6 @@ public class BlockMinoTable extends Block {
         }
     }
 
-    // only the room's host and operators may take a table apart
     @Override
     public boolean removedByPlayer(World level, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
         if (!level.isRemote) {

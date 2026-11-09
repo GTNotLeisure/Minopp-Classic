@@ -178,7 +178,8 @@ public class BlockEntityMinoTable extends TileEntity {
         }
     }
 
-    public static final List<HandSwapAnimation> activeAnimations = new ArrayList<>();
+    /** Client side: hand swaps flying across this table, in table space. */
+    public final List<HandSwapAnimation> activeAnimations = new ArrayList<>();
 
     /** Angle of a seat in radians, 0 = north, clockwise seen from above. */
     public static double seatAngle(int seat, int seatCount) {

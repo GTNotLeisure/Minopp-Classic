@@ -256,8 +256,6 @@ public final class ColorPicker3D {
         }
     }
 
-    // one quarter of the ring, with a gap to its neighbours; its top flares out wider than its foot, more so when it
-    // is the one pointed at
     private static void drawQuarter(double ox, double oz, double a0, double a1, double r0, double r1Top,
         double r1Bottom, double y0, double y1, int rgb, float alpha, boolean hot) {
         Tessellator t = Tessellator.instance;
@@ -313,7 +311,6 @@ public final class ColorPicker3D {
         }
     }
 
-    // a block whose top is a little wider than its foot, so its sides lean out
     private static void drawFrustum(double cx, double cz, double hwBottom, double hwTop, double y0, double y1, int rgb,
         float alpha, boolean hot) {
         Tessellator t = Tessellator.instance;
@@ -355,7 +352,6 @@ public final class ColorPicker3D {
         }
     }
 
-    // the orange arrow on top of each piece, pointing away from the pile
     private static void arrow(double cx, double cz, double angle, double from, double to, double halfBase, double y,
         float alpha) {
         double nx = Math.cos(angle), nz = Math.sin(angle), px = -nz, pz = nx;

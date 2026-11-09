@@ -57,6 +57,15 @@ public class GameOverlayLayer {
     private double zoomAnimationProgress = 0;
     private double zoomAnimationTarget = 0;
     private final Map<Integer, Float> handCardCurrentXOff = new HashMap<>();
+    private final java.util.Set<Integer> uidScratch = new java.util.HashSet<>();
+
+    private void keepOnly(Map<Integer, ?> byUid, List<Card> hand) {
+        if (byUid.isEmpty()) return;
+        uidScratch.clear();
+        for (Card c : hand) uidScratch.add(c.uid);
+        byUid.keySet()
+            .retainAll(uidScratch);
+    }
 
     public void render(float partialTicks) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -191,7 +200,6 @@ public class GameOverlayLayer {
         FontRenderer font = mc.fontRenderer;
         int lh = font.FONT_HEIGHT;
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        // the info text can be scaled; everything below is laid out in the scaled space
         float hs = Math.max(0.5f, ClientConfig.display.guiScale / 100f);
         GL11.glPushMatrix();
         GL11.glScalef(hs, hs, 1);
@@ -205,7 +213,6 @@ public class GameOverlayLayer {
             infoLines.clear();
             infoColors.clear();
             buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
-            // wrapped once here instead of on every frame
             wrappedLines.clear();
             wrappedColors.clear();
             for (int i = 0; i < infoLines.size(); i++) {
@@ -515,10 +522,7 @@ public class GameOverlayLayer {
 
         List<Card> hand = HandScreen.visibleHand(game, realPlayer);
         int clientHandIndex = Mth.clamp(ItemHandCards.getClientHandIndex(player), 0, hand.size() - 1);
-        handCardCurrentXOff.keySet()
-            .removeIf(
-                uid -> hand.stream()
-                    .noneMatch(c -> c.uid == uid));
+        keepOnly(handCardCurrentXOff, hand);
 
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
         int width = res.getScaledWidth();
@@ -718,8 +722,6 @@ public class GameOverlayLayer {
         return coinRect;
     }
 
-    // the Show 'Em No Mercy coin in the bottom right corner: it flips over when its side changes, spins and flashes
-    // when spent, then stays grey; an armed No Mercy coin pulses red until the next draw card
     private void drawCoin(FontRenderer font, CardGame game, CardPlayer me, boolean enabled, int width, int height) {
         coinRect = null;
         if (!enabled || me == null) return;
@@ -781,7 +783,6 @@ public class GameOverlayLayer {
             me.coinUsed ? 0xFF909090 : me.coinNoMercy ? 0xFFFF6050 : 0xFFFFD860);
     }
 
-    // over your own hand: a big no-entry sign when you get skipped, "+N" when cards come in
     private void drawCallouts(FontRenderer font, CardGame game, CardPlayer me, int width, int height) {
         long now = System.currentTimeMillis();
         int top = game.topCard == null ? -1 : game.topCard.uid;
@@ -841,7 +842,6 @@ public class GameOverlayLayer {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    // debug games never put drawn cards into the hand: they fly in, show their face and dissolve
     private void drawDebugDraws(CardGame game, CardPlayer me, String theme, int width, int height) {
         long now = System.currentTimeMillis();
         if (!Objects.equals(ghostGame, game.id)) {
@@ -898,10 +898,7 @@ public class GameOverlayLayer {
         float ease = 1 - (float) Math.exp(-dt * 14);
         boolean interactive = HandScreen.isOpen();
         rowRaise += ((interactive ? 1 : 0) - rowRaise) * ease;
-        rowLift.keySet()
-            .removeIf(
-                uid -> hand.stream()
-                    .noneMatch(c -> c.uid == uid));
+        keepOnly(rowLift, hand);
 
         int n = hand.size();
         int cw = cardWidth(width);
@@ -1045,8 +1042,6 @@ public class GameOverlayLayer {
         }
     }
 
-    // a drawn card leaves the deck, turns from its back to its face with a curl on the way to the middle of the screen,
-    // rests there for a moment and then joins the hand (or, for debug draws, dissolves)
     private void drawDrawnCard(CardGame game, CardFace face, Card card, String theme, float sx, float sy, float sang,
         float cw, float ch, float u, int width, int height, boolean dissolve) {
         if (u < 0 || u >= 1) return;
@@ -1100,7 +1095,6 @@ public class GameOverlayLayer {
         GL11.glPopMatrix();
     }
 
-    // a played card leaves the hand toward the middle of the screen, with a ring where it lands
     private void drawFlyers(int width, int height, long nowMs) {
         flyers.removeIf(f -> nowMs - (Long) f[3] > FLY_MS + 220);
         float tx = width * 0.5f, ty = height * 0.36f;

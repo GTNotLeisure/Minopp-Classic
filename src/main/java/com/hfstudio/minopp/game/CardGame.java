@@ -157,7 +157,6 @@ public class CardGame {
         "win",
         "stop");
 
-    // the debug toolbar: bends the game state so any situation can be set up and watched
     public ActionReport debugAction(String action) {
         CardPlayer me = deAmputate(debugger);
         ActionReport report = ActionReport.builder(this, me);
@@ -234,7 +233,6 @@ public class CardGame {
                 return win(me, report);
             }
             default -> {
-                // "rule:<id>" switches a mechanic on or off in the middle of the debug game
                 GameRules.Rule r = action.startsWith("rule:") ? GameRules.get(action.substring(5)) : null;
                 if (r == null || !r.bool()) return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
                 boolean on = !config().getBool(r.id());
@@ -255,7 +253,6 @@ public class CardGame {
         return debug && p != null && p.uuid.equals(debugger);
     }
 
-    // one card of every face in every pack; the shorter side repeats so both sides show all their faces
     public static List<CardFace[]> debugCatalog() {
         Set<CardFace> light = new LinkedHashSet<>(), dark = new LinkedHashSet<>();
         for (CardPack pack : CardPack.all()) {
@@ -921,8 +918,14 @@ public class CardGame {
                         return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
                     }
                     d.answerTarget = target;
+                } else if (d.type == PendingDecision.Type.ROULETTE_COLOR) {
+                    if (answer < 0 || answer >= CardColor.values().length
+                        || !CardColor.forSide(darkSide)
+                            .contains(CardColor.values()[answer]))
+                        return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+                    d.answer = answer;
                 } else {
-                    d.answer = Math.max(0, answer);
+                    d.answer = answer == 1 ? 1 : 0;
                 }
                 return resolveDecisionsIfDone(report);
             }

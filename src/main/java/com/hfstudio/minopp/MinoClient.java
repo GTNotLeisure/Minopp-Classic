@@ -77,6 +77,7 @@ public class MinoClient {
     }
 
     public static void tick() {
+        MinoNetwork.runClientQueue();
         Minecraft mc = Minecraft.getMinecraft();
         if (!themeListenerRegistered) {
             // Registered after startup (not during mod init) so it never runs inside the startup resource reloads
@@ -94,7 +95,6 @@ public class MinoClient {
                 if (System.getProperty("minopp.previewTheme") != null) {
                     ThemeManager.INSTANCE.select(System.getProperty("minopp.previewTheme"));
                 }
-                // the preview world is rebuilt every launch so old tables and bots never pile up
                 mc.getSaveLoader()
                     .flushCache();
                 mc.getSaveLoader()

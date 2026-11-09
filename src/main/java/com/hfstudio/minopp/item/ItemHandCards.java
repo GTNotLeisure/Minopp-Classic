@@ -29,6 +29,9 @@ public class ItemHandCards extends Item {
 
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World level, EntityPlayer player) {
+        BlockPos stored = ItemDataUtils.getBlockPos(stack);
+        // never load a chunk for this; the cards stay until their table can be checked
+        if (stored != null && !level.blockExists(stored.x, stored.y, stored.z)) return stack;
         BlockPos gamePos = getHandCardGamePos(player);
         if (gamePos != null
             && level.getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
@@ -59,13 +62,18 @@ public class ItemHandCards extends Item {
 
     public static BlockPos getGamePos(World world, ItemStack stack) {
         BlockPos tablePos = ItemDataUtils.getBlockPos(stack);
-        if (tablePos == null) return null;
+        if (!isLoaded(world, tablePos)) return null;
         if (world.getBlock(tablePos.x, tablePos.y, tablePos.z) != Mino.BLOCK_MINO_TABLE) return null;
         return BlockMinoTable.getCore(world, tablePos.x, tablePos.y, tablePos.z);
     }
 
+    /** True when the chunk holding pos is loaded; nothing in the mod may load one just to look at a table. */
+    public static boolean isLoaded(World world, BlockPos pos) {
+        return pos != null && world.blockExists(pos.x, pos.y, pos.z);
+    }
+
     public static BlockEntityMinoTable getTable(World world, BlockPos pos) {
-        if (pos == null) return null;
+        if (!isLoaded(world, pos)) return null;
         TileEntity te = world.getTileEntity(pos.x, pos.y, pos.z);
         return te instanceof BlockEntityMinoTable ? (BlockEntityMinoTable) te : null;
     }

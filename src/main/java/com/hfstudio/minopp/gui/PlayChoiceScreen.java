@@ -55,7 +55,6 @@ public class PlayChoiceScreen extends GuiScreen {
         this.colorStep = needsColor;
     }
 
-    // choices sit along the bottom of the screen, over the lowered hand
     private int bandTop() {
         return height - 74;
     }

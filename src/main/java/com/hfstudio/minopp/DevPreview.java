@@ -176,7 +176,6 @@ public final class DevPreview {
         "wild", "skip", "draw" };
     private int scriptStep;
 
-    // debug preview: plays one card of each effect in turn, so every table animation can be watched
     private void playScripted(BlockEntityMinoTable table, CardPlayer me, EntityPlayerMP player) {
         CardGame game = table.game;
         String id = SCRIPT[scriptStep++ % SCRIPT.length];

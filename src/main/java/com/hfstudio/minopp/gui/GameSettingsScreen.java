@@ -389,7 +389,6 @@ public class GameSettingsScreen extends GuiScreen {
                 place(list, y, 112, 72, 8);
             }
             case PERSONAL -> {
-                // your own settings: they only change how the game looks and sounds to you
                 List<Tile> list = new ArrayList<>();
                 for (Prefs.Pref p : Prefs.all()) {
                     Tile t = new Tile("pref:" + p.id(), Kind.PREF, p);
@@ -412,7 +411,6 @@ public class GameSettingsScreen extends GuiScreen {
                 }
             }
             case SOUNDS -> {
-                // personal too: which pack each sound plays from, or silence
                 String packsName = tr("gui.minopp.sound.packs");
                 List<Tile> packs = new ArrayList<>();
                 for (SoundBank.Pack pack : SoundBank.packs()) {
@@ -428,7 +426,6 @@ public class GameSettingsScreen extends GuiScreen {
                     tiles.addAll(packs);
                     y = grid(packs, y, 76, 62, 6) + 2;
                 }
-                // the built-in groups first, then any a mod added, in the order they came
                 Set<String> groups = new LinkedHashSet<>(List.of("game", "effects"));
                 for (SoundBank.Slot s : SoundBank.slots()) groups.add(s.group());
                 for (String group : groups) {
@@ -458,7 +455,6 @@ public class GameSettingsScreen extends GuiScreen {
                 }
             }
             case GALLERY -> {
-                // every kind of card once, by the pack it comes from, with its points and what it does;
                 // the tiles never change, so they are built once and only filtered and laid out per frame
                 if (galleryCache == null) galleryCache = buildGallery();
                 for (Map.Entry<String, List<Tile>> e : galleryCache.entrySet()) {
@@ -516,8 +512,6 @@ public class GameSettingsScreen extends GuiScreen {
         }
         return out;
     }
-
-    // ------------------------------------------------------------------ personal settings rows
 
     /** Prefs shown as a text box instead of a slider; switched by the button next to them. */
     private static final Set<String> typingPrefs = new HashSet<>();
@@ -663,7 +657,6 @@ public class GameSettingsScreen extends GuiScreen {
             .fittedCentered(fontRendererObj, text, (x1 + x2) / 2f, y1 + (y2 - y1 - 8) / 2f + 1, x2 - x1 - 6, color);
     }
 
-    // the switch button shows what it switches to: a slider, or a text box
     private void modeGlyph(int cx, int cy, boolean typing) {
         UiDraw.icon(typing ? "mode_slider" : "mode_text", cx - 8, cy - 8, 16);
         GL11.glColor4f(1, 1, 1, 1);
@@ -698,7 +691,6 @@ public class GameSettingsScreen extends GuiScreen {
         Prefs.Pref p = (Prefs.Pref) t.payload;
         int v = p.value();
         if (navId != null) {
-            // keyboard: Enter / Space steps through the values
             int dir = button == 1 ? -1 : 1;
             p.change(switch (p.type()) {
                 case BOOL -> v == 0 ? 1 : 0;
@@ -1607,7 +1599,6 @@ public class GameSettingsScreen extends GuiScreen {
             }
         }
         if (inside(pillSwitch, mouseX, mouseY)) {
-            // left: next tab, right: previous
             int n = Tab.values().length;
             switchTab(Tab.values()[(tab.ordinal() + (button == 1 ? n - 1 : 1)) % n]);
             return;
