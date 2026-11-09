@@ -389,7 +389,7 @@ public class GameSettingsScreen extends GuiScreen {
             case PERSONAL -> {
                 // your own settings: they only change how the game looks and sounds to you
                 List<Tile> list = new ArrayList<>();
-                for (Prefs.Pref p : Prefs.ALL) {
+                for (Prefs.Pref p : Prefs.all()) {
                     Tile t = new Tile("pref:" + p.id(), Kind.PREF, p);
                     t.title = tr(p.langKey());
                     t.desc.add(tr(p.langKey() + ".desc"));
@@ -413,10 +413,10 @@ public class GameSettingsScreen extends GuiScreen {
                 // personal too: which pack each sound plays from, or silence
                 String packsName = tr("gui.minopp.sound.packs");
                 List<Tile> packs = new ArrayList<>();
-                for (String pack : SoundBank.PACKS) {
-                    Tile t = new Tile("soundpack:" + pack, Kind.SOUND_PACK, pack);
-                    t.title = tr("gui.minopp.sound.pack." + pack);
-                    t.desc.add(tr("gui.minopp.sound.pack." + pack + ".desc"));
+                for (SoundBank.Pack pack : SoundBank.packs()) {
+                    Tile t = new Tile("soundpack:" + pack.id(), Kind.SOUND_PACK, pack.id());
+                    t.title = tr(pack.langKey());
+                    if (hasTr(pack.langKey() + ".desc")) t.desc.add(tr(pack.langKey() + ".desc"));
                     t.controls.add(tr("gui.minopp.controls.sound_pack"));
                     packs.add(t);
                 }
@@ -426,17 +426,25 @@ public class GameSettingsScreen extends GuiScreen {
                     tiles.addAll(packs);
                     y = grid(packs, y, 76, 62, 6) + 2;
                 }
-                for (String group : List.of("game", "effects")) {
-                    String groupName = tr("gui.minopp.sound.group." + group);
+                // the built-in groups first, then any a mod added, in the order they came
+                Set<String> groups = new LinkedHashSet<>(List.of("game", "effects"));
+                for (SoundBank.Slot s : SoundBank.slots()) groups.add(s.group());
+                for (String group : groups) {
+                    String groupKey = "gui.minopp.sound.group." + group;
+                    String groupName = hasTr(groupKey) ? tr(groupKey) : group;
                     List<Tile> list = new ArrayList<>();
-                    for (SoundBank.Slot s : SoundBank.SLOTS) {
+                    for (SoundBank.Slot s : SoundBank.slots()) {
                         if (!s.group()
                             .equals(group)) continue;
                         Tile t = new Tile("sound:" + s.id(), Kind.SOUND, s);
                         t.searchExtra = groupName;
-                        t.title = tr("gui.minopp.sound." + s.id());
-                        t.desc
-                            .add(tr("gui.minopp.sound.using", tr("gui.minopp.sound.pack." + SoundBank.choice(s.id()))));
+                        t.title = tr(s.langKey());
+                        t.desc.add(
+                            tr(
+                                "gui.minopp.sound.using",
+                                tr(
+                                    SoundBank.getPack(SoundBank.choice(s.id()))
+                                        .langKey())));
                         t.controls.add(tr("gui.minopp.controls.sound"));
                         list.add(t);
                     }
@@ -524,9 +532,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static Prefs.Pref pref(String id) {
-        for (Prefs.Pref p : Prefs.ALL) if (p.id()
-            .equals(id)) return p;
-        return null;
+        return Prefs.get(id);
     }
 
     /** Where a row's parts start: control, control end, slider/text switch, reset button. */
@@ -558,8 +564,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static String prefValue(Prefs.Pref p, int v) {
-        return p.id()
-            .endsWith("Scale") ? v + "%" : String.valueOf(v);
+        return p.format(v);
     }
 
     private GuiTextField prefField(Prefs.Pref p) {
@@ -1174,7 +1179,13 @@ public class GameSettingsScreen extends GuiScreen {
             case SOUND_PACK -> {
                 String pack = (String) t.payload;
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
-                UiDraw.icon("sound_" + pack, (x1 + x2) / 2f - 16, y1 + 4, 32);
+                UiDraw.texture(
+                    SoundBank.getPack(pack)
+                        .icon(),
+                    (x1 + x2) / 2f - 16,
+                    y1 + 4,
+                    32,
+                    32);
                 UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
                 checked = SoundBank.allUse(pack);
             }
@@ -1182,11 +1193,19 @@ public class GameSettingsScreen extends GuiScreen {
                 SoundBank.Slot s = (SoundBank.Slot) t.payload;
                 String pack = SoundBank.choice(s.id());
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, UiDraw.TILE_TOP, UiDraw.TILE_BOTTOM);
-                UiDraw.icon("sound_" + pack, (x1 + x2) / 2f - 16, y1 + 4, 32);
+                UiDraw.texture(
+                    SoundBank.getPack(pack)
+                        .icon(),
+                    (x1 + x2) / 2f - 16,
+                    y1 + 4,
+                    32,
+                    32);
                 UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 6, 0xFFFFFFFF);
                 dim = pack.equals(SoundBank.SILENT);
                 customCount = !pack.equals(SoundBank.DEFAULT);
-                count = tr("gui.minopp.sound.pack." + pack);
+                count = tr(
+                    SoundBank.getPack(pack)
+                        .langKey());
             }
             case GALLERY -> {
                 CardFace face = (CardFace) t.payload;
@@ -1414,13 +1433,18 @@ public class GameSettingsScreen extends GuiScreen {
                         30);
                     CardRenderer.drawBack2D(id, false, x2 - 40, py + 8, 28, 44);
                 }
-                case SOUND_PACK -> UiDraw
-                    .icon("sound_" + t.payload, cx - 32, py + (ph - 64) / 2f, Math.min(64, ph - 8));
-                case SOUND -> UiDraw.icon(
-                    "sound_" + SoundBank.choice(((SoundBank.Slot) t.payload).id()),
-                    cx - 32,
-                    py + (ph - 64) / 2f,
-                    Math.min(64, ph - 8));
+                case SOUND_PACK, SOUND -> {
+                    String pack = t.kind == Kind.SOUND_PACK ? (String) t.payload
+                        : SoundBank.choice(((SoundBank.Slot) t.payload).id());
+                    float size = Math.min(64, ph - 8);
+                    UiDraw.texture(
+                        SoundBank.getPack(pack)
+                            .icon(),
+                        cx - size / 2f,
+                        py + (ph - size) / 2f,
+                        size,
+                        size);
+                }
                 case PREF -> {
                     Prefs.Pref p = (Prefs.Pref) t.payload;
                     int v = p.value();
@@ -1616,8 +1640,9 @@ public class GameSettingsScreen extends GuiScreen {
     @Override
     protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
         if (state >= 0 && dragPref != null) {
+            dragPref.saver()
+                .run();
             dragPref = null;
-            Prefs.save();
         }
         if (state >= 0) scrolls.get(tab)
             .mouseReleased();

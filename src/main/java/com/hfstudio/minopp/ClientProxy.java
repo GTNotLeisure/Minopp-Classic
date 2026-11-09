@@ -49,9 +49,7 @@ public class ClientProxy extends CommonProxy {
         MinoClient.init();
         ClientRegistry.bindTileEntitySpecialRenderer(BlockEntityMinoTable.class, new BlockEntityMinoTableRenderer());
         RenderingRegistry.registerEntityRenderingHandler(EntityAutoPlayer.class, new EntityAutoPlayerRenderer());
-        net.minecraftforge.client.MinecraftForgeClient.registerItemRenderer(
-            net.minecraft.item.Item.getItemFromBlock(Mino.BLOCK_MINO_TABLE),
-            new com.hfstudio.minopp.render.TableItemRenderer());
+        com.hfstudio.minopp.render.TableItemRenderer.keepRegistered();
         MinecraftForgeClient.registerItemRenderer(Mino.ITEM_HAND_CARDS, new HandCardsItemRenderer());
 
         ClientEvents events = new ClientEvents();

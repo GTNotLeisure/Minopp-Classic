@@ -1,17 +1,34 @@
 package com.hfstudio.minopp.effect;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.util.ResourceLocation;
+
+import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.config.Prefs;
 
 /**
- * Which sound every game event makes for this player. Each sound has a slot, and each slot plays from a pack of the
- * player's choice or stays silent. Packs other than the default only list the slots they replace.
+ * Which sound every game event makes for this player. Each sound belongs to a slot, and each slot plays from a sound
+ * pack of the player's choice or stays silent.
+ * <p>
+ * Other mods register their own packs (client side, during init) instead of shipping resource packs:
+ *
+ * <pre>
+ * SoundBank.pack("mymod:arcade", new ResourceLocation("mymod", "textures/gui/arcade.png"))
+ *     .sound("play", "mymod:arcade.play", 1f)
+ *     .sound("mino_shout", "mymod:arcade.shout", 1.2f)
+ *     .register();
+ * </pre>
+ *
+ * A pack only lists the slots it replaces; the others keep the default sound. Mods can also add slots for their own
+ * sounds with {@link #registerSlot}, so players can swap or silence them too. A pack is named by the lang key
+ * {@code gui.<modid>.sound.pack.<name>} (and {@code .desc}), a slot by {@code gui.<modid>.sound.<name>}.
  */
 public final class SoundBank {
 
@@ -20,105 +37,191 @@ public final class SoundBank {
     public record Sound(String name, float volume, float pitch) {}
 
     /** A sound the player can change; {@code sample} is what it plays when previewed. */
-    public record Slot(String id, String group, String sample) {}
+    public record Slot(String id, String group, String sample) {
+
+        public String langKey() {
+            return key(id, "sound.");
+        }
+    }
+
+    public record Pack(String id, ResourceLocation icon, Map<String, Sound> sounds) {
+
+        public String langKey() {
+            return key(id, "sound.pack.");
+        }
+    }
+
+    public static final class PackBuilder {
+
+        private final String id;
+        private final ResourceLocation icon;
+        private final Map<String, Sound> sounds = new HashMap<>();
+
+        private PackBuilder(String id, ResourceLocation icon) {
+            this.id = id;
+            this.icon = icon;
+        }
+
+        /** What the pack plays for a slot, at a pitch relative to the game's own. */
+        public PackBuilder sound(String slot, String name, float pitch) {
+            return sound(slot, name, 1f, pitch);
+        }
+
+        public PackBuilder sound(String slot, String name, float volume, float pitch) {
+            sounds.put(slot, new Sound(name, volume, pitch));
+            return this;
+        }
+
+        public Pack register() {
+            return registerPack(new Pack(id, icon, Collections.unmodifiableMap(sounds)));
+        }
+    }
 
     public static final String DEFAULT = "mino", SILENT = "off";
-    public static final List<String> PACKS = List.of(DEFAULT, "minecraft", "note", SILENT);
 
-    public static final List<Slot> SLOTS = new ArrayList<>();
-    private static final Map<String, Slot> BY_ID = new HashMap<>();
-    // the vanilla sounds the special cards make, by the slot they belong to
-    private static final Map<String, String> EFFECT_SLOT = new HashMap<>();
-    private static final Map<String, Map<String, Sound>> PACK_SOUNDS = new HashMap<>();
+    private static final List<Slot> SLOTS = new ArrayList<>();
+    private static final Map<String, Slot> SLOT_BY_ID = new HashMap<>();
+    private static final List<Pack> PACKS = new ArrayList<>();
+    private static final Map<String, Pack> PACK_BY_ID = new HashMap<>();
+    // every sound the game sends, by the slot it belongs to
+    private static final Map<String, String> SOUND_SLOT = new HashMap<>();
 
     static {
         for (String id : new String[] { "play", "draw", "draw_multi", "pass", "turn_notice", "turn_notice_again",
             "turn_notice_continuous", "win", "mino_shout", "mino_shout_invalid", "doubt_success", "hand_change" }) {
-            slot(id, "game", "minopp:game." + id);
+            registerSlot(id, "game", "minopp:game." + id, "minopp:game." + id);
         }
-        effect("skip", "note.snare");
-        effect("reverse", "random.bow");
-        effect("draw_hit", "random.bowhit");
-        effect("flip", "mob.enderdragon.wings");
-        effect("wild", "random.orb");
-        effect("bonus", "random.levelup");
-        effect("blast", "fireworks.blast", "fireworks.largeBlast", "random.explode");
-        effect("fuse", "random.fuse");
-        effect("pop", "random.pop");
-        effect("click", "random.click");
-        effect("jingle", "note.pling", "note.harp", "note.hat");
-        slot("misc", "effects", "random.fizz");
+        // the vanilla sounds the special cards make
+        registerSlot("skip", "effects", "note.snare", "note.snare");
+        registerSlot("reverse", "effects", "random.bow", "random.bow");
+        registerSlot("draw_hit", "effects", "random.bowhit", "random.bowhit");
+        registerSlot("flip", "effects", "mob.enderdragon.wings", "mob.enderdragon.wings");
+        registerSlot("wild", "effects", "random.orb", "random.orb");
+        registerSlot("bonus", "effects", "random.levelup", "random.levelup");
+        registerSlot(
+            "blast",
+            "effects",
+            "fireworks.blast",
+            "fireworks.blast",
+            "fireworks.largeBlast",
+            "random.explode");
+        registerSlot("fuse", "effects", "random.fuse", "random.fuse");
+        registerSlot("pop", "effects", "random.pop", "random.pop");
+        registerSlot("click", "effects", "random.click", "random.click");
+        registerSlot("jingle", "effects", "note.pling", "note.pling", "note.harp", "note.hat");
+        registerSlot("misc", "effects", "random.fizz");
 
-        pack(
-            "minecraft",
-            "play=dig.cloth:1.4",
-            "draw=random.wood_click:1.6",
-            "draw_multi=random.chestopen:1.2",
-            "pass=random.door_close:1.4",
-            "turn_notice=random.orb:1.0",
-            "turn_notice_again=random.orb:1.4",
-            "turn_notice_continuous=note.pling:1.6",
-            "win=random.levelup:1.0",
-            "mino_shout=mob.villager.yes:1.0",
-            "mino_shout_invalid=mob.villager.no:1.0",
-            "doubt_success=random.successful_hit:1.0",
-            "hand_change=mob.endermen.portal:1.4");
-        pack(
-            "note",
-            "play=note.hat:1.4",
-            "draw=note.hat:1.8",
-            "draw_multi=note.bassattack:1.0",
-            "pass=note.bass:0.8",
-            "turn_notice=note.pling:1.0",
-            "turn_notice_again=note.pling:1.26",
-            "turn_notice_continuous=note.pling:1.5",
-            "win=note.harp:1.5",
-            "mino_shout=note.pling:2.0",
-            "mino_shout_invalid=note.bass:0.6",
-            "doubt_success=note.harp:1.26",
-            "hand_change=note.harp:0.8",
-            "reverse=note.harp:1.6",
-            "draw_hit=note.bassattack:0.8",
-            "flip=note.harp:0.7",
-            "wild=note.pling:1.4",
-            "bonus=note.pling:1.8",
-            "blast=note.bd:0.8",
-            "fuse=note.hat:0.6",
-            "pop=note.hat:1.2",
-            "click=note.hat:1.6",
-            "misc=note.harp:1.0");
+        registerPack(new Pack(DEFAULT, icon("mino"), Collections.emptyMap()));
+        pack("minecraft", icon("minecraft")).sound("play", "dig.cloth", 1.4f)
+            .sound("draw", "random.wood_click", 1.6f)
+            .sound("draw_multi", "random.chestopen", 1.2f)
+            .sound("pass", "random.door_close", 1.4f)
+            .sound("turn_notice", "random.orb", 1.0f)
+            .sound("turn_notice_again", "random.orb", 1.4f)
+            .sound("turn_notice_continuous", "note.pling", 1.6f)
+            .sound("win", "random.levelup", 1.0f)
+            .sound("mino_shout", "mob.villager.yes", 1.0f)
+            .sound("mino_shout_invalid", "mob.villager.no", 1.0f)
+            .sound("doubt_success", "random.successful_hit", 1.0f)
+            .sound("hand_change", "mob.endermen.portal", 1.4f)
+            .register();
+        pack("note", icon("note")).sound("play", "note.hat", 1.4f)
+            .sound("draw", "note.hat", 1.8f)
+            .sound("draw_multi", "note.bassattack", 1.0f)
+            .sound("pass", "note.bass", 0.8f)
+            .sound("turn_notice", "note.pling", 1.0f)
+            .sound("turn_notice_again", "note.pling", 1.26f)
+            .sound("turn_notice_continuous", "note.pling", 1.5f)
+            .sound("win", "note.harp", 1.5f)
+            .sound("mino_shout", "note.pling", 2.0f)
+            .sound("mino_shout_invalid", "note.bass", 0.6f)
+            .sound("doubt_success", "note.harp", 1.26f)
+            .sound("hand_change", "note.harp", 0.8f)
+            .sound("reverse", "note.harp", 1.6f)
+            .sound("draw_hit", "note.bassattack", 0.8f)
+            .sound("flip", "note.harp", 0.7f)
+            .sound("wild", "note.pling", 1.4f)
+            .sound("bonus", "note.pling", 1.8f)
+            .sound("blast", "note.bd", 0.8f)
+            .sound("fuse", "note.hat", 0.6f)
+            .sound("pop", "note.hat", 1.2f)
+            .sound("click", "note.hat", 1.6f)
+            .sound("misc", "note.harp", 1.0f)
+            .register();
+        registerPack(new Pack(SILENT, icon("off"), Collections.emptyMap()));
     }
 
-    private static void slot(String id, String group, String sample) {
+    private static ResourceLocation icon(String pack) {
+        return Mino.id("textures/gui/ui/icon_sound_" + pack + ".png");
+    }
+
+    private static String key(String id, String kind) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? "gui.minopp." + kind + id
+            : "gui." + id.substring(0, colon) + "." + kind + id.substring(colon + 1);
+    }
+
+    private static String bare(String sound) {
+        return sound.startsWith("minecraft:") ? sound.substring("minecraft:".length()) : sound;
+    }
+
+    // ------------------------------------------------------------------ registration
+
+    public static PackBuilder pack(String id, ResourceLocation icon) {
+        return new PackBuilder(id, icon);
+    }
+
+    /** Adds a pack; it shows before the silent pack. */
+    public static Pack registerPack(Pack pack) {
+        if (PACK_BY_ID.containsKey(pack.id()))
+            throw new IllegalArgumentException("Sound pack already registered: " + pack.id());
+        int at = PACK_BY_ID.containsKey(SILENT) ? PACKS.size() - 1 : PACKS.size();
+        PACKS.add(at, pack);
+        PACK_BY_ID.put(pack.id(), pack);
+        return pack;
+    }
+
+    /**
+     * Adds a slot players can swap or silence. {@code group} picks the section it shows in ("game", "effects" or a
+     * group of your own, named by {@code gui.minopp.sound.group.<group>}); {@code sounds} are the sound names the game
+     * plays for it.
+     */
+    public static Slot registerSlot(String id, String group, String sample, String... sounds) {
+        if (SLOT_BY_ID.containsKey(id)) throw new IllegalArgumentException("Sound slot already registered: " + id);
         Slot s = new Slot(id, group, sample);
         SLOTS.add(s);
-        BY_ID.put(id, s);
+        SLOT_BY_ID.put(id, s);
+        for (String sound : sounds) SOUND_SLOT.put(bare(sound), id);
+        return s;
     }
 
-    private static void effect(String id, String... sounds) {
-        slot(id, "effects", sounds[0]);
-        for (String s : sounds) EFFECT_SLOT.put(s, id);
+    public static List<Slot> slots() {
+        return Collections.unmodifiableList(SLOTS);
     }
 
-    private static void pack(String pack, String... entries) {
-        Map<String, Sound> map = new HashMap<>();
-        for (String e : entries) {
-            String[] kv = e.split("=");
-            String[] sp = kv[1].split(":");
-            map.put(kv[0], new Sound(sp[0], 1f, Float.parseFloat(sp[1])));
-        }
-        PACK_SOUNDS.put(pack, map);
+    public static List<Pack> packs() {
+        return Collections.unmodifiableList(PACKS);
+    }
+
+    public static Pack getPack(String id) {
+        return PACK_BY_ID.get(id);
+    }
+
+    // ------------------------------------------------------------------ choices
+
+    private static boolean covers(Pack pack, String slot) {
+        return pack.id()
+            .equals(DEFAULT)
+            || pack.id()
+                .equals(SILENT)
+            || pack.sounds()
+                .containsKey(slot);
     }
 
     /** The packs a slot can play from: the default, the packs that replace it, and silence. */
     public static List<String> options(String slot) {
         List<String> out = new ArrayList<>();
-        for (String p : PACKS) {
-            if (p.equals(DEFAULT) || p.equals(SILENT)
-                || PACK_SOUNDS.get(p)
-                    .containsKey(slot))
-                out.add(p);
-        }
+        for (Pack p : PACKS) if (covers(p, slot)) out.add(p.id());
         return out;
     }
 
@@ -133,14 +236,17 @@ public final class SoundBank {
             choices.clear();
             for (String part : raw.split(";")) {
                 String[] kv = part.split("=");
-                if (kv.length == 2 && BY_ID.containsKey(kv[0]) && PACKS.contains(kv[1])) choices.put(kv[0], kv[1]);
+                // kept even when the slot or pack is not registered right now, so removing a mod loses nothing
+                if (kv.length == 2) choices.put(kv[0], kv[1]);
             }
         }
         return choices;
     }
 
     public static String choice(String slot) {
-        return choices().getOrDefault(slot, DEFAULT);
+        String c = choices().get(slot);
+        Pack p = c == null ? null : PACK_BY_ID.get(c);
+        return p != null && covers(p, slot) ? c : DEFAULT;
     }
 
     public static void set(String slot, String pack) {
@@ -150,19 +256,23 @@ public final class SoundBank {
         store(c);
     }
 
-    /** Uses a pack for every sound it has; the others keep the default (or go silent for the silent pack). */
+    /** Uses a pack for every sound it has; the others go back to the default. */
     public static void setAll(String pack) {
         Map<String, String> c = choices();
-        c.clear();
-        if (!pack.equals(DEFAULT)) for (Slot s : SLOTS) if (options(s.id()).contains(pack)) c.put(s.id(), pack);
+        Pack p = PACK_BY_ID.get(pack);
+        for (Slot s : SLOTS) {
+            if (p != null && !pack.equals(DEFAULT) && covers(p, s.id())) c.put(s.id(), pack);
+            else c.remove(s.id());
+        }
         store(c);
     }
 
-    /** True when every slot that the pack covers uses it. */
+    /** True when every slot uses the pack where it can, and the default elsewhere. */
     public static boolean allUse(String pack) {
+        Pack p = PACK_BY_ID.get(pack);
+        if (p == null) return false;
         for (Slot s : SLOTS) {
-            if (options(s.id()).contains(pack) ? !choice(s.id()).equals(pack) : !choice(s.id()).equals(DEFAULT))
-                return false;
+            if (!choice(s.id()).equals(covers(p, s.id()) ? pack : DEFAULT)) return false;
         }
         return true;
     }
@@ -180,13 +290,10 @@ public final class SoundBank {
         Prefs.save();
     }
 
+    // ------------------------------------------------------------------ playing
+
     public static String slotOf(String sound) {
-        if (sound.startsWith("minopp:game.")) {
-            String id = sound.substring("minopp:game.".length());
-            return BY_ID.containsKey(id) ? id : "misc";
-        }
-        String bare = sound.startsWith("minecraft:") ? sound.substring("minecraft:".length()) : sound;
-        return EFFECT_SLOT.getOrDefault(bare, "misc");
+        return SOUND_SLOT.getOrDefault(bare(sound), "misc");
     }
 
     /** What a sound sent by the game actually plays for this player, or null for silence. */
@@ -194,15 +301,15 @@ public final class SoundBank {
         String slot = slotOf(sound);
         String pack = choice(slot);
         if (pack.equals(SILENT)) return null;
-        Sound alt = pack.equals(DEFAULT) ? null
-            : PACK_SOUNDS.get(pack)
-                .get(slot);
+        Sound alt = PACK_BY_ID.get(pack)
+            .sounds()
+            .get(slot);
         if (alt == null) return new Sound(sound, volume, pitch);
         return new Sound(alt.name(), volume * alt.volume(), pitch * alt.pitch());
     }
 
     public static Sound preview(String slot) {
-        Slot s = BY_ID.get(slot);
+        Slot s = SLOT_BY_ID.get(slot);
         return s == null ? null : resolve(s.sample(), 1f, 1f);
     }
 }

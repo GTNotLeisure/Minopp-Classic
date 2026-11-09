@@ -84,6 +84,7 @@ public class MinoClient {
                 rm.registerReloadListener(ThemeManager.INSTANCE);
             }
         }
+        com.hfstudio.minopp.render.TableItemRenderer.keepRegistered();
         World level = mc.theWorld;
         if (level == null || mc.thePlayer == null) {
             if (DevPreview.enabled() && !worldPreviewLaunched && mc.currentScreen instanceof GuiMainMenu) {

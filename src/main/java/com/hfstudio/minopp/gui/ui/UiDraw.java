@@ -239,6 +239,17 @@ public final class UiDraw {
         GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
     }
 
+    /** Draws any texture, such as an icon another mod registered. */
+    public static void texture(ResourceLocation tex, float x, float y, float w, float h) {
+        GL11.glColor4f(1, 1, 1, 1);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(tex);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
+    }
+
     public static void icon(String id, float x, float y, float size) {
         image("icon_" + id + (size <= 24 ? "_s" : ""), x, y, size, size);
     }

@@ -20,6 +20,19 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class TableItemRenderer implements IItemRenderer {
 
+    public static final TableItemRenderer INSTANCE = new TableItemRenderer();
+    private static ItemStack probe;
+
+    /**
+     * GTNHLib registers its JSON model renderer for every modeled block's item on each resource reload, which leaves
+     * the table item invisible (it has no item model). Called every client tick to take the item back.
+     */
+    public static void keepRegistered() {
+        if (probe == null) probe = new ItemStack(com.hfstudio.minopp.Mino.BLOCK_MINO_TABLE);
+        if (net.minecraftforge.client.MinecraftForgeClient.getItemRenderer(probe, ItemRenderType.INVENTORY) != INSTANCE)
+            net.minecraftforge.client.MinecraftForgeClient.registerItemRenderer(probe.getItem(), INSTANCE);
+    }
+
     private static final CardBatch BATCH = new CardBatch();
 
     @Override

@@ -197,6 +197,25 @@ CardFxRegistry.register("my_wild_bomb", ctx -> {
 
 The context can start every built-in animation (skip signs, reverse arrows, the color pillar, flying draw cards, big text, coin, particles) or a custom renderer, and `cancelDefaults()` replaces the generic animation for the card's kind. The mod's own card animations are registered the same way.
 
+Sound packs register on the client through `SoundBank`, so an addon ships its own sounds in its jar instead of asking players for a resource pack. A pack only lists the sounds it replaces; players then pick it in the table's **Sounds** tab for everything or for single sounds:
+
+```java
+SoundBank.pack("mymod:arcade", new ResourceLocation("mymod", "textures/gui/arcade.png"))
+    .sound("play", "mymod:arcade.play", 1f)
+    .sound("mino_shout", "mymod:arcade.shout", 1.2f)
+    .register();
+SoundBank.registerSlot("mymod:bomb", "mymod", "mymod:bomb", "mymod:bomb"); // lets players swap or mute your own sound
+```
+
+Personal settings register through `Prefs` and show in the **Personal** tab with a toggle, choice button or slider/text field:
+
+```java
+Prefs.bool("mymod:sparkles", true, () -> MyConfig.sparkles, v -> MyConfig.sparkles = v, MyConfig::save);
+Prefs.integer("mymod:volume", 100, 0, 200, 10, "%", () -> MyConfig.volume, v -> MyConfig.volume = v, MyConfig::save);
+```
+
+Names come from lang keys: `gui.mymod.sound.pack.arcade` (and `.desc`), `gui.mymod.sound.bomb`, `gui.minopp.sound.group.mymod`, `gui.mymod.pref.sparkles` (and `.desc`).
+
 <hr>
 
 ## 🖥️ Server Configuration
