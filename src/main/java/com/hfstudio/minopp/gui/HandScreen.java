@@ -118,66 +118,113 @@ public class HandScreen extends GuiScreen {
         updateButtons();
     }
 
+    private static final int DEBUG_ROWS = 8;
+    private static int debugScroll;
+    private boolean draggingDebugBar;
+    /** {x, y, w, h, rows shown, rows in all} of the debug list, or null when there is none. */
+    private int[] debugPanel;
+
+    // the toggle sits at the right edge; under it one column of actions and mechanics that the wheel scrolls
     private void addDebugButtons() {
+        debugPanel = null;
         Context ctx = Context.resolve(mc);
         if (ctx == null || !ctx.game.isDebugger(ctx.me)) return;
         List<String> actions = CardGame.DEBUG_ACTIONS;
+        List<String> rules = CardGame.DEBUG_RULES;
         int labelW = 0;
         for (String a : actions) labelW = Math.max(
             labelW,
             fontRendererObj.getStringWidth(
                 Chat.translatable("gui.minopp.debug.btn." + a)
                     .getFormattedText()));
-        for (String r : CardGame.DEBUG_RULES)
-            labelW = Math.max(labelW, fontRendererObj.getStringWidth(ruleLabel(ctx, r)));
-        int bw = labelW + 10, bh = 12, gap = 2;
-        int cw = GameOverlayLayer.cardWidth(width), ch = Math.round(cw * 8.9f / 5.6f);
-        int top = hintBottom + 16, handTop = height - ch - 44;
-        int total = actions.size() + CardGame.DEBUG_RULES.size();
-        int maxRows = Math.max(1, (handTop - top) / (bh + gap));
-        int cols = Math.min(total, (total + maxRows - 1) / maxRows);
-        int panelW = cols * bw + (cols - 1) * gap;
-        boolean classic = ClientConfig.display.classicInteraction;
-        int x0 = classic ? width / 2 - panelW / 2 : width - 6 - panelW;
+        for (String r : rules) labelW = Math.max(labelW, fontRendererObj.getStringWidth(ruleLabel(ctx, r)));
         String title = Chat.translatable("gui.minopp.debug.title")
             .getFormattedText() + (debugOpen ? " [-]" : " [+]");
-        buttonList.add(
-            new UiButton(
-                BTN_DEBUG_TOGGLE,
-                x0,
-                top - 14,
-                fontRendererObj.getStringWidth(title) + 10,
-                bh,
-                title,
-                0xFF8A2FB0));
+        int bh = 12, gap = 2;
+        int bw = Math.max(labelW + 10, fontRendererObj.getStringWidth(title) + 10);
+        int x0 = width - 6 - bw;
+        int top = hintBottom + 16;
+        buttonList.add(new UiButton(BTN_DEBUG_TOGGLE, x0, top - 14, bw, bh, title, 0xFF8A2FB0));
         if (!debugOpen) return;
-        for (int k = 0; k < CardGame.DEBUG_RULES.size(); k++) {
-            int i = actions.size() + k;
-            String r = CardGame.DEBUG_RULES.get(k);
-            buttonList.add(
-                new UiButton(
-                    BTN_RULE + k,
-                    x0 + (i % cols) * (bw + gap),
-                    top + (i / cols) * (bh + gap),
-                    bw,
-                    bh,
-                    ruleLabel(ctx, r),
-                    ctx.table.config.getBool(r) ? 0xFF2A7FD4 : 0xFF555560));
+        int total = actions.size() + rules.size();
+        int rows = Math.min(DEBUG_ROWS, total);
+        debugScroll = Math.max(0, Math.min(debugScroll, total - rows));
+        debugPanel = new int[] { x0, top, bw, rows * (bh + gap) - gap, rows, total };
+        for (int row = 0; row < rows; row++) {
+            int i = debugScroll + row;
+            int y = top + row * (bh + gap);
+            if (i < actions.size()) {
+                String a = actions.get(i);
+                int accent = a.equals("win") || a.equals("stop") ? 0xFFB03030
+                    : a.equals("turn") ? 0xFF2A9F4A : 0xFF7A3FB0;
+                buttonList.add(
+                    new UiButton(
+                        BTN_DEBUG + i,
+                        x0,
+                        y,
+                        bw,
+                        bh,
+                        Chat.translatable("gui.minopp.debug.btn." + a)
+                            .getFormattedText(),
+                        accent));
+            } else {
+                int k = i - actions.size();
+                String r = rules.get(k);
+                buttonList.add(
+                    new UiButton(
+                        BTN_RULE + k,
+                        x0,
+                        y,
+                        bw,
+                        bh,
+                        ruleLabel(ctx, r),
+                        ctx.table.config.getBool(r) ? 0xFF2A7FD4 : 0xFF555560));
+            }
         }
-        for (int i = 0; i < actions.size(); i++) {
-            String a = actions.get(i);
-            int accent = a.equals("win") || a.equals("stop") ? 0xFFB03030 : a.equals("turn") ? 0xFF2A9F4A : 0xFF7A3FB0;
-            buttonList.add(
-                new UiButton(
-                    BTN_DEBUG + i,
-                    x0 + (i % cols) * (bw + gap),
-                    top + (i / cols) * (bh + gap),
-                    bw,
-                    bh,
-                    Chat.translatable("gui.minopp.debug.btn." + a)
-                        .getFormattedText(),
-                    accent));
+    }
+
+    private void rebuildDebugButtons() {
+        buttonList.removeIf(o -> o instanceof UiButton b && b.id >= BTN_DEBUG_TOGGLE);
+        addDebugButtons();
+    }
+
+    private boolean overDebugList(int mx, int my) {
+        int[] p = debugPanel;
+        return p != null && mx >= p[0] - 8 && mx < p[0] + p[2] && my >= p[1] && my < p[1] + p[3];
+    }
+
+    private boolean overDebugBar(int mx, int my) {
+        int[] p = debugPanel;
+        return p != null && p[5] > p[4] && mx >= p[0] - 8 && mx < p[0] && my >= p[1] && my < p[1] + p[3];
+    }
+
+    private int debugThumb() {
+        int[] p = debugPanel;
+        return Math.max(10, p[3] * p[4] / p[5]);
+    }
+
+    // the thumb follows the pointer: its middle sits where the mouse is, so a click on the track jumps there too
+    private void dragDebugBar(int my) {
+        int[] p = debugPanel;
+        int thumb = debugThumb(), range = p[3] - thumb, maxScroll = p[5] - p[4];
+        if (range <= 0) return;
+        int s = Math.round((my - p[1] - thumb / 2f) * maxScroll / range);
+        s = Math.max(0, Math.min(s, maxScroll));
+        if (s != debugScroll) {
+            debugScroll = s;
+            rebuildDebugButtons();
         }
+    }
+
+    private void drawDebugScrollbar(int mouseX, int mouseY) {
+        int[] p = debugPanel;
+        if (p == null || p[5] <= p[4]) return;
+        int x = p[0] - 6, y = p[1], h = p[3];
+        UiDraw.roundRect(x, y, x + 4, y + h, 2, 0x70000000);
+        int thumb = debugThumb();
+        int ty = y + (h - thumb) * debugScroll / Math.max(1, p[5] - p[4]);
+        boolean hot = draggingDebugBar || overDebugBar(mouseX, mouseY);
+        UiDraw.roundRect(x, ty, x + 4, ty + thumb, 2, hot ? 0xFFE0B8FF : 0xFFB07AE0);
     }
 
     private static String ruleLabel(Context ctx, String rule) {
@@ -248,6 +295,7 @@ public class HandScreen extends GuiScreen {
             && BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY);
         updateButtons();
         super.drawScreen(mouseX, mouseY, partialTicks);
+        drawDebugScrollbar(mouseX, mouseY);
 
         int ty = 6;
         for (String line : hintLines(hintText(), width - 24)) {
@@ -403,11 +451,33 @@ public class HandScreen extends GuiScreen {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
         Context ctx = Context.resolve(mc);
+        if (wheel != 0 && debugPanel != null) {
+            int mx = Mouse.getEventX() * width / mc.displayWidth;
+            int my = height - Mouse.getEventY() * height / mc.displayHeight - 1;
+            if (overDebugList(mx, my)) {
+                int before = debugScroll;
+                debugScroll = Math.max(0, Math.min(debugScroll - Integer.signum(wheel), debugPanel[5] - debugPanel[4]));
+                if (debugScroll != before) rebuildDebugButtons();
+                return;
+            }
+        }
         if (wheel != 0 && ctx != null) {
             int dir = -Integer.signum(wheel);
             if (ctx.hand.size() > GameOverlayLayer.pageSize()) GameOverlayLayer.turnCarousel(dir);
             select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + dir);
         }
+    }
+
+    @Override
+    protected void mouseClickMove(int mouseX, int mouseY, int button, long time) {
+        if (draggingDebugBar && debugPanel != null) dragDebugBar(mouseY);
+        else super.mouseClickMove(mouseX, mouseY, button, time);
+    }
+
+    @Override
+    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+        if (state >= 0) draggingDebugBar = false;
+        super.mouseMovedOrUp(mouseX, mouseY, state);
     }
 
     @Override
@@ -420,6 +490,11 @@ public class HandScreen extends GuiScreen {
             && mouseY < coin[1] + coin[2]) {
             Context ctx = Context.resolve(mc);
             if (ctx != null && !ctx.me.coinUsed) C2SPlayCardPacket.Client.sendCoinC2S(ctx.pos, !ctx.me.coinLocked);
+            return;
+        }
+        if (button == 0 && overDebugBar(mouseX, mouseY)) {
+            draggingDebugBar = true;
+            dragDebugBar(mouseY);
             return;
         }
         if (button == 1) {

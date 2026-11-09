@@ -245,6 +245,12 @@ public class TableConfig {
         return deck;
     }
 
+    /** The faces the cards' other sides come from in a Flip game, never empty. */
+    public List<CardFace> darkFaces() {
+        List<CardFace> base = buildFaces(true);
+        return base.isEmpty() ? buildDefaultDarkFaces() : base;
+    }
+
     private static List<CardFace> buildDefaultDarkFaces() {
         TableConfig def = new TableConfig();
         def.set(GameRules.FLIP_MODE, 1);

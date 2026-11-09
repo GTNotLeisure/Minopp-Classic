@@ -103,7 +103,8 @@ public class CardGame {
         Set<CardFace> active = dark ? darkFaces : light, other = dark ? light : darkFaces;
         List<Card> out = new ArrayList<>();
         for (CardFace f : active) {
-            CardFace back = other.isEmpty() ? null : counterpart(f, other, !dark);
+            CardFace back = other.isEmpty() || !dark && !rule(GameRules.FLIP_MODE) ? null
+                : counterpart(f, other, !dark);
             out.add(dark ? new Card(debugUid++, back == null ? f : back, f) : new Card(debugUid++, f, back));
         }
         return out;
@@ -237,6 +238,8 @@ public class CardGame {
                 if (r == null || !r.bool()) return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
                 boolean on = !config().getBool(r.id());
                 config().set(r.id(), on ? 1 : 0);
+                if (r.id()
+                    .equals(GameRules.FLIP_MODE)) applyFlipMode(on);
                 restoreDebugHand();
                 return report.state(
                     Chat.translatable(
@@ -247,6 +250,31 @@ public class CardGame {
         restoreDebugHand();
         return report
             .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
+    }
+
+    // every card already in the game gains (or loses) its other side, so the table and every hand follow the switch
+    private void applyFlipMode(boolean on) {
+        if (!on && darkSide) {
+            darkSide = false;
+            CardFace top = topCard == null ? null : topFace();
+            currentColor = top != null && !top.isWild() ? top.color
+                : CardColor.forSide(false)
+                    .get(0);
+        }
+        List<CardFace> pool = on ? new ArrayList<>(config().darkFaces()) : null;
+        if (pool != null) Collections.shuffle(pool, random);
+        int[] next = { 0 };
+        java.util.function.UnaryOperator<Card> fix = c -> {
+            if (c == null || (on ? c.dark != null : c.dark == null)) return c;
+            return new Card(c.uid, c.light, on ? pool.get(next[0]++ % pool.size()) : null);
+        };
+        deck.replaceAll(fix);
+        discardDeck.replaceAll(fix);
+        topCard = fix.apply(topCard);
+        for (CardPlayer p : players) p.hand.replaceAll(fix);
+        CardPlayer me = deAmputate(debugger);
+        if (me != null) me.hand.removeIf(c -> c.uid >= 2_000_000);
+        debugHand.clear();
     }
 
     public boolean isDebugger(CardPlayer p) {

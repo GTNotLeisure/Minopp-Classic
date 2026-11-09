@@ -98,4 +98,36 @@ public class DebugModeTest {
         assertFalse(game.playCard(me, number.uid, red()).isFail);
         assertEquals(expected, game.currentPlayerIndex);
     }
+
+    @Test
+    public void switchingFlipModeTurnsEveryCardInPlay() {
+        CardGame game = start(3, true);
+        List<Card> all = new ArrayList<>(game.deck);
+        all.addAll(game.discardDeck);
+        for (CardPlayer p : game.players) all.addAll(p.hand);
+        assertTrue(
+            all.stream()
+                .filter(c -> c.uid < 2_000_000)
+                .allMatch(c -> c.dark == null));
+
+        assertFalse(game.debugAction("rule:" + GameRules.FLIP_MODE).isFail);
+        assertTrue(
+            game.deck.stream()
+                .allMatch(c -> c.dark != null));
+        assertTrue(game.topCard.dark != null);
+        for (CardPlayer p : game.players) assertTrue(
+            p.hand.stream()
+                .allMatch(c -> c.dark != null));
+
+        game.darkSide = true;
+        assertFalse(game.debugAction("rule:" + GameRules.FLIP_MODE).isFail);
+        assertFalse(game.darkSide);
+        assertTrue(
+            game.deck.stream()
+                .allMatch(c -> c.dark == null));
+        for (CardPlayer p : game.players) assertTrue(
+            p.hand.stream()
+                .allMatch(c -> c.dark == null));
+        assertEquals(CardColor.Side.LIGHT, game.currentColor.side);
+    }
 }
