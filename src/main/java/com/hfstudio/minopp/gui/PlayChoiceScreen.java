@@ -516,12 +516,14 @@ public class PlayChoiceScreen extends GuiScreen {
         int avail = width - 40;
         int cw = 30, gap = 4;
         int rows = 1;
+        // shrinks until the grid and its title fit between the top of the screen and the buttons
         while (true) {
             int perRow = Math.max(1, (avail + gap) / (cw + gap));
             rows = (n + perRow - 1) / perRow;
             int ch = Math.round(cw * 8.9f / 5.6f);
-            if (rows * (ch + gap) <= height / 2 || cw <= 14) break;
-            cw -= 2;
+            if (rows * (ch + gap) <= height - 34 - 34 || cw <= 8) break;
+            cw--;
+            if (cw < 18) gap = 2;
         }
         int perRow = Math.max(1, (avail + gap) / (cw + gap));
         int ch = Math.round(cw * 8.9f / 5.6f);

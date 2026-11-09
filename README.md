@@ -21,7 +21,7 @@
   <p>
     <b>Mino++: Classic</b> brings a well-known color-and-number card game to Minecraft 1.7.10.
     <br>
-    Place a table, sit down with friends or bots, mix <strong>27 card packs</strong>, tune <strong>32 rules</strong>
+    Place a table, sit down with friends or bots, mix <strong>28 card packs</strong>, tune <strong>32 rules</strong>
     and play with an animated, controller-style interface.
   </p>
 </div>
@@ -100,6 +100,7 @@ The **Classic** deck provides the number cards. Packs without numbers always get
 | **Love Island Pack** | 3–10 | Wild Eggs in One Basket, Wild Pull You for a Chat, Wild I've Got a Text. |
 | **Billie Eilish Pack** | 2–10 | Wild Pass Color, Trick Wild, Wild Color Challenge, Reveal Hands. |
 | **Show 'Em No Mercy Expansion** | 2–6 | 10 Play Again, Wild Discard All, Wild Reverse Draw 8, Wild Final Attack, Wild Sudden Death, plus the Mercy / No Mercy coins. Adds the No Mercy deck. |
+| **UNO Infinity** (fan-made) | 2–10 | Fast and Colorless numbers, Minus One / Two, Divided by Two, Number Sign, Joker, Wild Skip / Reverse / Draw 8, Times Two, Targeted and Everyone draws, Hand Reveal, Recycle, Lucky Seven and D4–D20 dice that roll on the table. Cards the mod already had (Replay, Shield, NO U, Hand Swap...) are not added twice. Adds the classic deck. |
 
 <details>
 <summary><strong>How mixed packs build the deck (Click to expand)</strong></summary>

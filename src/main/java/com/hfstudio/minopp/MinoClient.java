@@ -132,15 +132,24 @@ public class MinoClient {
         }
         if (System.getProperty("minopp.previewColorPicker") != null && mc.currentScreen == null) {
             HandScreen.Context ctx = HandScreen.Context.resolve(mc);
-            if (ctx != null) mc.displayGuiScreen(
-                new PlayChoiceScreen(
-                    ctx.pos,
-                    ctx.me,
-                    ctx.hand.get(0),
-                    new PlayContext.PlayChoices(),
-                    true,
-                    0,
-                    ctx.game.darkSide));
+            if (ctx != null) {
+                String want = System.getProperty("minopp.previewChoiceCard");
+                com.hfstudio.minopp.game.Card card = ctx.hand.get(0);
+                for (com.hfstudio.minopp.game.Card c : ctx.hand) if (c.face(ctx.game.darkSide)
+                    .type().id.equals(want)) card = c;
+                com.hfstudio.minopp.game.CardType.Choice choice = card.face(ctx.game.darkSide)
+                    .type()
+                    .choiceFor(false);
+                mc.displayGuiScreen(
+                    new PlayChoiceScreen(
+                        ctx.pos,
+                        ctx.me,
+                        card,
+                        new PlayContext.PlayChoices(),
+                        want == null || choice.needsColor(),
+                        choice.targetCount(),
+                        ctx.game.darkSide));
+            }
         }
         if (!wasInWorld) {
             wasInWorld = true;
