@@ -126,7 +126,7 @@ public final class TableFx {
             String id = face.type().id;
             if (isSkip(id) || id.equals("reverse") && game.activePlayers()
                 .size() == 2) {
-                for (int seat : skippedSeats(table, game)) {
+                for (int seat : skippedSeats(game)) {
                     Vec3d p = table.getSeatLocalPos(seat);
                     s.fx.add(
                         new Fx(
@@ -155,11 +155,12 @@ public final class TableFx {
         };
     }
 
-    private static List<Integer> skippedSeats(BlockEntityMinoTable table, CardGame game) {
+    private static List<Integer> skippedSeats(CardGame game) {
         List<Integer> out = new ArrayList<>();
         int n = game.players.size();
         int from = -1;
-        for (int i = 0; i < n; i++) if (game.players.get(i).uuid.equals(table.lastPlayedByUuid)) from = i;
+        UUID owner = game.topCard == null ? null : game.topCard.owner;
+        for (int i = 0; i < n; i++) if (game.players.get(i).uuid.equals(owner)) from = i;
         if (from < 0 || n < 2) return out;
         int step = game.isAntiClockwise ? -1 : 1;
         for (int i = Math.floorMod(from + step, n), guard = 0; i != game.currentPlayerIndex
@@ -254,7 +255,7 @@ public final class TableFx {
         t.setColorRGBA_F((rgb >> 16 & 255) / 255f, (rgb >> 8 & 255) / 255f, (rgb & 255) / 255f, a);
     }
 
-    // chevrons circling the discard pile; they spin fast for a moment whenever the direction changes
+    // two curved arrows circling the discard pile; they spin fast for a moment whenever the direction changes
     private static void directionRing(float angle, float speed, int sign) {
         GL11.glPushMatrix();
         GL11.glTranslated(1.5, 0.945, 1.5);
@@ -262,29 +263,36 @@ public final class TableFx {
         GL11.glDepthMask(false);
         Tessellator t = Tessellator.instance;
         t.startDrawingQuads();
-        float a = Math.min(0.95f, 0.7f + (speed - 1f) * 0.05f);
-        int n = 6;
-        double r = 0.66, len = 0.24;
+        float a = Math.min(0.95f, 0.75f + (speed - 1f) * 0.05f);
+        double r = 0.66, span = Math.PI * 0.72;
+        int steps = 20;
         for (int pass = 0; pass < 2; pass++) {
-            double w = pass == 0 ? 0.11 : 0.08;
-            double grow = pass == 0 ? 0.03 : 0;
+            double grow = pass == 0 ? 0.025 : 0;
             int rgb = pass == 0 ? 0x3A1A00 : 0xFFD43A;
-            float alpha = pass == 0 ? a * 0.45f : a;
-            double lift = pass * 0.002;
-            for (int i = 0; i < n; i++) {
-                double c = i * Math.PI * 2 / n;
-                for (int k = 0; k < 2; k++) {
-                    double off = k * 0.1 * sign;
-                    double tip = c + sign * (len + grow) / r * 0.5 + off / r;
-                    double tail = c - sign * (len + grow) / r * 0.5 + off / r;
-                    double mx = Math.sin(tail), mz = -Math.cos(tail);
-                    double px = Math.sin(tip), pz = -Math.cos(tip);
-                    color(t, rgb, alpha * (k == 0 ? 0.6f : 1f));
-                    t.addVertex(mx * (r - w), lift, mz * (r - w));
-                    t.addVertex(px * r, lift, pz * r);
-                    t.addVertex(px * r, lift, pz * r);
-                    t.addVertex(mx * (r + w), lift, mz * (r + w));
+            float alpha = pass == 0 ? a * 0.5f : a;
+            double y = pass * 0.002;
+            for (int arc = 0; arc < 2; arc++) {
+                double start = arc * Math.PI - sign * grow / r;
+                double total = span + grow / r;
+                for (int i = 0; i < steps; i++) {
+                    double u0 = (double) i / steps, u1 = (double) (i + 1) / steps;
+                    double t0 = start + sign * total * u0, t1 = start + sign * total * u1;
+                    double w0 = 0.03 + 0.04 * u0 + grow, w1 = 0.03 + 0.04 * u1 + grow;
+                    float f0 = 0.3f + 0.7f * (float) u0, f1 = 0.3f + 0.7f * (float) u1;
+                    color(t, rgb, alpha * f0);
+                    t.addVertex(Math.sin(t0) * (r - w0), y, -Math.cos(t0) * (r - w0));
+                    t.addVertex(Math.sin(t0) * (r + w0), y, -Math.cos(t0) * (r + w0));
+                    color(t, rgb, alpha * f1);
+                    t.addVertex(Math.sin(t1) * (r + w1), y, -Math.cos(t1) * (r + w1));
+                    t.addVertex(Math.sin(t1) * (r - w1), y, -Math.cos(t1) * (r - w1));
                 }
+                double base = start + sign * total, head = 0.13 + grow * 1.6;
+                double tip = base + sign * (0.26 + grow * 2) / r;
+                color(t, rgb, alpha);
+                t.addVertex(Math.sin(base) * (r - head), y, -Math.cos(base) * (r - head));
+                t.addVertex(Math.sin(base) * (r + head), y, -Math.cos(base) * (r + head));
+                t.addVertex(Math.sin(tip) * r, y, -Math.cos(tip) * r);
+                t.addVertex(Math.sin(tip) * r, y, -Math.cos(tip) * r);
             }
         }
         t.draw();
@@ -330,10 +338,10 @@ public final class TableFx {
         ring(tes, 0, 0.78, 28, 0xFFFFFF, alpha * 0.55f);
         double c = Math.cos(Math.PI / 4), s = Math.sin(Math.PI / 4), h = 0.11, l = 0.8;
         color(tes, 0xE02424, alpha);
-        tes.addVertex(-l * c - h * s, -l * s + h * c, 0.001);
-        tes.addVertex(l * c - h * s, l * s + h * c, 0.001);
-        tes.addVertex(l * c + h * s, l * s - h * c, 0.001);
-        tes.addVertex(-l * c + h * s, -l * s - h * c, 0.001);
+        tes.addVertex(-l * c - h * s, -l * s + h * c, -0.001);
+        tes.addVertex(l * c - h * s, l * s + h * c, -0.001);
+        tes.addVertex(l * c + h * s, l * s - h * c, -0.001);
+        tes.addVertex(-l * c + h * s, -l * s - h * c, -0.001);
         tes.draw();
         GL11.glPopMatrix();
     }

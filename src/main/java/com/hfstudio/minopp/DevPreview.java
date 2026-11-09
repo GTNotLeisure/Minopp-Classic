@@ -1,5 +1,6 @@
 package com.hfstudio.minopp;
 
+import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -45,7 +46,10 @@ public final class DevPreview {
     private int ticks;
     private boolean teamsConfigured;
     private int stage;
-    private int mode;
+    private int mode = Math.max(
+        0,
+        Arrays.asList(MODES)
+            .indexOf(System.getProperty("minopp.previewMode", CardPack.CLASSIC)));
     private BlockPos core;
     private final AutoPlayer ai = new AutoPlayer();
 
@@ -72,7 +76,19 @@ public final class DevPreview {
                 int seat = table.seatOf(
                     player.getGameProfile()
                         .getId());
-                if (seat >= 0) {
+                String cam = System.getProperty("minopp.previewCam");
+                if (cam != null) {
+                    String[] c = cam.split(",");
+                    double dx = Double.parseDouble(c[0]), dy = Double.parseDouble(c[1]), dz = Double.parseDouble(c[2]);
+                    player.capabilities.isFlying = true;
+                    player.sendPlayerAbilities();
+                    player.playerNetServerHandler.setPlayerLocation(
+                        core.x + 1.5 + dx,
+                        core.y + dy,
+                        core.z + 1.5 + dz,
+                        (float) Math.toDegrees(Math.atan2(dx, -dz)),
+                        (float) Math.toDegrees(Math.atan2(dy + 0.62, Math.sqrt(dx * dx + dz * dz))));
+                } else if (seat >= 0) {
                     Vec3d spot = table.botSpot(seat);
                     double ox = spot.x - (core.x + 1.5), oz = spot.z - (core.z + 1.5);
                     double len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
@@ -147,6 +163,11 @@ public final class DevPreview {
             config.setCount("no_mercy:discard_all", 2);
             config.setCount("weekend:wild_time_balloon", 2);
             config.setCount("jungle:wild_rebound", 2);
+        }
+        for (String spec : System.getProperty("minopp.previewDeck", "")
+            .split(",")) {
+            int eq = spec.indexOf('=');
+            if (eq > 0) config.setCount(spec.substring(0, eq), Integer.parseInt(spec.substring(eq + 1)));
         }
     }
 
