@@ -2,7 +2,8 @@
   "textures": {
     "1": "minecraft:blocks/planks_spruce",
     "3": "minecraft:blocks/log_big_oak",
-    "particle": "minecraft:blocks/log_big_oak"
+    "particle": "minecraft:blocks/log_big_oak",
+    "h": "minopp:blocks/table_log_h"
   },
   "elements": [
     {
@@ -141,13 +142,12 @@
       "faces": {
         "north": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            11.8
+            5.9,
+            11.8,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "east": {
           "uv": [
@@ -160,13 +160,12 @@
         },
         "south": {
           "uv": [
-            5.9,
             4.2,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "west": {
           "uv": [
@@ -179,22 +178,20 @@
         },
         "up": {
           "uv": [
-            0.5,
             4.2,
-            4.1,
-            16
+            0.5,
+            16,
+            4.1
           ],
-          "rotation": 90,
           "texture": "#3"
         },
         "down": {
           "uv": [
-            11.9,
             4.2,
-            15.5,
-            16
+            11.9,
+            16,
+            15.5
           ],
-          "rotation": 90,
           "texture": "#3"
         }
       }
@@ -223,13 +220,12 @@
         },
         "east": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            11.7
+            5.9,
+            11.7,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "south": {
           "uv": [
@@ -242,13 +238,12 @@
         },
         "west": {
           "uv": [
-            5.9,
             4.3,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [

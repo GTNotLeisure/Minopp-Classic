@@ -2,7 +2,8 @@
   "textures": {
     "1": "minecraft:blocks/planks_spruce",
     "3": "minecraft:blocks/log_big_oak",
-    "particle": "minecraft:blocks/log_big_oak"
+    "particle": "minecraft:blocks/log_big_oak",
+    "h": "minopp:blocks/table_log_h"
   },
   "elements": [
     {
@@ -29,13 +30,12 @@
         },
         "west": {
           "uv": [
-            5.9,
             12.5,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [
@@ -72,13 +72,12 @@
       "faces": {
         "west": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [
@@ -124,13 +123,12 @@
         },
         "west": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            4
+            5.9,
+            4,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [
@@ -176,13 +174,12 @@
         },
         "east": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            3.5
+            5.9,
+            3.5,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [
@@ -219,13 +216,12 @@
       "faces": {
         "east": {
           "uv": [
-            5.9,
             0,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "up": {
           "uv": [
@@ -262,13 +258,12 @@
       "faces": {
         "east": {
           "uv": [
-            5.9,
             12,
-            9.5,
-            16
+            5.9,
+            16,
+            9.5
           ],
-          "rotation": 90,
-          "texture": "#3"
+          "texture": "#h"
         },
         "south": {
           "uv": [
