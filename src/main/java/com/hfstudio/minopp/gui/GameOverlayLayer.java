@@ -181,38 +181,55 @@ public class GameOverlayLayer {
         if (mc.gameSettings.hideGUI || !ClientConfig.display.enableGameHistoryGUI
             || mc.currentScreen instanceof PlayChoiceScreen) return;
 
-        int x = ClientConfig.display.guiXPosition, y = ClientConfig.display.guiYPosition;
         FontRenderer font = mc.fontRenderer;
         int lh = font.FONT_HEIGHT;
-        if (infoGame != game || infoState != tableEntity.state) {
+        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        // the info text can be scaled; everything below is laid out in the scaled space
+        float hs = Math.max(0.5f, ClientConfig.display.guiScale / 100f);
+        GL11.glPushMatrix();
+        GL11.glScalef(hs, hs, 1);
+        int x = Math.round(ClientConfig.display.guiXPosition / hs),
+            y = Math.round(ClientConfig.display.guiYPosition / hs);
+        int wrapAt = Math.max(120, (int) (res.getScaledWidth() / hs) / 2 - x - 8);
+        if (infoGame != game || infoState != tableEntity.state || wrapAt != infoWrap) {
             infoGame = game;
             infoState = tableEntity.state;
+            infoWrap = wrapAt;
             infoLines.clear();
             infoColors.clear();
             buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
-        }
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        int wrapAt = Math.max(120, res.getScaledWidth() / 2 - x - 8);
-        for (int i = 0; i < infoLines.size(); i++) {
-            String text = infoLines.get(i);
-            if (text == null) {
-                y += lh;
-                continue;
+            // wrapped once here instead of on every frame
+            wrappedLines.clear();
+            wrappedColors.clear();
+            for (int i = 0; i < infoLines.size(); i++) {
+                String text = infoLines.get(i);
+                if (text == null) {
+                    wrappedLines.add(null);
+                    wrappedColors.add(0);
+                    continue;
+                }
+                for (Object part : font.listFormattedStringToWidth(text, wrapAt)) {
+                    wrappedLines.add((String) part);
+                    wrappedColors.add(infoColors.get(i));
+                }
             }
-            int color = infoColors.get(i);
-            for (Object part : font.listFormattedStringToWidth(text, wrapAt)) {
+        }
+        for (int i = 0; i < wrappedLines.size(); i++) {
+            String text = wrappedLines.get(i);
+            if (text != null) {
+                int color = wrappedColors.get(i);
                 drawStringWithBackdrop(
                     font,
-                    (String) part,
+                    text,
                     x,
                     y,
                     color == PULSE ? UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()) : color);
-                y += lh;
             }
+            y += lh;
         }
         for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList
             .listIterator(tableEntity.clientMessageList.size()); it.hasPrevious();) {
-            if (y > res.getScaledHeight() - lh - (HandScreen.isOpen() ? 100 : 40)) break;
+            if (y > res.getScaledHeight() / hs - lh - (HandScreen.isOpen() ? 100 : 40) / hs) break;
             Pair<ActionMessage, Long> entry = it.previous();
             long currentTime = System.currentTimeMillis();
             if (entry.getSecond() - 200 < currentTime) {
@@ -222,15 +239,13 @@ public class GameOverlayLayer {
                     .type()
                     .isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
                 int alpha = Mth.clamp((int) (0xFF * (entry.getSecond() - currentTime) / 1000), 0x05, 0xFF);
-                for (Object part : font.listFormattedStringToWidth(
-                    entry.getFirst()
-                        .formattedText(),
-                    wrapAt)) {
-                    drawStringWithBackdrop(font, (String) part, x, y, alpha << 24 | color);
+                for (String part : wrapMessage(font, entry.getFirst(), wrapAt)) {
+                    drawStringWithBackdrop(font, part, x, y, alpha << 24 | color);
                     y += lh;
                 }
             }
         }
+        GL11.glPopMatrix();
 
         int width = res.getScaledWidth();
         int height = res.getScaledHeight();
@@ -308,6 +323,29 @@ public class GameOverlayLayer {
     private Object infoGame, infoState;
     private final List<String> infoLines = new java.util.ArrayList<>();
     private final List<Integer> infoColors = new java.util.ArrayList<>();
+
+    private int infoWrap;
+    private final List<String> wrappedLines = new java.util.ArrayList<>();
+    private final List<Integer> wrappedColors = new java.util.ArrayList<>();
+    private final Map<ActionMessage, List<String>> wrappedMessages = new java.util.WeakHashMap<>();
+    private int messageWrap;
+
+    private List<String> wrapMessage(FontRenderer font, ActionMessage message, int wrapAt) {
+        if (wrapAt != messageWrap) {
+            wrappedMessages.clear();
+            messageWrap = wrapAt;
+        }
+        return wrappedMessages.computeIfAbsent(message, m -> {
+            List<String> out = new java.util.ArrayList<>();
+            for (Object o : font.listFormattedStringToWidth(m.formattedText(), wrapAt)) out.add((String) o);
+            return out;
+        });
+    }
+
+    /** Width of a hand card on screen, scaled by the personal hand size. */
+    public static int cardWidth(int screenWidth) {
+        return Math.round(Mth.clamp(screenWidth / 9, 40, 60) * Math.max(0.7f, ClientConfig.display.handScale / 100f));
+    }
 
     private void line(String text, int color) {
         infoLines.add(text);
@@ -812,7 +850,7 @@ public class GameOverlayLayer {
         }
         ghostSeq = game.debugDrawSeq;
         ghosts.removeIf(g -> now - (Long) g[1] > DRAW_MS);
-        int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
+        int cw = cardWidth(width), ch = Math.round(cw * 8.9f / 5.6f);
         GL11.glEnable(GL11.GL_BLEND);
         for (Object[] g : ghosts) {
             float u = (now - (Long) g[1]) / (float) DRAW_MS;
@@ -836,7 +874,7 @@ public class GameOverlayLayer {
 
     private void renderHandRow(FontRenderer font, CardGame game, CardPlayer me, List<Card> fullHand, int selectedFull,
         boolean isMyTurn, int myPlayerIndex, String theme, int width, int height) {
-        int cwFit = Mth.clamp(width / 9, 40, 60);
+        int cwFit = cardWidth(width);
         int rowFit = Math.max(cwFit, Math.min(width - 150, (int) (width * 0.62)));
         int fit = Math.max(3, (int) ((rowFit - cwFit) / (cwFit * 0.34f)) + 1);
         int[] shownIdx = window(fullHand.size(), selectedFull, fit, true);
@@ -859,7 +897,7 @@ public class GameOverlayLayer {
                     .noneMatch(c -> c.uid == uid));
 
         int n = hand.size();
-        int cw = Mth.clamp(width / 9, 40, 60);
+        int cw = cardWidth(width);
         int ch = Math.round(cw * 8.9f / 5.6f);
         int corner = Math.max(1, cw * 3 / 32);
         int maxRow = Math.max(cw, Math.min(width - 150, (int) (width * 0.62)));
@@ -1013,19 +1051,19 @@ public class GameOverlayLayer {
             float k = easeOutCubic(u / 0.45f);
             x = fx + (mx - fx) * k;
             y = fy + (my - fy) * k - (float) Math.sin(k * Math.PI) * 30;
-            scale = 0.45f + 0.95f * k;
+            scale = 0.4f + 0.75f * k;
             ang = (1 - k) * -0.9f;
         } else if (u < 0.6f) {
             x = mx;
             y = my;
-            scale = 1.4f;
+            scale = 1.15f;
             ang = 0;
         } else {
             float k = (u - 0.6f) / 0.4f;
             k = k < 0.5f ? 4 * k * k * k : 1 - (float) Math.pow(-2 * k + 2, 3) / 2;
             x = mx + (sx - mx) * k;
             y = my + (sy - my) * k;
-            scale = 1.4f - 0.4f * k;
+            scale = 1.15f - 0.15f * k;
             ang = sang * k;
             if (dissolve) {
                 scale *= 1 - k;

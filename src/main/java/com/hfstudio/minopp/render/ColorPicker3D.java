@@ -171,9 +171,9 @@ public final class ColorPicker3D {
             int rgb = colors.get(i).rgb;
             if (ring) {
                 double mid = Math.atan2(offsets[i][1], offsets[i][0]);
-                double a0 = mid - Math.toRadians(40), a1 = mid + Math.toRadians(40);
-                double ox = 1.5 + Math.cos(mid) * 0.035, oz = 1.5 + Math.sin(mid) * 0.035;
-                drawQuarter(ox, oz, a0, a1, 0.03, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
+                double a0 = mid - Math.toRadians(45), a1 = mid + Math.toRadians(45);
+                double ox = 1.5 + Math.cos(mid) * 0.05, oz = 1.5 + Math.sin(mid) * 0.05;
+                drawQuarter(ox, oz, a0, a1, 0, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
                 arrow(ox, oz, mid, 0.18, 0.36, 0.085, y1 + 0.004, hot ? 0.95f : 0.8f);
                 double[][] pts = new double[14][];
                 for (int k = 0; k < 6; k++) {

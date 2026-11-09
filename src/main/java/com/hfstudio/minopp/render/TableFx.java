@@ -46,7 +46,8 @@ public final class TableFx {
         PLUS,
         CUSTOM,
         TOSS,
-        ROULETTE
+        ROULETTE,
+        SYMBOL
     }
 
     private record Fx(Kind kind, long start, int duration, double x, double y, double z, int color, Object data) {
@@ -85,7 +86,34 @@ public final class TableFx {
 
     private TableFx() {}
 
-    public static void render(BlockEntityMinoTable table, CardGame game) {
+    private static final Map<UUID, java.lang.ref.WeakReference<net.minecraft.entity.Entity>> HOLDERS = new java.util.HashMap<>();
+    private static long holderScan;
+
+    // the player or bot behind a card player, looked up from the client world at most every couple of seconds
+    private static net.minecraft.entity.Entity holderEntity(UUID uuid) {
+        java.lang.ref.WeakReference<net.minecraft.entity.Entity> ref = HOLDERS.get(uuid);
+        net.minecraft.entity.Entity e = ref == null ? null : ref.get();
+        if (e != null && !e.isDead) return e;
+        long now = System.currentTimeMillis();
+        if (now - holderScan < 2000) return null;
+        holderScan = now;
+        World w = Minecraft.getMinecraft().theWorld;
+        if (w == null) return null;
+        for (Object o : w.playerEntities) {
+            net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
+            if (uuid.equals(
+                p.getGameProfile()
+                    .getId()))
+                e = p;
+        }
+        if (e == null) for (Object o : w.loadedEntityList) {
+            if (o instanceof com.hfstudio.minopp.entity.EntityAutoPlayer bot && uuid.equals(bot.getUniqueID())) e = bot;
+        }
+        if (e != null) HOLDERS.put(uuid, new java.lang.ref.WeakReference<>(e));
+        return e;
+    }
+
+    public static void render(BlockEntityMinoTable table, CardGame game, float partialTick) {
         State s = STATES.computeIfAbsent(table, k -> new State());
         long now = System.currentTimeMillis();
         float dt = Math.min(0.1f, (now - s.lastFrame) / 1000f);
@@ -112,11 +140,26 @@ public final class TableFx {
                 s.balloonSeat = seat;
                 boolean busy = false;
                 for (Fx f : s.fx) busy |= now >= f.start && f.kind != Kind.SHOCK && f.kind != Kind.SKIP;
-                balloon(table, table.getSeatLocalPos(seat), game.balloonFuse, now, busy);
+                Vec3d seatPos = table.getSeatLocalPos(seat);
+                double bx = seatPos.x + (seatPos.x - 1.5) * 0.15, bz = seatPos.z + (seatPos.z - 1.5) * 0.15,
+                    by = seatPos.y + 2.15;
+                net.minecraft.entity.Entity holder = holderEntity(game.balloonHolder);
+                if (holder != null && holder.getDistanceSq(table.xCoord + 1.5, table.yCoord, table.zCoord + 1.5) < 64) {
+                    // follows its holder, interpolated between ticks so it never stutters
+                    bx = holder.prevPosX + (holder.posX - holder.prevPosX) * partialTick - table.xCoord;
+                    bz = holder.prevPosZ + (holder.posZ - holder.prevPosZ) * partialTick - table.zCoord;
+                    by = holder.prevPosY + (holder.posY - holder.prevPosY) * partialTick
+                        - holder.yOffset
+                        + holder.height
+                        + 0.55
+                        - table.yCoord;
+                }
+                balloon(table, new Vec3d(bx, by, bz), game.balloonFuse, now, busy);
             }
         }
 
         s.fx.removeIf(f -> f.t(now) >= 1f);
+        if (!com.hfstudio.minopp.config.ClientConfig.display.tableEffects) s.fx.clear();
         for (Fx f : s.fx) {
             float t = f.t(now);
             if (now < f.start) continue;
@@ -134,6 +177,7 @@ public final class TableFx {
                 case PLUS -> plusText(f, t);
                 case TOSS -> toss(f, t);
                 case ROULETTE -> roulette(f, now);
+                case SYMBOL -> symbolPop(f, t);
                 case CUSTOM -> {
                     Object[] d = (Object[]) f.data;
                     GL11.glPushMatrix();
@@ -197,8 +241,9 @@ public final class TableFx {
         s.coins.clear();
         for (CardPlayer p : game.players) if (p.coinUsed) s.coins.add(p.uuid);
         if (!first && game.darkSide != s.dark && game.topCard != null) {
-            CardFace[] faces = { game.topCard.face(s.dark), game.topCard.face(game.darkSide) };
-            s.fx.add(new Fx(Kind.FLIP, now, 1500, 1.5, PILE_Y, 1.5, 0, new Object[] { faces, theme }));
+            CardFace[] faces = { s.dark ? game.topCard.dark : game.topCard.light,
+                game.darkSide ? game.topCard.dark : game.topCard.light };
+            s.fx.add(new Fx(Kind.FLIP, now, 1400, 1.5, PILE_Y, 1.5, 0, new Object[] { faces, theme, game.darkSide }));
         }
         if (!first && s.balloon != null && game.balloonHolder == null && s.balloonSeat >= 0) {
             Vec3d p = table.getSeatLocalPos(s.balloonSeat);
@@ -342,6 +387,36 @@ public final class TableFx {
         particlesFor("happyVillager", 14, 0.6, "play_again_10");
         particlesFor("flame", 12, 0.6, "wild_hurry_up");
         CardFxRegistry.register("wild_color_roulette", ctx -> ctx.sink.roulette());
+        // every special card without an animation of its own shows its symbol over the pile
+        CardFxRegistry.register(
+            face -> !face.type().numbered && !OWN_FX.contains(face.type().id)
+                && !isSkip(face.type().id)
+                && !face.type().matchKey.equals("skip")
+                && !face.type().matchKey.equals("reverse")
+                && !face.type()
+                    .isDraw(),
+            ctx -> ctx.symbolPop(
+                ctx.pile()
+                    .add(0, 1.3, 0),
+                0));
+        CardFxRegistry.register("reveal_hands", ctx -> {
+            for (CardPlayer p : ctx.game().players) {
+                if (ctx.game().topCard != null && p.uuid.equals(ctx.game().topCard.owner)) continue;
+                ctx.symbolPop(ctx.head(p.seat, 1.85), 250);
+            }
+        });
+        for (String speed : new String[] { "speed_up", "wild_double_speed" }) {
+            CardFxRegistry.register(speed, ctx -> {
+                ctx.bigText(
+                    "\u00bb\u00bb",
+                    0x60E0FF,
+                    ctx.pile()
+                        .add(0, 1.8, 0),
+                    300,
+                    1200);
+                ctx.particles("fireworksSpark", 24, 1.0);
+            });
+        }
         CardFxRegistry.register(
             "wild_sudden_death",
             ctx -> ctx.bigText(
@@ -432,6 +507,19 @@ public final class TableFx {
             s.fx.add(new Fx(Kind.PLUS, now + delay, duration, at.x, at.y, at.z, rgb, text));
         }
 
+        void symbol(CardFace face, Vec3d at, long delay) {
+            s.fx.add(
+                new Fx(
+                    Kind.SYMBOL,
+                    now + delay,
+                    1300,
+                    at.x,
+                    at.y,
+                    at.z,
+                    0,
+                    new Object[] { face, ThemeManager.INSTANCE.selected() }));
+        }
+
         void roulette() {
             s.fx.add(
                 new Fx(Kind.ROULETTE, now, 9000, 1.5, PILE_Y + 0.95, 1.5, 0, new Object[] { table, new long[] { 0 } }));
@@ -446,6 +534,7 @@ public final class TableFx {
         }
 
         void particles(String name, int count, double spread) {
+            if (!com.hfstudio.minopp.config.ClientConfig.display.tableEffects) return;
             TableFx.particles(table, name, 1.5, 1.05, 1.5, count, spread);
         }
 
@@ -614,6 +703,64 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
+    private static final Set<String> OWN_FX = Set.of(
+        "wild",
+        "wild_draw4",
+        "flip",
+        "wild_fifty_fifty",
+        "wild_color_roulette",
+        "wild_time_balloon",
+        "wild_sudden_death",
+        "wild_final_attack");
+
+    // a card's own symbol pops up on a disc of its color, wobbles and fades
+    private static void symbolPop(Fx f, float t) {
+        Object[] d = (Object[]) f.data;
+        CardFace face = (CardFace) d[0];
+        String theme = (String) d[1];
+        ResourceLocation tex = ThemeManager.INSTANCE.texture(theme, "symbol_" + face.type().symbol);
+        float scale = 0.5f * overshoot(Math.min(1f, t / 0.25f));
+        float alpha = fadeOut(t, 0.72f);
+        int rgb = face.color.isWild() ? 0x2A2630 : face.color.rgb & 0xFFFFFF;
+        GL11.glPushMatrix();
+        GL11.glTranslated(f.x, f.y + t * 0.25, f.z);
+        billboard();
+        GL11.glRotatef((float) Math.sin(t * Math.PI * 4) * 10 * (1 - t), 0, 0, 1);
+        GL11.glScalef(scale, scale, scale);
+        Tessellator tes = Tessellator.instance;
+        tes.startDrawingQuads();
+        int seg = 20;
+        for (int i = 0; i < seg; i++) {
+            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg;
+            prism(
+                tes,
+                new double[] { 0, Math.cos(a0) * 0.62, Math.cos(a1) * 0.62 },
+                new double[] { 0, Math.sin(a0) * 0.62, Math.sin(a1) * 0.62 },
+                0.08,
+                rgb,
+                alpha);
+        }
+        for (int i = 0; i < seg; i++) {
+            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg;
+            prism(
+                tes,
+                new double[] { Math.cos(a0) * 0.62, Math.cos(a0) * 0.7, Math.cos(a1) * 0.7, Math.cos(a1) * 0.62 },
+                new double[] { Math.sin(a0) * 0.62, Math.sin(a0) * 0.7, Math.sin(a1) * 0.7, Math.sin(a1) * 0.62 },
+                0.09,
+                0xFFFFFF,
+                alpha);
+        }
+        tes.draw();
+        if (tex != null) {
+            GL11.glPushMatrix();
+            GL11.glTranslatef(0, 0, -0.06f);
+            GL11.glScalef(1.15f, 1.8f, 1);
+            sprite(tex, alpha, false);
+            GL11.glPopMatrix();
+        }
+        GL11.glPopMatrix();
+    }
+
     // the 50/50 toss: each chosen player gets a small coin for their side, the big coin climbs over the pile, flips
     // and lands on the result, then the loser's coin is crossed out and the winner's ticked
     private static void toss(Fx f, float t) {
@@ -763,29 +910,51 @@ public final class TableFx {
     }
 
     // the top card rises, turns over to its other side and drops back onto the pile
+    // the top card lifts, turns over in one smooth motion to the side now in play (curling a little as it turns, like
+    // card stock) and settles back onto the pile
     private static void flipCard(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardFace[] faces = (CardFace[]) d[0];
         String theme = (String) d[1];
-        float rise = t < 0.22f ? easeOutCubic(t / 0.22f) : t > 0.8f ? 1 - easeOutCubic((t - 0.8f) / 0.2f) : 1;
-        float turn = Math.max(0f, Math.min(1f, (t - 0.25f) / 0.45f));
+        boolean toDark = (Boolean) d[2];
+        float rise = t < 0.2f ? easeOutCubic(t / 0.2f) : t > 0.82f ? 1 - easeOutCubic((t - 0.82f) / 0.18f) : 1;
+        float turn = Math.max(0f, Math.min(1f, (t - 0.22f) / 0.5f));
         float deg = (float) (0.5 - 0.5 * Math.cos(turn * Math.PI)) * 180f;
-        float s = 0.11f * (0.55f + 0.45f * rise);
+        float s = 0.1f * (0.6f + 0.4f * rise);
         GL11.glPushMatrix();
-        GL11.glTranslated(f.x, f.y + 0.05 + rise * 0.8, f.z);
+        GL11.glTranslated(f.x, f.y + 0.05 + rise * 0.75, f.z);
         GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
         GL11.glScalef(-1, 1, 1);
-        GL11.glRotatef((float) Math.sin(t * Math.PI * 2) * 6, 0, 0, 1);
+        GL11.glRotatef(RenderManager.instance.playerViewX * 0.3f * rise, 1, 0, 0);
         GL11.glRotatef(deg, 0, 1, 0);
-        if (deg > 90) GL11.glRotatef(180, 0, 1, 0);
         GL11.glScalef(s, -s, s);
-        float bend = (float) Math.sin(turn * Math.PI) * 0.22f + (float) Math.sin(rise * Math.PI) * 0.05f;
-        bentFace(deg > 90 ? faces[1] : faces[0], theme, 5.6f, 8.9f, deg > 90 ? -bend : bend);
+        float bend = (float) Math.sin(turn * Math.PI) * 0.12f;
+        boolean back = deg > 90;
+        CardFace shown = back ? faces[1] : faces[0];
+        if (shown != null) bentFace(shown, theme, 5.6f, 8.9f, bend, back);
+        else bentLayers(
+            new ResourceLocation[] { ThemeManager.INSTANCE.texture(theme, back == toDark ? "back_dark" : "back") },
+            null,
+            5.6f,
+            8.9f,
+            bend,
+            back);
         GL11.glPopMatrix();
-        if (t > 0.45f) {
-            float sec = (t - 0.45f) * f.duration / 1000f;
-            int c = faces[1].color.isWild() ? 0x8A3CFF : faces[1].color.rgb & 0xFFFFFF;
-            cubes(f.x, f.y + 0.85, f.z, sec, f.start, new int[] { c, 0xFFFFFF, shade(c, 0.7f) }, 20, 0.06f, 1.4f, 1f);
+        if (t > 0.5f) {
+            float sec = (t - 0.5f) * f.duration / 1000f;
+            int c = faces[1] == null || faces[1].color.isWild() ? (toDark ? 0x8A3CFF : 0xFFD040)
+                : faces[1].color.rgb & 0xFFFFFF;
+            cubes(
+                f.x,
+                f.y + 0.8,
+                f.z,
+                sec,
+                f.start,
+                new int[] { c, 0xFFFFFF, shade(c, 0.7f) },
+                20,
+                0.06f,
+                1.4f,
+                fadeOut(t, 0.8f));
         }
     }
 
@@ -821,14 +990,14 @@ public final class TableFx {
                 frustum(tes, cx, cz, 0.15 * k * grow, 0.18 * k * grow * (picked ? 1.15 : 1), y0, y0 + h, rgb);
                 if (pull <= 0f) topArrow(tes, cx, cz, mid, -0.07, 0.09, 0.07, y0 + h + 0.004);
             } else {
-                double k = 1 - 0.9 * pull, ox = Math.cos(mid) * 0.035 * k, oz = Math.sin(mid) * 0.035 * k;
+                double k = 1 - 0.9 * pull, ox = Math.cos(mid) * 0.05 * k, oz = Math.sin(mid) * 0.05 * k;
                 ringPiece(
                     tes,
                     ox,
                     oz,
-                    mid - Math.toRadians(40),
-                    mid + Math.toRadians(40),
-                    0.03 * k,
+                    mid - Math.toRadians(45),
+                    mid + Math.toRadians(45),
+                    0,
                     0.56 * k * grow * (picked ? 1.12 : 1.04),
                     0.5 * k * grow,
                     y0,
@@ -1064,10 +1233,10 @@ public final class TableFx {
 
     // the time balloon, built from blocks, floats over its holder and swells as the fuse runs down
     // kept above and behind the holder; it turns see-through while another effect plays or the camera is right at it
-    private static void balloon(BlockEntityMinoTable table, Vec3d seat, int fuse, long now, boolean busy) {
-        double x = seat.x + (seat.x - 1.5) * 0.15, z = seat.z + (seat.z - 1.5) * 0.15;
+    private static void balloon(BlockEntityMinoTable table, Vec3d at, int fuse, long now, boolean busy) {
+        double x = at.x, z = at.z;
         double bob = Math.sin((now % 100000L) / 400.0) * 0.04;
-        double y = seat.y + 2.15 + bob;
+        double y = at.y + bob;
         float size = 0.11f + Math.max(0, 8 - fuse) * 0.014f;
         float wobble = fuse <= 1 ? (float) Math.sin((now % 100000L) / 45.0) * 0.01f : 0;
         float v = (size + wobble) / 3.2f;
@@ -1329,16 +1498,28 @@ public final class TableFx {
 
     // a card face built as a strip of columns so it can curl like real card stock
     private static void bentFace(CardFace face, String theme, float w, float h, float bend) {
+        bentFace(face, theme, w, h, bend, false);
+    }
+
+    private static void bentFace(CardFace face, String theme, float w, float h, float bend, boolean mirror) {
+        ResourceLocation[] layers = CardBatch.textures(face, theme);
+        int[] tints = new int[layers.length];
+        for (int i = 0; i < layers.length; i++) tints[i] = ThemeManager.INSTANCE.layerTint(theme, face, i);
+        bentLayers(layers, tints, w, h, bend, mirror);
+    }
+
+    // a card built as a strip of columns so it can curl like real card stock; mirror reads it from behind
+    private static void bentLayers(ResourceLocation[] layers, int[] tints, float w, float h, float bend,
+        boolean mirror) {
         int cols = 12;
         GL11.glEnable(GL11.GL_TEXTURE_2D);
-        ResourceLocation[] layers = CardBatch.textures(face, theme);
         for (int layer = 0; layer < layers.length; layer++) {
             ResourceLocation tex = layers[layer];
             if (tex == null) continue;
             Minecraft.getMinecraft()
                 .getTextureManager()
                 .bindTexture(tex);
-            int tint = ThemeManager.INSTANCE.layerTint(theme, face, layer);
+            int tint = tints == null ? 0xFFFFFF : tints[layer];
             Tessellator t = Tessellator.instance;
             t.startDrawingQuads();
             t.setColorRGBA_F((tint >> 16 & 255) / 255f, (tint >> 8 & 255) / 255f, (tint & 255) / 255f, 1);
@@ -1347,10 +1528,11 @@ public final class TableFx {
                 double x0 = -w / 2 + w * u0, x1 = -w / 2 + w * u1;
                 double k0 = 2 * u0 - 1, k1 = 2 * u1 - 1;
                 double z0 = bend * w * (k0 * k0 - 1), z1 = bend * w * (k1 * k1 - 1);
-                t.addVertexWithUV(x0, -h / 2, z0, u0, 0);
-                t.addVertexWithUV(x1, -h / 2, z1, u1, 0);
-                t.addVertexWithUV(x1, h / 2, z1, u1, 1);
-                t.addVertexWithUV(x0, h / 2, z0, u0, 1);
+                double tu0 = mirror ? 1 - u0 : u0, tu1 = mirror ? 1 - u1 : u1;
+                t.addVertexWithUV(x0, -h / 2, z0, tu0, 0);
+                t.addVertexWithUV(x1, -h / 2, z1, tu1, 0);
+                t.addVertexWithUV(x1, h / 2, z1, tu1, 1);
+                t.addVertexWithUV(x0, h / 2, z0, tu0, 1);
             }
             t.draw();
         }

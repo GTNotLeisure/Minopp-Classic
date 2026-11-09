@@ -126,6 +126,18 @@ public class CardGame {
     public UUID debugShoutBy;
     private int debugShoutCursor;
 
+    /** Mechanics the debug toolbar can switch during a game. */
+    public static final List<String> DEBUG_RULES = java.util.Arrays.asList(
+        GameRules.COINS,
+        GameRules.FLIP_MODE,
+        GameRules.FLEX_POWER,
+        GameRules.MERCY,
+        GameRules.STACKING,
+        GameRules.JUMP_IN,
+        GameRules.SEVEN_ZERO,
+        GameRules.BRING_CARD,
+        GameRules.MULTI_PLAY);
+
     public static final List<String> DEBUG_ACTIONS = java.util.Arrays.asList(
         "turn",
         "next",
@@ -219,7 +231,16 @@ public class CardGame {
                 return win(me, report);
             }
             default -> {
-                return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
+                // "rule:<id>" switches a mechanic on or off in the middle of the debug game
+                GameRules.Rule r = action.startsWith("rule:") ? GameRules.get(action.substring(5)) : null;
+                if (r == null || !r.bool()) return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
+                boolean on = !config().getBool(r.id());
+                config().set(r.id(), on ? 1 : 0);
+                restoreDebugHand();
+                return report.state(
+                    Chat.translatable(
+                        on ? "game.minopp.debug.rule_on" : "game.minopp.debug.rule_off",
+                        Chat.translatable(r.langKey())));
             }
         }
         restoreDebugHand();

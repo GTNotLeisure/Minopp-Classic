@@ -118,7 +118,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         }
 
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
-        TableFx.render(blockEntity, game);
+        TableFx.render(blockEntity, game, partialTick);
 
         for (BlockEntityMinoTable.HandSwapAnimation anim : BlockEntityMinoTable.activeAnimations) {
             int stackSize = Math.max(1, Math.min(anim.cardCount, 10));
@@ -204,30 +204,35 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glDepthMask(false);
         Tessellator t = Tessellator.instance;
         t.startDrawingQuads();
-        t.setColorRGBA_F(1f, 0.82f, 0.2f, 0.18f * pulse);
-        double[][] faces = { { x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0 },
-            { x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0 }, { x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1 },
-            { x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0 }, { x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1 } };
-        for (double[] f : faces) for (int i = 0; i < 12; i += 3) t.addVertex(f[i], f[i + 1], f[i + 2]);
-        t.draw();
-        GL11.glLineWidth(3f);
-        t.startDrawing(GL11.GL_LINES);
+        // a gold outline hugging the pile: a frame around its top card, one around its foot, and its four corners
+        double cx0 = 0.335, cx1 = 0.665, cz0 = 0.245, cz1 = 0.755, w = 0.022;
+        frame(t, cx0, cz0, cx1, cz1, w, y1 + 0.003, pulse);
+        frame(t, cx0, cz0, cx1, cz1, w, y0 + 0.003, pulse * 0.7f);
         t.setColorRGBA_F(1f, 0.85f, 0.25f, pulse);
-        double[][] corners = { { x0, z0 }, { x1, z0 }, { x1, z1 }, { x0, z1 } };
-        for (int i = 0; i < 4; i++) {
-            double[] c = corners[i], n = corners[(i + 1) % 4];
-            t.addVertex(c[0], y1, c[1]);
-            t.addVertex(n[0], y1, n[1]);
-            t.addVertex(c[0], y0 + 0.002, c[1]);
-            t.addVertex(n[0], y0 + 0.002, n[1]);
-            t.addVertex(c[0], y0, c[1]);
-            t.addVertex(c[0], y1, c[1]);
+        double[][] corners = { { cx0, cz0 }, { cx1, cz0 }, { cx1, cz1 }, { cx0, cz1 } };
+        for (double[] c : corners) {
+            double ox = c[0] < 0.5 ? -w : 0, oz = c[1] < 0.5 ? -w : 0;
+            t.addVertex(c[0] + ox, y0, c[1] + oz + w / 2);
+            t.addVertex(c[0] + ox + w, y0, c[1] + oz + w / 2);
+            t.addVertex(c[0] + ox + w, y1, c[1] + oz + w / 2);
+            t.addVertex(c[0] + ox, y1, c[1] + oz + w / 2);
         }
         t.draw();
-        GL11.glLineWidth(1f);
         GL11.glDepthMask(true);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private static void frame(Tessellator t, double x0, double z0, double x1, double z1, double w, double y, float a) {
+        t.setColorRGBA_F(1f, 0.85f, 0.25f, a);
+        double[][] bands = { { x0 - w, z0 - w, x1 + w, z0 }, { x0 - w, z1, x1 + w, z1 + w }, { x0 - w, z0, x0, z1 },
+            { x1, z0, x1 + w, z1 } };
+        for (double[] b : bands) {
+            t.addVertex(b[0], y, b[1]);
+            t.addVertex(b[0], y, b[3]);
+            t.addVertex(b[2], y, b[3]);
+            t.addVertex(b[2], y, b[1]);
+        }
     }
 
     private static final float[] JITTER = new float[512 * 3];

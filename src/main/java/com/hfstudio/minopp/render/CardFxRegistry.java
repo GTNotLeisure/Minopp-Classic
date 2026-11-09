@@ -160,6 +160,11 @@ public final class CardFxRegistry {
             sink.text(text, rgb, at, delayMs, durationMs);
         }
 
+        /** The card's own symbol popping up on a disc of its color. */
+        public void symbolPop(Vec3d at, long delayMs) {
+            sink.symbol(face, at, delayMs);
+        }
+
         public void coinToss(Vec3d at) {
             sink.coin(at);
         }

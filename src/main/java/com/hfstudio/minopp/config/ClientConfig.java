@@ -19,10 +19,10 @@ public class ClientConfig {
     @Config.Comment("Display settings")
     public static class Display {
 
-        @Config.Comment("X position of the game GUI. Negative goes left, positive goes right. Default is 8.")
-        @Config.DefaultInt(8)
+        @Config.Comment("X position of the game GUI. Negative goes left, positive goes right. Default is 1 (the left edge).")
+        @Config.DefaultInt(1)
         @Config.RangeInt(min = -10000, max = 10000)
-        public int guiXPosition = 8;
+        public int guiXPosition = 1;
 
         @Config.Comment("Y position of the game GUI. Negative goes up, positive goes down. Default is 30.")
         @Config.DefaultInt(30)
@@ -50,5 +50,27 @@ public class ClientConfig {
         @Config.Comment("Show the cards played by other players in their own theme when you have it installed.")
         @Config.DefaultBoolean(true)
         public boolean showOthersThemes = true;
+
+        @Config.Comment("Size of the game info text, in percent. Default is 100.")
+        @Config.DefaultInt(100)
+        @Config.RangeInt(min = 50, max = 200)
+        public int guiScale = 100;
+
+        @Config.Comment("Size of the cards in your hand, in percent. Default is 100.")
+        @Config.DefaultInt(100)
+        @Config.RangeInt(min = 70, max = 150)
+        public int handScale = 100;
+
+        @Config.Comment("Show the name, points and effect of the selected special card. Shift-click a card to toggle.")
+        @Config.DefaultBoolean(true)
+        public boolean cardInfo = true;
+
+        @Config.Comment("Sound of a MINO! shout: default, high, low, chime or off.")
+        @Config.DefaultString("default")
+        public String shoutSound = "default";
+
+        @Config.Comment("Play the animations on the table (skip signs, color pillars, coins...). Turn off on slow machines.")
+        @Config.DefaultBoolean(true)
+        public boolean tableEffects = true;
     }
 }

@@ -19,6 +19,7 @@ import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.gui.ui.SearchMatch;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
@@ -37,11 +38,9 @@ public class HandScreen extends GuiScreen {
 
     private static boolean resumeAfterChoice;
 
-    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100;
+    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100, BTN_RULE = 200;
 
     private static String query = "";
-    /** Shift-click turns the card info band on and off; while on it follows the selected card. */
-    private static boolean infoOn = true;
     private static final java.util.Set<String> PLAIN = java.util.Set
         .of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
     private static boolean debugOpen = true;
@@ -124,11 +123,14 @@ public class HandScreen extends GuiScreen {
             fontRendererObj.getStringWidth(
                 Chat.translatable("gui.minopp.debug.btn." + a)
                     .getFormattedText()));
+        for (String r : CardGame.DEBUG_RULES)
+            labelW = Math.max(labelW, fontRendererObj.getStringWidth(ruleLabel(ctx, r)));
         int bw = labelW + 10, bh = 12, gap = 2;
-        int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
+        int cw = GameOverlayLayer.cardWidth(width), ch = Math.round(cw * 8.9f / 5.6f);
         int top = hintBottom + 16, handTop = height - ch - 44;
+        int total = actions.size() + CardGame.DEBUG_RULES.size();
         int maxRows = Math.max(1, (handTop - top) / (bh + gap));
-        int cols = Math.min(actions.size(), (actions.size() + maxRows - 1) / maxRows);
+        int cols = Math.min(total, (total + maxRows - 1) / maxRows);
         int panelW = cols * bw + (cols - 1) * gap;
         boolean classic = ClientConfig.display.classicInteraction;
         int x0 = classic ? width / 2 - panelW / 2 : width - 6 - panelW;
@@ -144,6 +146,19 @@ public class HandScreen extends GuiScreen {
                 title,
                 0xFF8A2FB0));
         if (!debugOpen) return;
+        for (int k = 0; k < CardGame.DEBUG_RULES.size(); k++) {
+            int i = actions.size() + k;
+            String r = CardGame.DEBUG_RULES.get(k);
+            buttonList.add(
+                new UiButton(
+                    BTN_RULE + k,
+                    x0 + (i % cols) * (bw + gap),
+                    top + (i / cols) * (bh + gap),
+                    bw,
+                    bh,
+                    ruleLabel(ctx, r),
+                    ctx.table.config.getBool(r) ? 0xFF2A7FD4 : 0xFF555560));
+        }
         for (int i = 0; i < actions.size(); i++) {
             String a = actions.get(i);
             int accent = a.equals("win") || a.equals("stop") ? 0xFFB03030 : a.equals("turn") ? 0xFF2A9F4A : 0xFF7A3FB0;
@@ -158,6 +173,12 @@ public class HandScreen extends GuiScreen {
                         .getFormattedText(),
                     accent));
         }
+    }
+
+    private static String ruleLabel(Context ctx, String rule) {
+        GameRules.Rule r = GameRules.get(rule);
+        return (ctx.table.config.getBool(rule) ? "\u2714 " : "\u2716 ") + Chat.translatable(r.langKey())
+            .getFormattedText();
     }
 
     private String hintText() {
@@ -193,7 +214,15 @@ public class HandScreen extends GuiScreen {
 
     @Override
     public void updateScreen() {
-        if (Context.resolve(mc) == null) mc.displayGuiScreen(null);
+        Context live = Context.resolve(mc);
+        if (live == null) mc.displayGuiScreen(null);
+        else for (Object o : buttonList) {
+            if (o instanceof UiButton b && b.id >= BTN_RULE && b.id - BTN_RULE < CardGame.DEBUG_RULES.size()) {
+                String r = CardGame.DEBUG_RULES.get(b.id - BTN_RULE);
+                b.displayString = ruleLabel(live, r);
+                b.setAccent(live.table.config.getBool(r) ? 0xFF2A7FD4 : 0xFF555560);
+            }
+        }
         if (search != null) search.updateCursorCounter();
     }
 
@@ -266,7 +295,7 @@ public class HandScreen extends GuiScreen {
             UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
         }
         int sel = ItemHandCards.getClientHandIndex(mc.thePlayer);
-        if (infoOn && sel >= 0 && sel < ctx.hand.size()) {
+        if (ClientConfig.display.cardInfo && sel >= 0 && sel < ctx.hand.size()) {
             Card card = ctx.hand.get(sel);
             if (!PLAIN.contains(
                 ctx.game.face(card)
@@ -408,10 +437,12 @@ public class HandScreen extends GuiScreen {
             return;
         }
         if (hit >= 0 && isShiftKeyDown()) {
-            infoOn = !infoOn;
+            ClientConfig.display.cardInfo = !ClientConfig.display.cardInfo;
+            com.hfstudio.minopp.config.Prefs.save();
             select(ctx, hit);
             notice(
-                Chat.translatable(infoOn ? "gui.minopp.hand.info_on" : "gui.minopp.hand.info_off")
+                Chat.translatable(
+                    ClientConfig.display.cardInfo ? "gui.minopp.hand.info_on" : "gui.minopp.hand.info_off")
                     .getFormattedText());
             return;
         }
@@ -435,7 +466,7 @@ public class HandScreen extends GuiScreen {
         int maxW = Math.min(380, width - 40);
         List<?> lines = fontRendererObj.listFormattedStringToWidth(desc, maxW);
         int bandH = 24 + lines.size() * 11;
-        int cw = Mth.clamp(width / 9, 40, 60), ch = Math.round(cw * 8.9f / 5.6f);
+        int cw = GameOverlayLayer.cardWidth(width), ch = Math.round(cw * 8.9f / 5.6f);
         int y = Math.max(40, height - ch / 2 - bandH / 2 - 6);
         UiDraw.gradient(0, y, width, y + bandH, 0xD0181010, 0xD0181010);
         UiDraw.gradient(0, y - 1, width, y, 0xFFE8B828, 0xFFE8B828);
@@ -458,7 +489,9 @@ public class HandScreen extends GuiScreen {
         if (ctx == null) return;
         if (button.id == BTN_DRAW) draw(ctx);
         else if (button.id == BTN_SHOUT) shout(ctx);
-        else if (button.id == BTN_DEBUG_TOGGLE) {
+        else if (button.id >= BTN_RULE && button.id - BTN_RULE < CardGame.DEBUG_RULES.size()) {
+            mc.thePlayer.sendChatMessage("/minopp debug rule:" + CardGame.DEBUG_RULES.get(button.id - BTN_RULE));
+        } else if (button.id == BTN_DEBUG_TOGGLE) {
             debugOpen = !debugOpen;
             initGui();
         } else if (button.id >= BTN_DEBUG && button.id - BTN_DEBUG < CardGame.DEBUG_ACTIONS.size()) {

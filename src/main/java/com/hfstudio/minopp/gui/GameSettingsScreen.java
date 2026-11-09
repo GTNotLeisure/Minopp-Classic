@@ -24,6 +24,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.config.DesignStore;
+import com.hfstudio.minopp.config.Prefs;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPack;
@@ -54,8 +55,10 @@ public class GameSettingsScreen extends GuiScreen {
         PACKS("tab_packs"),
         RULES("tab_rules"),
         CARDS("tab_cards"),
+        GALLERY("tab_gallery"),
         TABLE("tab_table"),
-        STYLE("tab_style");
+        STYLE("tab_style"),
+        PERSONAL("tab_personal");
 
         final String icon;
 
@@ -76,7 +79,9 @@ public class GameSettingsScreen extends GuiScreen {
         RULE,
         CARD,
         THEME,
-        INFO
+        INFO,
+        PREF,
+        GALLERY
     }
 
     private static final class Tile {
@@ -377,7 +382,328 @@ public class GameSettingsScreen extends GuiScreen {
                 }
                 place(list, y, 112, 72, 8);
             }
+            case PERSONAL -> {
+                // your own settings: they only change how the game looks and sounds to you
+                List<Tile> list = new ArrayList<>();
+                for (Prefs.Pref p : Prefs.ALL) {
+                    Tile t = new Tile("pref:" + p.id(), Kind.PREF, p);
+                    t.title = tr(p.langKey());
+                    t.desc.add(tr(p.langKey() + ".desc"));
+                    t.controls.add(tr(switch (p.type()) {
+                        case BOOL -> "gui.minopp.controls.rule_toggle";
+                        case CHOICE -> "gui.minopp.controls.pref_choice";
+                        case INT -> "gui.minopp.controls.pref_int";
+                    }));
+                    list.add(t);
+                }
+                for (Tile t : filter(list, "")) {
+                    t.x = 0;
+                    t.y = y;
+                    t.w = viewW() - 4;
+                    t.h = 18;
+                    tiles.add(t);
+                    y += 21;
+                }
+            }
+            case GALLERY -> {
+                // every kind of card once, by the pack it comes from, with its points and what it does;
+                // the tiles never change, so they are built once and only filtered and laid out per frame
+                if (galleryCache == null) galleryCache = buildGallery();
+                for (Map.Entry<String, List<Tile>> e : galleryCache.entrySet()) {
+                    List<Tile> list = filter(e.getValue(), e.getKey());
+                    if (list.isEmpty()) continue;
+                    y = header(e.getKey(), y);
+                    tiles.addAll(list);
+                    y = grid(list, y, 34, 52, 6) + 2;
+                }
+            }
         }
+    }
+
+    private Map<String, List<Tile>> galleryCache;
+
+    private Map<String, List<Tile>> buildGallery() {
+        Map<String, List<Tile>> out = new java.util.LinkedHashMap<>();
+        Map<String, List<CardType>> byPack = new java.util.LinkedHashMap<>();
+        for (CardPack pack : CardPack.all()) byPack.put(pack.id, new ArrayList<>());
+        for (CardType type : CardTypes.all()) {
+            if (type.id.equals(com.hfstudio.minopp.game.HandMask.HIDDEN_TYPE)) continue;
+            List<CardType> into = byPack.get(CardPack.alias(type.packId));
+            if (into != null) into.add(type);
+        }
+        for (Map.Entry<String, List<CardType>> e : byPack.entrySet()) {
+            CardPack pack = CardPack.get(e.getKey());
+            if (pack == null || e.getValue()
+                .isEmpty()) continue;
+            String packName = tr(pack.langKey());
+            List<Tile> list = new ArrayList<>();
+            for (CardType type : e.getValue()) {
+                boolean dark = pack.backSideOnly;
+                CardFace face = new CardFace(
+                    type.id,
+                    type.wild ? CardColor.WILD : dark ? CardColor.PINK : CardColor.RED,
+                    type.numbered ? 7 : -1);
+                Tile t = new Tile("gallery:" + type.id, Kind.GALLERY, face);
+                t.searchExtra = packName;
+                t.title = tr("game.minopp.card.type." + type.id);
+                t.desc.add(
+                    tr("gui.minopp.gallery.points", type.numbered ? tr("gui.minopp.gallery.face_value") : type.points));
+                String descKey = "game.minopp.card.type." + type.id + ".desc";
+                if (hasTr(descKey)) t.desc.add(tr(descKey));
+                List<String> packs = new ArrayList<>();
+                for (CardPack p : CardPack.all()) {
+                    for (CardPack.Entry entry : p.entries) {
+                        if (entry.typeId()
+                            .equals(type.id) && !packs.contains(tr(p.langKey()))) packs.add(tr(p.langKey()));
+                    }
+                }
+                if (!packs.isEmpty()) t.desc.add(tr("gui.minopp.gallery.packs", String.join(", ", packs)));
+                list.add(t);
+            }
+            out.put(packName, list);
+        }
+        return out;
+    }
+
+    // ------------------------------------------------------------------ personal settings rows
+
+    /** Prefs shown as a text box instead of a slider; switched by the button next to them. */
+    private static final Set<String> typingPrefs = new HashSet<>();
+    private final Map<String, GuiTextField> prefFields = new HashMap<>();
+    private Prefs.Pref dragPref;
+    private int dragX1, dragX2;
+    private int prefMouseX, prefMouseY;
+
+    private void prefMouse(int mouseX, int mouseY) {
+        prefMouseX = mouseX - viewX();
+        prefMouseY = (int) (mouseY - viewY()
+            + scrolls.get(tab)
+                .offset());
+    }
+
+    private static Prefs.Pref pref(String id) {
+        for (Prefs.Pref p : Prefs.ALL) if (p.id()
+            .equals(id)) return p;
+        return null;
+    }
+
+    /** Where a row's parts start: control, control end, slider/text switch, reset button. */
+    private int[] prefLayout(Tile t, Prefs.Pref p) {
+        int resetW = Math.max(32, fontRendererObj.getStringWidth(tr("controls.reset")) + 12);
+        int reset = t.x + t.w - resetW;
+        int mode = p.type() == Prefs.Type.INT ? reset - 3 - t.h : reset;
+        int start = t.x + Math.max(70, t.w * 2 / 5);
+        return new int[] { start, mode - 3, mode, reset };
+    }
+
+    private boolean inRow(int x1, int y1, int x2, int y2) {
+        return prefMouseX >= x1 && prefMouseX < x2 && prefMouseY >= y1 && prefMouseY < y2;
+    }
+
+    // the HUD can be dragged anywhere on screen; typing still reaches the full range
+    private int sliderMin(Prefs.Pref p) {
+        return p.id()
+            .equals("hudX")
+            || p.id()
+                .equals("hudY") ? 0 : p.min();
+    }
+
+    private int sliderMax(Prefs.Pref p) {
+        return p.id()
+            .equals("hudX") ? width - 20
+                : p.id()
+                    .equals("hudY") ? height - 20 : p.max();
+    }
+
+    private static String prefValue(Prefs.Pref p, int v) {
+        return p.id()
+            .endsWith("Scale") ? v + "%" : String.valueOf(v);
+    }
+
+    private GuiTextField prefField(Prefs.Pref p) {
+        return prefFields.computeIfAbsent(p.id(), id -> {
+            GuiTextField f = new GuiTextField(fontRendererObj, 0, 0, 40, 14);
+            f.setMaxStringLength(6);
+            f.setText(String.valueOf(p.value()));
+            return f;
+        });
+    }
+
+    private void commitPrefField(String id) {
+        GuiTextField f = prefFields.get(id);
+        Prefs.Pref p = pref(id);
+        if (f == null || p == null) return;
+        try {
+            p.change(Integer.parseInt(f.getText()));
+        } catch (NumberFormatException ignored) {}
+        f.setFocused(false);
+        f.setText(String.valueOf(p.value()));
+    }
+
+    private void drawPrefRow(Tile t, float hoverA) {
+        Prefs.Pref p = (Prefs.Pref) t.payload;
+        int v = p.value();
+        int[] l = prefLayout(t, p);
+        int y1 = t.y, y2 = t.y + t.h;
+        UiDraw.roundRect(t.x, y1, t.x + t.w, y2, 4, (0x30 + (int) (hoverA * 0x40)) << 24);
+        UiDraw.marquee(
+            fontRendererObj,
+            t.title,
+            t.x + 6,
+            y1 + (t.h - 8) / 2f,
+            l[0] - t.x - 12,
+            1f,
+            v == p.def() ? 0xFFFFFFFF : 0xFFFFE070);
+        switch (p.type()) {
+            case BOOL -> rowButton(
+                l[0],
+                y1 + 1,
+                l[1],
+                y2 - 1,
+                tr(v != 0 ? "options.on" : "options.off"),
+                v != 0 ? 0xFF55FF55 : 0xFFFF5555,
+                true);
+            case CHOICE -> rowButton(
+                l[0],
+                y1 + 1,
+                l[1],
+                y2 - 1,
+                tr(
+                    p.langKey() + "."
+                        + p.choices()
+                            .get(v)),
+                0xFFFFFFFF,
+                true);
+            case INT -> {
+                boolean typing = typingPrefs.contains(p.id());
+                if (typing) {
+                    GuiTextField f = prefField(p);
+                    if (!f.isFocused() && !f.getText()
+                        .equals(String.valueOf(v))) f.setText(String.valueOf(v));
+                    f.xPosition = l[0] + 1;
+                    f.yPosition = y1 + 2;
+                    f.width = l[1] - l[0] - 2;
+                    f.height = t.h - 4;
+                    f.drawTextBox();
+                } else {
+                    slider(p, l[0], y1 + 1, l[1], y2 - 1, v);
+                }
+                rowButton(l[2], y1 + 1, l[3] - 3, y2 - 1, "", 0, true);
+                modeGlyph((l[2] + l[3] - 3) / 2, (y1 + y2) / 2, typing);
+            }
+        }
+        boolean changed = v != p.def();
+        rowButton(l[3], y1 + 1, t.x + t.w, y2 - 1, tr("controls.reset"), changed ? 0xFFFFFFFF : 0xFF8A7070, changed);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private void rowButton(int x1, int y1, int x2, int y2, String text, int color, boolean enabled) {
+        boolean hot = enabled && inRow(x1, y1, x2, y2);
+        if (!enabled) UiDraw.roundFrame(x1, y1, x2, y2, 3, 1, 0xFF2A0C0C, 0xFF4A2222, 0xFF361818);
+        else UiDraw.roundFrame(
+            x1,
+            y1,
+            x2,
+            y2,
+            3,
+            1,
+            hot ? UiDraw.GLOW : 0xFF1A0606,
+            hot ? 0xFFB03A30 : 0xFF84261E,
+            hot ? 0xFF7A2018 : 0xFF581410);
+        if (!text.isEmpty()) UiDraw
+            .fittedCentered(fontRendererObj, text, (x1 + x2) / 2f, y1 + (y2 - y1 - 8) / 2f + 1, x2 - x1 - 6, color);
+    }
+
+    // the switch button shows what it switches to: a slider, or a text box with a cursor
+    private void modeGlyph(int cx, int cy, boolean typing) {
+        if (typing) {
+            drawRect(cx - 5, cy, cx + 5, cy + 1, 0xFFE8E8E8);
+            drawRect(cx - 1, cy - 3, cx + 2, cy + 4, 0xFFFFE070);
+        } else {
+            drawRect(cx - 6, cy - 4, cx + 6, cy + 4, 0xFFE8E8E8);
+            drawRect(cx - 5, cy - 3, cx + 5, cy + 3, 0xFF101010);
+            drawRect(cx - 3, cy - 2, cx - 2, cy + 2, 0xFFFFE070);
+        }
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private void slider(Prefs.Pref p, int x1, int y1, int x2, int y2, int v) {
+        int lo = sliderMin(p), hi = sliderMax(p);
+        float f = hi > lo ? Math.max(0f, Math.min(1f, (v - lo) / (float) (hi - lo))) : 0f;
+        boolean hot = dragPref == p || inRow(x1, y1, x2, y2);
+        UiDraw.roundFrame(x1, y1, x2, y2, 3, 1, hot ? UiDraw.GLOW : 0xFF1A0606, 0xFF2A0A0A, 0xFF1A0606);
+        int fill = x1 + 1 + Math.round((x2 - x1 - 2) * f);
+        if (fill > x1 + 2) UiDraw.roundRect(x1 + 1, y1 + 1, fill, y2 - 1, 2, 0xFFC04A34, 0xFF8A2A1C);
+        int k = Math.max(x1 + 3, Math.min(x2 - 3, fill));
+        UiDraw.roundFrame(k - 3, y1 - 1, k + 3, y2 + 1, 2, 1, 0xFF202020, 0xFFF4F4F4, 0xFFB4B4B4);
+        UiDraw.fittedCentered(
+            fontRendererObj,
+            prefValue(p, v),
+            (x1 + x2) / 2f,
+            y1 + (y2 - y1 - 8) / 2f + 1,
+            x2 - x1 - 6,
+            0xFFFFFFFF);
+    }
+
+    private void dragSlider() {
+        Prefs.Pref p = dragPref;
+        float f = Math.max(0f, Math.min(1f, (prefMouseX - dragX1) / (float) Math.max(1, dragX2 - dragX1)));
+        int lo = sliderMin(p), hi = sliderMax(p);
+        p.apply(lo + Math.round(f * (hi - lo) / p.step()) * p.step());
+    }
+
+    private void clickPrefRow(Tile t, int button, boolean shift, boolean ctrl) {
+        Prefs.Pref p = (Prefs.Pref) t.payload;
+        int v = p.value();
+        if (navId != null) {
+            // keyboard: Enter / Space steps through the values
+            int dir = button == 1 ? -1 : 1;
+            p.change(switch (p.type()) {
+                case BOOL -> v == 0 ? 1 : 0;
+                case CHOICE -> v + dir;
+                case INT -> ctrl ? p.def() : v + dir * p.step() * (shift ? 10 : 1);
+            });
+            click();
+            return;
+        }
+        int[] l = prefLayout(t, p);
+        int mx = prefMouseX;
+        if (mx >= l[3]) {
+            if (v != p.def()) {
+                p.change(p.def());
+                click();
+            }
+            return;
+        }
+        if (mx < l[0]) return;
+        switch (p.type()) {
+            case BOOL -> p.change(v == 0 ? 1 : 0);
+            case CHOICE -> p.change(v + (button == 1 ? -1 : 1));
+            case INT -> {
+                if (mx >= l[2]) {
+                    if (!typingPrefs.remove(p.id())) {
+                        typingPrefs.add(p.id());
+                        GuiTextField f = prefField(p);
+                        f.setText(String.valueOf(v));
+                        f.setFocused(true);
+                        f.setCursorPositionEnd();
+                    }
+                } else if (mx < l[1]) {
+                    if (typingPrefs.contains(p.id())) {
+                        GuiTextField f = prefField(p);
+                        if (button == 1) f.setText("");
+                        f.mouseClicked(mx, prefMouseY, 0);
+                        return;
+                    }
+                    dragPref = p;
+                    dragX1 = l[0] + 3;
+                    dragX2 = l[1] - 3;
+                    dragSlider();
+                    return;
+                } else return;
+            }
+        }
+        click();
     }
 
     private void place(List<Tile> list, int y, int tileW, int tileH, int gap) {
@@ -559,6 +885,7 @@ public class GameSettingsScreen extends GuiScreen {
         boolean inView = mouseX >= viewX() && mouseX < viewX() + viewW()
             && mouseY >= viewY()
             && mouseY < viewY() + viewH();
+        prefMouse(mouseX, mouseY);
         UiDraw.scissor(viewX() - 5, viewY() - 4, viewW() + 10, viewH() + 4);
         GL11.glPushMatrix();
         GL11.glTranslatef(viewX(), viewY() - offset, 0);
@@ -609,7 +936,11 @@ public class GameSettingsScreen extends GuiScreen {
         if (showInfo) drawInfoPanel(te);
         drawBottomBar(mouseX, mouseY);
 
-        if (hovered != null && (navId == null || !showInfo) && System.currentTimeMillis() - hoverStart > 350) {
+        boolean rowTip = hovered == null || hovered.kind != Kind.PREF
+            || dragPref == null && prefMouseX < prefLayout(hovered, (Prefs.Pref) hovered.payload)[0];
+        if (hovered != null && rowTip
+            && (navId == null || !showInfo)
+            && System.currentTimeMillis() - hoverStart > 350) {
             List<String> lines = new ArrayList<>();
             lines.add(hovered.title);
             for (String d : hovered.desc)
@@ -625,7 +956,8 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private int tabWidth() {
-        return Math.min(64, (contentW - 30) / Tab.values().length);
+        // the tab row may run over the info panel's column, which leaves room for longer names
+        return Math.min(64, (width - 8 - contentX - 32) / Tab.values().length - 2);
     }
 
     private int tabX(int i) {
@@ -706,6 +1038,10 @@ public class GameSettingsScreen extends GuiScreen {
         }
         if (t.kind == Kind.INFO) {
             drawDeckInfo(te, t);
+            return;
+        }
+        if (t.kind == Kind.PREF) {
+            drawPrefRow(t, hoverA);
             return;
         }
         int lift = (int) (hoverA * 2);
@@ -800,6 +1136,13 @@ public class GameSettingsScreen extends GuiScreen {
                 locked = !editable;
                 customCount = cfg.hasOverride(pack, entry);
             }
+            case GALLERY -> {
+                CardFace face = (CardFace) t.payload;
+                UiDraw.roundRect(x1, y1, x2, y2, 4, 0x80000000);
+                CardRenderer.drawFace2D(face, ThemeManager.INSTANCE.selected(), x1 + 2, y1 + 2, t.w - 4, t.h - 4);
+                CardType type = face.type();
+                count = type.numbered ? "0-9" : String.valueOf(type.points);
+            }
             case THEME -> {
                 ThemeManager.ThemeInfo theme = (ThemeManager.ThemeInfo) t.payload;
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, 0xFFF0A040, 0xFFD06020);
@@ -825,7 +1168,7 @@ public class GameSettingsScreen extends GuiScreen {
         }
         if (four) UiDraw.image("badge_four", x1 + 2, y1 + 2, 10, 10);
         if (count != null && !t.id.equals(editingId)) {
-            int pillY = t.kind == Kind.CARD ? y2 - 11 : y2 - 24;
+            int pillY = t.kind == Kind.CARD || t.kind == Kind.GALLERY ? y2 - 11 : y2 - 24;
             valuePill(count, (x1 + x2) / 2, pillY);
         }
         if (locked) UiDraw.image("badge_lock", x1 + 2, four ? y1 + 12 : y1 + 2, 10, 10);
@@ -1019,6 +1362,33 @@ public class GameSettingsScreen extends GuiScreen {
                         30);
                     CardRenderer.drawBack2D(id, false, x2 - 40, py + 8, 28, 44);
                 }
+                case PREF -> {
+                    Prefs.Pref p = (Prefs.Pref) t.payload;
+                    int v = p.value();
+                    String value = switch (p.type()) {
+                        case BOOL -> tr(v != 0 ? "options.on" : "options.off");
+                        case CHOICE -> tr(
+                            p.langKey() + "."
+                                + p.choices()
+                                    .get(v));
+                        case INT -> prefValue(p, v);
+                    };
+                    float s = Math.min(2.5f, (infoW - 24) / (float) Math.max(1, fontRendererObj.getStringWidth(value)));
+                    UiDraw.scaledCentered(
+                        fontRendererObj,
+                        value,
+                        cx,
+                        py + ph / 2f - 4 * s,
+                        s,
+                        v == p.def() ? 0xFFFFFFFF : 0xFFFFE070);
+                }
+                case GALLERY -> drawFanCentered(
+                    List.of((CardFace) t.payload),
+                    ThemeManager.INSTANCE.selected(),
+                    cx,
+                    py,
+                    ph,
+                    40);
                 case DESIGN -> {
                     DesignStore.Design d = DesignStore.get((Integer) t.payload);
                     if (d != null)
@@ -1111,6 +1481,11 @@ public class GameSettingsScreen extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        prefMouse(mouseX, mouseY);
+        for (Map.Entry<String, GuiTextField> e : prefFields.entrySet()) {
+            if (e.getValue()
+                .isFocused()) commitPrefField(e.getKey());
+        }
         if (editingId != null) {
             if (mouseX >= numberField.xPosition && mouseX < numberField.xPosition + numberField.width
                 && mouseY >= numberField.yPosition
@@ -1160,12 +1535,21 @@ public class GameSettingsScreen extends GuiScreen {
 
     @Override
     protected void mouseClickMove(int mouseX, int mouseY, int button, long time) {
+        if (dragPref != null) {
+            prefMouse(mouseX, mouseY);
+            dragSlider();
+            return;
+        }
         scrolls.get(tab)
             .mouseDragged(mouseY, viewY(), viewH());
     }
 
     @Override
     protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+        if (state >= 0 && dragPref != null) {
+            dragPref = null;
+            Prefs.save();
+        }
         if (state >= 0) scrolls.get(tab)
             .mouseReleased();
         super.mouseMovedOrUp(mouseX, mouseY, state);
@@ -1181,6 +1565,22 @@ public class GameSettingsScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        for (Map.Entry<String, GuiTextField> e : prefFields.entrySet()) {
+            GuiTextField f = e.getValue();
+            if (!f.isFocused()) continue;
+            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER
+                || key == Keyboard.KEY_ESCAPE
+                || key == Keyboard.KEY_TAB) {
+                commitPrefField(e.getKey());
+            } else if (Character.isDigit(c) || c == '-' || c < 32 || key == Keyboard.KEY_DELETE) {
+                f.textboxKeyTyped(c, key);
+                Prefs.Pref p = pref(e.getKey());
+                try {
+                    if (p != null) p.apply(Integer.parseInt(f.getText()));
+                } catch (NumberFormatException ignored) {}
+            }
+            return;
+        }
         if (editingId != null) {
             if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
                 closeEditor(true);
@@ -1379,6 +1779,11 @@ public class GameSettingsScreen extends GuiScreen {
             click();
             return;
         }
+        if (t.kind == Kind.PREF) {
+            clickPrefRow(t, button, shift, ctrl);
+            return;
+        }
+        if (t.kind == Kind.GALLERY) return;
         if (t.kind == Kind.DESIGN) {
             int slot = (Integer) t.payload;
             DesignStore.Design d = DesignStore.get(slot);

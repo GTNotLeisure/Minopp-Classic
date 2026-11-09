@@ -11,7 +11,12 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class UiButton extends GuiButton {
 
-    private final int accent;
+    private int accent;
+
+    public void setAccent(int accent) {
+        this.accent = accent;
+    }
+
     private float hoverAnim;
 
     public UiButton(int id, int x, int y, int w, int h, String text) {
