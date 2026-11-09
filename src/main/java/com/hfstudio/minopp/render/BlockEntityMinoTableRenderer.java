@@ -51,7 +51,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(0.5, 0.94, 0.5);
         GL11.glScalef(0.5f, 0.4f, 0.5f);
         GL11.glRotatef(-90, 1, 0, 0);
-        int layers = (int) Math.ceil(game.deck.size() / 5f);
+        int layers = Math.min(24, (int) Math.ceil(game.deck.size() / 5f));
         float layerH = 1f / 48f;
         for (int ci = 0; ci < layers; ci++) {
             BATCH.at(jitter(ci, 0) * 0.06f - 0.03f, jitter(ci, 1) * 0.06f - 0.03f, ci * layerH, 0);

@@ -89,6 +89,11 @@ public class MinoClient {
             if (DevPreview.enabled() && !worldPreviewLaunched && mc.currentScreen instanceof GuiMainMenu) {
                 worldPreviewLaunched = true;
                 mc.gameSettings.pauseOnLostFocus = false;
+                // the preview world is rebuilt every launch so old tables and bots never pile up
+                mc.getSaveLoader()
+                    .flushCache();
+                mc.getSaveLoader()
+                    .deleteWorldDirectory("minopp_preview");
                 mc.launchIntegratedServer(
                     "minopp_preview",
                     "Mino Preview",

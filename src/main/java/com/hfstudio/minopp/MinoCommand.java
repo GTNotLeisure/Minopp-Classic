@@ -32,7 +32,7 @@ public class MinoCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/minopp <shout|force_discard|force_draw [count]|set_table_award|set_table_demo <true|false>|debug [start|hold|stop]>";
+        return "/minopp <shout|force_discard|force_draw [count]|set_table_award|set_table_demo <true|false>|debug [start|hold|stop|turn|next|...]>";
     }
 
     @Override
@@ -150,7 +150,12 @@ public class MinoCommand extends CommandBase {
                 table.destroyGame(new CardPlayer(player));
                 player.addChatComponentMessage(Chat.translatable("game.minopp.debug.stopped"));
             }
-            default -> throw new WrongUsageException("/minopp debug [start|hold|stop]");
+            default -> {
+                if (table.game == null || !table.game.debug) throw new CommandException("game.minopp.debug.not_debug");
+                CardPlayer me = table.game.deAmputate(id);
+                table.handleActionResult(table.game.debugAction(mode), me, player);
+                return;
+            }
         }
         table.sync();
     }
@@ -195,7 +200,9 @@ public class MinoCommand extends CommandBase {
                 "debug");
         }
         if (args.length == 2 && args[0].equals("debug")) {
-            return getListOfStringsMatchingLastWord(args, "start", "hold", "stop");
+            List<String> modes = new java.util.ArrayList<>(CardGame.DEBUG_ACTIONS);
+            modes.add(0, "start");
+            return getListOfStringsMatchingLastWord(args, modes.toArray(new String[0]));
         }
         if (args.length == 2 && args[0].equals("set_table_demo")) {
             return getListOfStringsMatchingLastWord(args, "true", "false");

@@ -105,6 +105,7 @@ public final class DevPreview {
                         player.rotationPitch);
                 }
                 table.addBots(BlockEntityMinoTable.MAX_SEATS);
+                player.inventory.setInventorySlotContents(8, new net.minecraft.item.ItemStack(Mino.BLOCK_MINO_TABLE));
                 stage = 2;
                 ticks = 0;
             }
@@ -231,7 +232,7 @@ public final class DevPreview {
         world.setWorldTime(6000);
         int px = MathHelper.floor_double(player.posX), py = MathHelper.floor_double(player.boundingBox.minY);
         int pz = MathHelper.floor_double(player.posZ);
-        core = new BlockPos(px - 1, py, pz - 6);
+        core = new BlockPos(px - 1, py + Integer.getInteger("minopp.previewSky", 0), pz - 6);
         for (int dx = -14; dx <= 16; dx++) for (int dz = -14; dz <= 16; dz++) {
             for (int dy = 0; dy < 4; dy++) world.setBlockToAir(core.x + dx, core.y + dy, core.z + dz);
         }

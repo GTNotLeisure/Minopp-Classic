@@ -63,11 +63,11 @@ public class HandCardsItemRenderer implements IItemRenderer {
         GL11.glEnable(GL12.GL_RESCALE_NORMAL);
         GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glTranslated(0.5, 0.5, 0.18);
-        int n = realPlayer.hand.size();
+        int total = realPlayer.hand.size(), n = Math.min(total, 24);
         float step = (float) Math.min(0.08, 1.2 / Math.max(1, n));
         boolean dark = tableEntity.game.darkSide;
         for (int k = 0; k < n; k++) {
-            Card card = realPlayer.hand.get(k);
+            Card card = realPlayer.hand.get(total - n + k);
             BATCH.at(0, 0.02f * k, step * k, 0);
             BATCH.slab(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
             BATCH.back(card, dark, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);

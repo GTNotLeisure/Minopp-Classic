@@ -63,6 +63,7 @@ public final class TableFx {
         long lastFrame = System.currentTimeMillis();
         final List<Fx> fx = new ArrayList<>();
         final Set<UUID> shouted = new HashSet<>();
+        int shoutSeq = -1;
     }
 
     private static final ResourceLocation TEX_DIRECTION = Mino.id("textures/fx/direction.png");
@@ -101,7 +102,9 @@ public final class TableFx {
             int seat = seatOf(game, game.balloonHolder);
             if (seat >= 0) {
                 s.balloonSeat = seat;
-                balloon(table.getSeatLocalPos(seat), game.balloonFuse, now);
+                boolean busy = false;
+                for (Fx f : s.fx) busy |= now >= f.start && f.kind != Kind.SHOCK && f.kind != Kind.SKIP;
+                balloon(table, table.getSeatLocalPos(seat), game.balloonFuse, now, busy);
             }
         }
 
@@ -142,28 +145,27 @@ public final class TableFx {
         if (turned) s.ringSpeed = 9f;
         for (CardPlayer p : game.players) {
             if (p.hasShoutedMino && !s.shouted.contains(p.uuid) && !first) {
-                Vec3d seat = table.getSeatLocalPos(p.seat);
-                s.fx.add(
-                    new Fx(
-                        Kind.SHOUT,
-                        now,
-                        1800,
-                        seat.x + (1.5 - seat.x) * 0.2,
-                        seat.y + 1.9,
-                        seat.z + (1.5 - seat.z) * 0.2,
-                        0,
-                        null));
+                Vec3d at = head(table, p.seat, 1.95);
+                s.fx.add(new Fx(Kind.SHOUT, now, 1800, at.x, at.y, at.z, 0, null));
             }
         }
         s.shouted.clear();
         for (CardPlayer p : game.players) if (p.hasShoutedMino) s.shouted.add(p.uuid);
+        if (!first && game.debugShoutSeq != s.shoutSeq && game.debugShoutBy != null) {
+            int seat = seatOf(game, game.debugShoutBy);
+            if (seat >= 0) {
+                Vec3d at = head(table, seat, 1.95);
+                s.fx.add(new Fx(Kind.SHOUT, now, 1800, at.x, at.y, at.z, 0, null));
+            }
+        }
+        s.shoutSeq = game.debugShoutSeq;
         if (!first && game.darkSide != s.dark && game.topCard != null) {
             CardFace[] faces = { game.topCard.face(s.dark), game.topCard.face(game.darkSide) };
             s.fx.add(new Fx(Kind.FLIP, now, 1500, 1.5, PILE_Y, 1.5, 0, new Object[] { faces, theme }));
         }
         if (!first && s.balloon != null && game.balloonHolder == null && s.balloonSeat >= 0) {
             Vec3d p = table.getSeatLocalPos(s.balloonSeat);
-            Vec3d at = new Vec3d(p.x + (1.5 - p.x) * 0.25, p.y + 1.25, p.z + (1.5 - p.z) * 0.25);
+            Vec3d at = new Vec3d(p.x + (p.x - 1.5) * 0.15, p.y + 2.15, p.z + (p.z - 1.5) * 0.15);
             s.fx.add(new Fx(Kind.POP, now, 900, at.x, at.y, at.z, 0xE83030, now));
             particles(table, "largeexplode", at.x, at.y, at.z, 1, 0);
         }
@@ -179,15 +181,18 @@ public final class TableFx {
             } else if (isSkip(id) || face.type().matchKey.equals("skip")) {
                 s.fx.add(new Fx(Kind.SKIP_SIGN, now, 1300, 1.5, PILE_Y, 1.5, rgb, null));
             }
+            int victimIdx = game.debugHold && game.debugNext >= 0 ? game.debugNext : game.currentPlayerIndex;
             if (face.type()
                 .isDraw()) {
                 int amount = game.pendingDraw > 0 ? game.pendingDraw : face.type().drawValue;
+                Vec3d at = victimIdx >= 0 && victimIdx < game.players.size()
+                    ? head(table, game.players.get(victimIdx).seat, 1.75)
+                    : new Vec3d(1.5, PILE_Y + 1.75, 1.5);
                 s.fx.add(
-                    new Fx(Kind.PLUS, now + (face.isWild() ? 1000 : 250), 1400, 1.5, PILE_Y, 1.5, rgb, "+" + amount));
+                    new Fx(Kind.PLUS, now + (face.isWild() ? 1000 : 250), 1400, at.x, at.y, at.z, rgb, "+" + amount));
             }
             if (face.type()
                 .isDraw() && !face.isWild()) {
-                int victimIdx = game.debugHold && game.debugNext >= 0 ? game.debugNext : game.currentPlayerIndex;
                 Vec3d victim = null;
                 if (victimIdx >= 0 && victimIdx < game.players.size()) {
                     Vec3d seat = table.getSeatLocalPos(game.players.get(victimIdx).seat);
@@ -207,17 +212,8 @@ public final class TableFx {
             if (isSkip(id) || id.equals("reverse") && game.activePlayers()
                 .size() == 2) {
                 for (int seat : skippedSeats(game)) {
-                    Vec3d p = table.getSeatLocalPos(seat);
-                    s.fx.add(
-                        new Fx(
-                            Kind.SKIP,
-                            now,
-                            1600,
-                            p.x + (1.5 - p.x) * 0.15,
-                            p.y + 1.35,
-                            p.z + (1.5 - p.z) * 0.15,
-                            0,
-                            null));
+                    Vec3d at = head(table, seat, 1.5);
+                    s.fx.add(new Fx(Kind.SKIP, now, 1600, at.x, at.y, at.z, 0, null));
                 }
             }
             if (id.equals("wild_fifty_fifty")) s.fx.add(new Fx(Kind.COIN, now, 1600, 1.5, 1.2, 1.5, 0, null));
@@ -242,6 +238,13 @@ public final class TableFx {
         s.dark = game.darkSide;
         s.anti = game.isAntiClockwise;
         s.balloon = game.balloonHolder;
+    }
+
+    // just over the head of whoever sits in that seat
+    private static Vec3d head(BlockEntityMinoTable table, int seat, double lift) {
+        Vec3d p = table.getSeatLocalPos(seat);
+        double ox = p.x - 1.5, oz = p.z - 1.5, len = Math.max(1e-3, Math.sqrt(ox * ox + oz * oz));
+        return new Vec3d(p.x + ox / len * 0.45, p.y + lift, p.z + oz / len * 0.45);
     }
 
     public static boolean isSkip(String id) {
@@ -749,26 +752,34 @@ public final class TableFx {
     }
 
     // the time balloon, built from blocks, floats over its holder and swells as the fuse runs down
-    private static void balloon(Vec3d seat, int fuse, long now) {
-        double x = seat.x + (1.5 - seat.x) * 0.25, z = seat.z + (1.5 - seat.z) * 0.25;
+    // kept above and behind the holder; it turns see-through while another effect plays or the camera is right at it
+    private static void balloon(BlockEntityMinoTable table, Vec3d seat, int fuse, long now, boolean busy) {
+        double x = seat.x + (seat.x - 1.5) * 0.15, z = seat.z + (seat.z - 1.5) * 0.15;
         double bob = Math.sin((now % 100000L) / 400.0) * 0.04;
-        float size = 0.15f + Math.max(0, 8 - fuse) * 0.02f;
-        float wobble = fuse <= 1 ? (float) Math.sin((now % 100000L) / 45.0) * 0.012f : 0;
+        double y = seat.y + 2.15 + bob;
+        float size = 0.11f + Math.max(0, 8 - fuse) * 0.014f;
+        float wobble = fuse <= 1 ? (float) Math.sin((now % 100000L) / 45.0) * 0.01f : 0;
         float v = (size + wobble) / 3.2f;
+        double cx = table.xCoord + x - RenderManager.renderPosX, cy = table.yCoord + y - RenderManager.renderPosY,
+            cz = table.zCoord + z - RenderManager.renderPosZ;
+        boolean close = cx * cx + cy * cy + cz * cz < 2.2 * 2.2;
+        float alpha = busy || close ? 0.3f : 1f;
         Tessellator tes = Tessellator.instance;
         GL11.glPushMatrix();
-        GL11.glTranslated(x, seat.y + 1.3 + bob, z);
+        if (alpha < 1f) GL11.glDepthMask(false);
+        GL11.glTranslated(x, y, z);
         GL11.glRotatef((now % 36000L) / 50f, 0, 1, 0);
         tes.startDrawingQuads();
         for (int[] b : BALLOON) {
             int rgb = b[1] >= 2 && b[0] <= -1 && b[2] <= -1 ? 0xFF7070 : 0xD82828;
-            cube(tes, b[0] * v, b[1] * v, b[2] * v, v, rgb, 1f, b[3]);
+            cube(tes, b[0] * v, b[1] * v, b[2] * v, v, rgb, alpha, b[3]);
         }
-        cube(tes, 0, -4 * v, 0, v * 0.8, 0xB01E1E, 1f, 63);
+        cube(tes, 0, -4 * v, 0, v * 0.8, 0xB01E1E, alpha, 63);
         for (int i = 0; i < 7; i++) {
-            cube(tes, Math.sin(i * 0.9) * 0.012, -4.6 * v - i * 0.065, 0, 0.022, 0xEEEEEE, 1f, 63);
+            cube(tes, Math.sin(i * 0.9) * 0.012, -4.6 * v - i * 0.065, 0, 0.022, 0xEEEEEE, alpha, 63);
         }
         tes.draw();
+        GL11.glDepthMask(true);
         GL11.glPopMatrix();
     }
 
@@ -879,18 +890,25 @@ public final class TableFx {
         GL11.glPopMatrix();
     }
 
-    private static void cardSlab(Tessellator t, double w, double h, double depth, int rgb, float a) {
-        double c = Math.min(w, h) * 0.18;
-        double[] xs = { -w / 2 + c, w / 2 - c, w / 2, w / 2, w / 2 - c, -w / 2 + c, -w / 2, -w / 2 };
-        double[] ys = { -h / 2, -h / 2, -h / 2 + c, h / 2 - c, h / 2, h / 2, h / 2 - c, -h / 2 + c };
-        prism(t, xs, ys, depth, 0xF4F4F4, a);
-        double k = 0.82;
-        double[] ix = new double[8], iy = new double[8];
-        for (int i = 0; i < 8; i++) {
-            ix[i] = xs[i] * k;
-            iy[i] = ys[i] * (k + 0.06);
+    private static double[][] roundedRect(double w, double h, double r) {
+        int seg = 4, n = seg * 4;
+        double[] xs = new double[n], ys = new double[n];
+        for (int q = 0; q < 4; q++) {
+            double ox = q == 0 || q == 3 ? w / 2 - r : -w / 2 + r, oy = q < 2 ? h / 2 - r : -h / 2 + r;
+            for (int j = 0; j < seg; j++) {
+                double ang = Math.PI / 2 * (q + j / (double) (seg - 1));
+                xs[q * seg + j] = ox + Math.cos(ang) * r;
+                ys[q * seg + j] = oy + Math.sin(ang) * r;
+            }
         }
-        prism(t, ix, iy, depth + 0.012, rgb, a);
+        return new double[][] { xs, ys };
+    }
+
+    private static void cardSlab(Tessellator t, double w, double h, double depth, int rgb, float a) {
+        double[][] outer = roundedRect(w, h, Math.min(w, h) * 0.07);
+        prism(t, outer[0], outer[1], depth, 0xF4F4F4, a);
+        double[][] inner = roundedRect(w * 0.84, h * 0.88, Math.min(w, h) * 0.05);
+        prism(t, inner[0], inner[1], depth + 0.012, rgb, a);
     }
 
     // draw cards: thick cards of the current color fan out over the pile, then fly to whoever has to take them
@@ -942,17 +960,17 @@ public final class TableFx {
         cubes(f.x, f.y, f.z, sec, f.start, new int[] { 0xFFE040, 0xFFFFFF, 0xFFB020 }, 14, 0.05f, 1.3f, out);
     }
 
-    // the penalty total in big letters over the pile, inside a beam of the current color
+    // the penalty total in big letters over the head of whoever takes it, inside a beam of the current color
     private static void plusText(Fx f, float t) {
         float out = fadeOut(t, 0.75f);
         int rgb = f.color & 0xFFFFFF;
         GL11.glPushMatrix();
-        GL11.glTranslated(f.x, PILE_Y, f.z);
+        GL11.glTranslated(f.x, f.y - 1.75, f.z);
         GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
         GL11.glDepthMask(false);
         Tessellator tes = Tessellator.instance;
         tes.startDrawingQuads();
-        double w = 0.42 + 0.06 * Math.sin(t * Math.PI * 4), h = 2.6 * easeOutCubic(Math.min(1f, t / 0.2f));
+        double w = 0.3 + 0.05 * Math.sin(t * Math.PI * 4), h = 2.3 * easeOutCubic(Math.min(1f, t / 0.2f));
         color(tes, rgb, 0.55f * out);
         tes.addVertex(-w * 0.7, 0, 0);
         tes.addVertex(w * 0.7, 0, 0);
@@ -962,10 +980,10 @@ public final class TableFx {
         tes.draw();
         GL11.glDepthMask(true);
         GL11.glPopMatrix();
-        bigText((String) f.data, f.x, f.y + 1.1 + t * 0.15, f.z, t, 0.065f, 0xFFFFFF, 0);
+        bigText((String) f.data, f.x, f.y + t * 0.15, f.z, t, 0.05f, 0xFFFFFF, 0);
         cubes(
             f.x,
-            f.y + 0.3,
+            f.y - 0.3,
             f.z,
             t * f.duration / 1000f,
             f.start,

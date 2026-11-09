@@ -40,6 +40,9 @@ public class TableItemRenderer implements IItemRenderer {
             GL11.glTranslatef(0.5f, 0.5f, 0.5f);
         }
         if (type == ItemRenderType.INVENTORY) GL11.glScalef(1.15f, 1.15f, 1.15f);
+        boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glColor4f(1, 1, 1, 1);
         GL11.glEnable(GL12.GL_RESCALE_NORMAL);
         Minecraft.getMinecraft()
             .getTextureManager()
@@ -69,6 +72,7 @@ public class TableItemRenderer implements IItemRenderer {
         GL11.glPopMatrix();
 
         GL11.glDisable(GL12.GL_RESCALE_NORMAL);
+        if (cull) GL11.glEnable(GL11.GL_CULL_FACE);
         GL11.glPopMatrix();
     }
 

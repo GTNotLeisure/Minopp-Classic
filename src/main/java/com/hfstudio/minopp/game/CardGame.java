@@ -85,6 +85,109 @@ public class CardGame {
     private final List<Card> debugHand = new ArrayList<>();
     private int debugUid = 2_000_000;
 
+    public int debugShoutSeq;
+    public UUID debugShoutBy;
+    private int debugShoutCursor;
+
+    public static final List<String> DEBUG_ACTIONS = java.util.Arrays.asList(
+        "turn",
+        "next",
+        "hold",
+        "flip",
+        "reverse",
+        "color",
+        "penalty",
+        "others_draw",
+        "draw",
+        "shout",
+        "clear",
+        "refill",
+        "win",
+        "stop");
+
+    // the debug toolbar: bends the game state so any situation can be set up and watched
+    public ActionReport debugAction(String action) {
+        CardPlayer me = deAmputate(debugger);
+        ActionReport report = ActionReport.builder(this, me);
+        if (!debug || me == null) return report.fail(Chat.translatable("game.minopp.debug.not_debug"));
+        int mine = players.indexOf(me);
+        int next = nextActiveIndex(mine);
+        switch (action) {
+            case "turn" -> {
+                decisions.clear();
+                awaitingCutIn = false;
+                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+                drawnCardUid = -1;
+                chainNumber = -1;
+                currentPlayerIndex = mine;
+            }
+            case "next" -> {
+                if (next == mine) return report.fail(Chat.translatable("game.minopp.debug.no_others"));
+                decisions.clear();
+                awaitingCutIn = false;
+                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+                currentPlayerIndex = next;
+                debugNext = -1;
+            }
+            case "hold" -> debugHold = !debugHold;
+            case "flip" -> {
+                darkSide = !darkSide;
+                CardFace top = topCard == null ? null : topFace();
+                currentColor = top != null && !top.isWild() ? top.color
+                    : CardColor.forSide(darkSide)
+                        .get(0);
+            }
+            case "reverse" -> isAntiClockwise = !isAntiClockwise;
+            case "color" -> {
+                List<CardColor> colors = CardColor.forSide(darkSide);
+                currentColor = colors.get((colors.indexOf(currentColor) + 1) % colors.size());
+            }
+            case "penalty" -> {
+                pendingDraw += 2;
+                lastDrawValue = 2;
+                pendingDrawSource = null;
+            }
+            case "others_draw" -> {
+                if (next == mine) return report.fail(Chat.translatable("game.minopp.debug.no_others"));
+                drawCards(players.get(next), 2, report);
+            }
+            case "draw" -> drawCards(me, 3, report);
+            case "shout" -> {
+                debugShoutBy = players.get(debugShoutCursor++ % players.size()).uuid;
+                debugShoutSeq++;
+            }
+            case "clear" -> {
+                pendingDraw = 0;
+                lastDrawValue = 0;
+                pendingDrawSource = null;
+                challengeable = null;
+                decisions.clear();
+                awaitingCutIn = false;
+                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+                speedLevel = 1;
+                pendingSpeed = 0;
+                balloonHolder = null;
+                danceOwner = null;
+                forcedNext = null;
+                links.clear();
+            }
+            case "refill" -> {
+                debugHand.clear();
+                for (CardFace[] faces : debugCatalog()) debugHand.add(new Card(debugUid++, faces[0], faces[1]));
+                me.hand.clear();
+                me.hand.addAll(debugHand);
+            }
+            case "win" -> {
+                return win(me, report);
+            }
+            default -> {
+                return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
+            }
+        }
+        return report
+            .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
+    }
+
     public boolean isDebugger(CardPlayer p) {
         return debug && p != null && p.uuid.equals(debugger);
     }
@@ -140,6 +243,22 @@ public class CardGame {
         me.hand.clear();
         me.hand.addAll(debugHand);
         me.eliminated = false;
+        // debug cards handed to others (hand swaps) are taken back; they get a normal hand of at most 7 instead
+        for (CardPlayer p : players) {
+            if (p == me) continue;
+            int taken = 0;
+            for (java.util.Iterator<Card> it = p.hand.iterator(); it.hasNext();) {
+                if (it.next().uid >= 2_000_000) {
+                    it.remove();
+                    taken++;
+                }
+            }
+            for (int i = 0; i < Math.min(taken, 7) && !deck.isEmpty(); i++) {
+                Card c = deck.remove(deck.size() - 1);
+                c.owner = p.uuid;
+                p.hand.add(c);
+            }
+        }
     }
 
     private ActionReport debugged(ActionReport report) {
@@ -245,8 +364,8 @@ public class CardGame {
         }
         topCard = tobeTopCard;
         currentColor = topFace().color;
-        if (debug) dealDebugHand();
         if (official) applyOpening(tobeTopCard.light);
+        if (debug) dealDebugHand();
         ActionReport report = ActionReport.builder(this, cardPlayer);
         GameSounds.deal(report, initialCardCount + 3);
         report.sound(GameSounds.PLAY, report.soundTail() + 250);
@@ -1945,6 +2064,8 @@ public class CardGame {
         debugNext = tag.hasKey("debugNext") ? tag.getInteger("debugNext") : -1;
         debugger = NbtUtil.hasUUID(tag, "debugger") ? NbtUtil.getUUID(tag, "debugger") : null;
         debugDrawSeq = tag.getInteger("debugDrawSeq");
+        debugShoutSeq = tag.getInteger("debugShoutSeq");
+        debugShoutBy = NbtUtil.hasUUID(tag, "debugShoutBy") ? NbtUtil.getUUID(tag, "debugShoutBy") : null;
         debugUid = Math.max(2_000_000, tag.getInteger("debugUid"));
         debugDrawn.clear();
         NBTTagList drawnTag = tag.getTagList("debugDrawn", 10);
@@ -2018,6 +2139,8 @@ public class CardGame {
             tag.setInteger("debugNext", debugNext);
             if (debugger != null) NbtUtil.putUUID(tag, "debugger", debugger);
             tag.setInteger("debugDrawSeq", debugDrawSeq);
+            tag.setInteger("debugShoutSeq", debugShoutSeq);
+            if (debugShoutBy != null) NbtUtil.putUUID(tag, "debugShoutBy", debugShoutBy);
             tag.setInteger("debugUid", debugUid);
             NBTTagList drawnTag = new NBTTagList();
             for (Card c : debugDrawn) drawnTag.appendTag(c.toTag());

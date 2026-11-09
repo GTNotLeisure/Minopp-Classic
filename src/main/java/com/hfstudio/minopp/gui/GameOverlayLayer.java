@@ -67,6 +67,8 @@ public class GameOverlayLayer {
             return;
         }
 
+        // the hand goes first so the game info text stays readable on top of it
+        boolean handActive = renderHandCards(partialTicks);
         if (tableEntity.game == null) {
             renderGameInactive(tableEntity);
             TurnDeadMan.setOutsideGame();
@@ -81,7 +83,7 @@ public class GameOverlayLayer {
             }
         }
         performZoomAnimation(partialTicks);
-        MinoClient.handCardOverlayActive = renderHandCards(partialTicks);
+        MinoClient.handCardOverlayActive = handActive;
     }
 
     private void renderGameInactive(BlockEntityMinoTable tableEntity) {
@@ -188,23 +190,28 @@ public class GameOverlayLayer {
             infoColors.clear();
             buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
         }
+        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        int wrapAt = Math.max(120, res.getScaledWidth() / 2 - x - 8);
         for (int i = 0; i < infoLines.size(); i++) {
             String text = infoLines.get(i);
-            if (text != null) {
-                int color = infoColors.get(i);
+            if (text == null) {
+                y += lh;
+                continue;
+            }
+            int color = infoColors.get(i);
+            for (Object part : font.listFormattedStringToWidth(text, wrapAt)) {
                 drawStringWithBackdrop(
                     font,
-                    text,
+                    (String) part,
                     x,
                     y,
                     color == PULSE ? UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()) : color);
+                y += lh;
             }
-            y += lh;
         }
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
         for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList
             .listIterator(tableEntity.clientMessageList.size()); it.hasPrevious();) {
-            if (y > res.getScaledHeight() - lh - 40) break;
+            if (y > res.getScaledHeight() - lh - (HandScreen.isOpen() ? 100 : 40)) break;
             Pair<ActionMessage, Long> entry = it.previous();
             long currentTime = System.currentTimeMillis();
             if (entry.getSecond() - 200 < currentTime) {
@@ -214,14 +221,13 @@ public class GameOverlayLayer {
                     .type()
                     .isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
                 int alpha = Mth.clamp((int) (0xFF * (entry.getSecond() - currentTime) / 1000), 0x05, 0xFF);
-                drawStringWithBackdrop(
-                    font,
+                for (Object part : font.listFormattedStringToWidth(
                     entry.getFirst()
                         .formattedText(),
-                    x,
-                    y,
-                    alpha << 24 | color);
-                y += lh;
+                    wrapAt)) {
+                    drawStringWithBackdrop(font, (String) part, x, y, alpha << 24 | color);
+                    y += lh;
+                }
             }
         }
 
@@ -461,7 +467,7 @@ public class GameOverlayLayer {
         final int CARD_HEIGHT = (int) (CARD_WIDTH * 8.9 / 5.6);
         String theme = ThemeManager.INSTANCE.selected();
 
-        List<Card> hand = ItemHandCards.sortedHand(game, realPlayer);
+        List<Card> hand = HandScreen.visibleHand(game, realPlayer);
         int clientHandIndex = Mth.clamp(ItemHandCards.getClientHandIndex(player), 0, hand.size() - 1);
         handCardCurrentXOff.keySet()
             .removeIf(
@@ -478,6 +484,7 @@ public class GameOverlayLayer {
             drawCallouts(font, game, realPlayer, width, height);
             return true;
         }
+        rowExtent = null;
         int[] shownIdx = window(hand.size(), clientHandIndex, 24, false);
         List<Card> shown = new ArrayList<>();
         int shownSel = 0;
@@ -567,10 +574,6 @@ public class GameOverlayLayer {
                 }
             }
         }
-        if (shownIdx.length < hand.size()) {
-            String page = pageLabel(clientHandIndex, hand.size());
-            GuiDraw.drawString(font, page, width - 10 - font.getStringWidth(page), 6, 0xFFFFE070);
-        }
         drawDebugDraws(game, realPlayer, theme, width, height);
         drawCallouts(font, game, realPlayer, width, height);
         GL11.glDisable(GL11.GL_BLEND);
@@ -603,6 +606,13 @@ public class GameOverlayLayer {
     }
 
     private static int lastPage = 15;
+    private static float[] rowExtent;
+
+    /** {left, right, top} of the fanned hand last frame, or null when the hand is not laid out as a fan. */
+    public static float[] rowExtent() {
+        return rowExtent;
+    }
+
     private final java.util.Set<Integer> rowKnown = new java.util.HashSet<>();
     private final List<Object[]> ghosts = new ArrayList<>();
     private Object ghostGame;
@@ -634,11 +644,6 @@ public class GameOverlayLayer {
         int[] out = new int[fit];
         for (int i = 0; i < fit; i++) out[i] = Math.floorMod(start + i, total);
         return out;
-    }
-
-    private static String pageLabel(int selected, int total) {
-        return Chat.translatable("gui.minopp.hand.page", selected + 1, total)
-            .getFormattedText();
     }
 
     private Object callGame;
@@ -880,14 +885,13 @@ public class GameOverlayLayer {
         }
         GL11.glDisable(GL11.GL_BLEND);
 
-        if (shownIdx.length < fullHand.size()) {
-            String page = pageLabel(selectedFull, fullHand.size());
-            int pw = font.getStringWidth(page);
-            int lx = Math.max(4, Math.round(px - maxRow / 2f) - pw - 10);
-            int ly = Math.round(cy) - 4;
-            UiDraw.roundRect(lx - 4, ly - 3, lx + pw + 4, ly + 10, 3, 0xA0000000);
-            font.drawStringWithShadow(page, lx, ly, 0xFFFFE070);
+        float left = Float.MAX_VALUE, right = -Float.MAX_VALUE, top = Float.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            left = Math.min(left, cxs[i] - cw / 2f);
+            right = Math.max(right, cxs[i] + cw / 2f);
+            top = Math.min(top, cys[i] - ch / 2f);
         }
+        rowExtent = n == 0 ? null : new float[] { left, right, top };
 
         if (selectedIndex >= 0 && selectedIndex < n) {
             cardRects.add(

@@ -254,6 +254,26 @@ public class EntityAutoPlayer extends EntityLiving {
         return new ItemStack[5];
     }
 
+    // a seated bot at a table with nothing under its spot (a table in the sky) stands on thin air instead of falling
+    // and being pulled back over and over
+    @Override
+    public void onLivingUpdate() {
+        if (!worldObj.isRemote && tablePos != null && getActive()) {
+            double dx = posX - (tablePos.x + 1.5), dz = posZ - (tablePos.z + 1.5);
+            boolean near = dx * dx + dz * dz <= 3.5 * 3.5 && posY >= tablePos.y - 0.2 && posY <= tablePos.y + 0.8;
+            int bx = net.minecraft.util.MathHelper.floor_double(posX),
+                bz = net.minecraft.util.MathHelper.floor_double(posZ);
+            int by = net.minecraft.util.MathHelper.floor_double(posY - 0.05);
+            if (near && worldObj.isAirBlock(bx, by, bz)) {
+                if (motionY < 0) motionY = 0;
+                if (posY < tablePos.y) setPosition(posX, tablePos.y, posZ);
+                fallDistance = 0;
+                onGround = true;
+            }
+        }
+        super.onLivingUpdate();
+    }
+
     // bots stay at their table: pulled back when moved away, and lobby-summoned bots vanish once they lose their seat
     private void leash() {
         BlockEntityMinoTable table = tablePos == null ? null : ItemHandCards.getTable(worldObj, tablePos);
