@@ -54,7 +54,8 @@ public final class TableFx {
         CUSTOM,
         TOSS,
         ROULETTE,
-        SYMBOL
+        SYMBOL,
+        DICE
     }
 
     private record Fx(Kind kind, long start, int duration, double x, double y, double z, int color, Object data) {
@@ -78,6 +79,7 @@ public final class TableFx {
         int shoutSeq = -1;
         final Set<UUID> coins = new HashSet<>();
         int tossSeq = -1;
+        int diceSeq = -1, luckySeq = -1;
     }
 
     private static final ResourceLocation TEX_DIRECTION = Mino.id("textures/fx/direction.png");
@@ -184,6 +186,7 @@ public final class TableFx {
                 case TOSS -> toss(f, t);
                 case ROULETTE -> roulette(f, now);
                 case SYMBOL -> symbolPop(f, t);
+                case DICE -> dice(f, now);
                 case CUSTOM -> {
                     Object[] d = (Object[]) f.data;
                     GL11.glPushMatrix();
@@ -236,6 +239,31 @@ public final class TableFx {
             }
         }
         s.tossSeq = game.tossSeq;
+        if (!first && game.diceSeq != s.diceSeq && game.diceSides > 0 && game.diceRoller != null) {
+            int seat = seatOf(game, game.diceRoller);
+            if (seat >= 0) s.fx.add(throwDie(table, seat, game.diceSides, game.diceResult, now));
+        }
+        s.diceSeq = game.diceSeq;
+        if (!first && game.luckySeq != s.luckySeq && game.luckyPlayer != null) {
+            int seat = seatOf(game, game.luckyPlayer);
+            if (seat >= 0) {
+                Vec3d at = head(table, seat, 1.6);
+                boolean win = game.luckyResult != CardGame.LUCKY_TAILS;
+                if (game.luckyResult != CardGame.LUCKY_SEVENS)
+                    s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
+                s.fx.add(
+                    new Fx(
+                        Kind.PLUS,
+                        now + (game.luckyResult == CardGame.LUCKY_SEVENS ? 200 : 1300),
+                        1500,
+                        at.x,
+                        at.y + 0.45,
+                        at.z,
+                        win ? 0x60F070 : 0xFF4840,
+                        win ? "-7" : "+7"));
+            }
+        }
+        s.luckySeq = game.luckySeq;
         for (CardPlayer p : game.players) {
             if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
                 Vec3d at = head(table, p.seat, 1.6);
@@ -390,6 +418,28 @@ public final class TableFx {
         particlesFor("happyVillager", 14, 0.6, "play_again_10");
         particlesFor("flame", 12, 0.6, "wild_hurry_up");
         CardFxRegistry.register("wild_color_roulette", ctx -> ctx.sink.roulette());
+        for (String sign : new String[] { "number_sign", "wild_number_sign" }) {
+            CardFxRegistry.register(
+                sign,
+                ctx -> ctx.bigText(
+                    "#" + Math.max(1, ctx.game().signNumber),
+                    ctx.face.color.isWild() || ctx.face.color == CardColor.COLORLESS ? 0xD0D0D8
+                        : ctx.face.color.rgb & 0xFFFFFF,
+                    ctx.pile()
+                        .add(0, 1.6, 0),
+                    250,
+                    1400));
+        }
+        CardFxRegistry.register("joker", ctx -> ctx.particles("fireworksSpark", 36, 1.1));
+        CardFxRegistry.register(
+            "wild_times_two",
+            ctx -> ctx.bigText(
+                "x2",
+                0xFF5040,
+                ctx.pile()
+                    .add(0, 1.7, 0),
+                300,
+                1300));
         CardFxRegistry.register(
             face -> !face.type().numbered && !OWN_FX.contains(face.type().id)
                 && !isSkip(face.type().id)
@@ -710,7 +760,79 @@ public final class TableFx {
         "wild_color_roulette",
         "wild_time_balloon",
         "wild_sudden_death",
-        "wild_final_attack");
+        "wild_final_attack",
+        "wild_d4",
+        "wild_d6",
+        "wild_d8",
+        "wild_d12",
+        "wild_d20",
+        "wild_lucky_seven");
+
+    private static final int[] DIE_COLORS = { 0x3CAA50, 0xD23228, 0xE6BE1E, 0x286ED2, 0x8C46C8 };
+    private static final double DIE_SIZE = 0.17;
+
+    private static int dieColor(int sides) {
+        return DIE_COLORS[switch (sides) {
+            case 4 -> 0;
+            case 6 -> 1;
+            case 8 -> 2;
+            case 12 -> 3;
+            default -> 4;
+        }];
+    }
+
+    // thrown from in front of the roller onto the table beside the discard pile
+    private static Fx throwDie(BlockEntityMinoTable table, int seat, int sides, int result, long now) {
+        Vec3d h = head(table, seat, 1.35);
+        double dx = h.x - 1.5, dz = h.z - 1.5, len = Math.max(1e-3, Math.sqrt(dx * dx + dz * dz));
+        dx /= len;
+        dz /= len;
+        double side = (RANDOM.nextDouble() - 0.5) * 0.5;
+        double[] start = { h.x - dx * 0.35, h.y, h.z - dz * 0.35 };
+        double[] target = { 1.5 + dx * 0.45 - dz * side, PILE_Y, 1.5 + dz * 0.45 + dx * side };
+        Dice.Roll roll = Dice.simulate(sides, result, RANDOM.nextLong(), start, target, PILE_Y + 0.01, DIE_SIZE);
+        int duration = (int) (roll.frames() * 1000L / Dice.FPS) + 2200;
+        double[] world = { table.xCoord, table.yCoord, table.zCoord };
+        return new Fx(
+            Kind.DICE,
+            now,
+            duration,
+            0,
+            0,
+            0,
+            dieColor(sides),
+            new Object[] { roll, world, new int[] { 0 } });
+    }
+
+    private static void dice(Fx f, long now) {
+        Object[] d = (Object[]) f.data;
+        Dice.Roll roll = (Dice.Roll) d[0];
+        double[] world = (double[]) d[1];
+        int[] heard = (int[]) d[2];
+        double sec = (now - f.start) / 1000.0;
+        float t = f.t(now);
+        double frame = sec * Dice.FPS;
+        while (heard[0] < roll.bounces.size() && roll.bounces.get(heard[0]) <= frame) {
+            double[] p = roll.pos.get(roll.bounces.get(heard[0]));
+            float loud = 0.55f / (1 + heard[0]);
+            Minecraft.getMinecraft().theWorld.playSound(
+                world[0] + p[0],
+                world[1] + p[1],
+                world[2] + p[2],
+                "step.wood",
+                loud,
+                1.5f + 0.1f * heard[0],
+                false);
+            heard[0]++;
+        }
+        float alpha = fadeOut(t, 0.88f);
+        double[] at = Dice.draw(roll, sec, DIE_SIZE, f.color, alpha);
+        double settled = roll.settleEnd / (double) Dice.FPS;
+        if (sec > settled) {
+            float lt = (float) Math.min(1, (sec - settled) / (f.duration / 1000.0 - settled));
+            bigText(String.valueOf(roll.result), at[0], at[1] + 0.32, at[2], lt, 0.035f, f.color, 0);
+        }
+    }
 
     private static void symbolPop(Fx f, float t) {
         Object[] d = (Object[]) f.data;

@@ -533,7 +533,7 @@ public class GameOverlayLayer {
             renderHandRow(font, game, realPlayer, hand, clientHandIndex, isMyTurn, myPlayerIndex, theme, width, height);
             drawDebugDraws(game, realPlayer, theme, width, height);
             drawCallouts(font, game, realPlayer, width, height);
-            drawCoin(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
+            drawTray(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
             return true;
         }
         rowExtent = null;
@@ -628,7 +628,7 @@ public class GameOverlayLayer {
         }
         drawDebugDraws(game, realPlayer, theme, width, height);
         drawCallouts(font, game, realPlayer, width, height);
-        drawCoin(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
+        drawTray(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
         GL11.glDisable(GL11.GL_BLEND);
         return true;
     }
@@ -723,7 +723,97 @@ public class GameOverlayLayer {
         return coinRect;
     }
 
-    private void drawCoin(FontRenderer font, CardGame game, CardPlayer me, boolean enabled, int width, int height) {
+    // the bottom right corner holds the coin and the last die rolled, side by side; both shrink when they share it
+    private void drawTray(FontRenderer font, CardGame game, CardPlayer me, boolean coins, int width, int height) {
+        boolean dice = diceVisible(game);
+        boolean coin = coins && me != null;
+        int size = dice && coin ? 24 : 30;
+        drawCoin(font, game, me, coins, width, height, size);
+        if (dice) drawDiceBadge(font, coin ? width - size - 10 - 8 : width, height, size);
+    }
+
+    private Long diceGame;
+    private int diceSeqSeen = -1, diceSides, diceResult;
+    private long diceAt;
+
+    private static final long DICE_LANDS_MS = 1800, DICE_SHOWN_MS = 6000;
+
+    private boolean diceVisible(CardGame game) {
+        long now = System.currentTimeMillis();
+        if (!Objects.equals(diceGame, game.id)) {
+            diceGame = game.id;
+            diceSeqSeen = game.diceSeq;
+            diceAt = 0;
+        }
+        if (game.diceSeq != diceSeqSeen) {
+            diceSeqSeen = game.diceSeq;
+            diceAt = now;
+            diceSides = game.diceSides;
+            diceResult = game.diceResult;
+        }
+        // waits for the die on the table to land, so the corner never gives the roll away
+        return diceAt > 0 && now - diceAt > DICE_LANDS_MS && now - diceAt < DICE_LANDS_MS + DICE_SHOWN_MS;
+    }
+
+    private static final int[] DIE_RGB = { 0x3CAA50, 0xD23228, 0xE6BE1E, 0x286ED2, 0x8C46C8 };
+
+    private void drawDiceBadge(FontRenderer font, int right, int height, int size) {
+        long age = System.currentTimeMillis() - diceAt - DICE_LANDS_MS;
+        float in = Math.min(1f, age / 250f), out = Math.min(1f, (DICE_SHOWN_MS - age) / 500f);
+        float scale = (1 + 0.25f * (float) Math.sin(Math.min(1f, in) * Math.PI)) * Math.max(0f, out);
+        int x = right - size - 10, y = height - size - 26;
+        float cx = x + size / 2f, cy = y + size / 2f, r = size / 2f;
+        int rgb = DIE_RGB[switch (diceSides) {
+            case 4 -> 0;
+            case 6 -> 1;
+            case 8 -> 2;
+            case 12 -> 3;
+            default -> 4;
+        }];
+        int corners = switch (diceSides) {
+            case 4 -> 3;
+            case 6 -> 4;
+            case 8 -> 4;
+            case 12 -> 5;
+            default -> 6;
+        };
+        double start = diceSides == 6 ? -Math.PI / 4 : -Math.PI / 2;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(cx, cy, 0);
+        GL11.glScalef(scale, scale, 1);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        net.minecraft.client.renderer.Tessellator t = net.minecraft.client.renderer.Tessellator.instance;
+        for (int pass = 0; pass < 2; pass++) {
+            float rr = pass == 0 ? r + 1.5f : r;
+            int c = pass == 0 ? 0xF0F0F0 : rgb;
+            t.startDrawing(GL11.GL_TRIANGLE_FAN);
+            t.setColorRGBA((c >> 16) & 255, (c >> 8) & 255, c & 255, 255);
+            t.addVertex(0, 0, 0);
+            for (int i = corners; i >= 0; i--) {
+                double a = start + i * 2 * Math.PI / corners;
+                t.addVertex(Math.cos(a) * rr, Math.sin(a) * rr, 0);
+            }
+            t.draw();
+        }
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        String n = String.valueOf(diceResult);
+        float ts = size >= 30 ? 1.5f : 1.2f;
+        GL11.glScalef(ts, ts, 1);
+        int nx = -font.getStringWidth(n) / 2, ny = diceSides == 4 ? -2 : -4;
+        for (int[] o : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } })
+            font.drawString(n, nx + o[0], ny + o[1], 0xFF1A1A1A);
+        font.drawString(n, nx, ny, 0xFFFFFFFF);
+        GL11.glPopMatrix();
+        GL11.glColor4f(1, 1, 1, 1);
+        if (scale > 0.05f) {
+            String label = "D" + diceSides;
+            drawStringWithBackdrop(font, label, (int) cx - font.getStringWidth(label) / 2, y + size + 3, 0xFFE8E8E8);
+        }
+    }
+
+    private void drawCoin(FontRenderer font, CardGame game, CardPlayer me, boolean enabled, int width, int height,
+        int size) {
         coinRect = null;
         if (!enabled || me == null) return;
         long now = System.currentTimeMillis();
@@ -738,7 +828,7 @@ public class GameOverlayLayer {
         }
         if (me.coinUsed && !coinSpent) coinUseAt = now;
         coinSpent = me.coinUsed;
-        int size = 30, x = width - size - 10, y = height - size - 26;
+        int x = width - size - 10, y = height - size - 26;
         coinRect = new int[] { x, y, size };
         float flipT = Math.min(1f, (now - coinFlipAt) / 350f), useT = Math.min(1f, (now - coinUseAt) / 900f);
         float sx = flipT < 1 ? (float) Math.abs(Math.cos(flipT * Math.PI)) : 1;

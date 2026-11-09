@@ -172,8 +172,9 @@ public final class DevPreview {
         }
     }
 
-    private static final String[] SCRIPT = { "wild", "wild_fifty_fifty", "draw", "wild_draw4", "wild_color_roulette",
-        "wild", "skip", "draw" };
+    private static final String[] SCRIPT = System
+        .getProperty("minopp.previewScript", "wild,wild_fifty_fifty,draw,wild_draw4,wild_color_roulette,wild,skip,draw")
+        .split(",");
     private int scriptStep;
 
     private void playScripted(BlockEntityMinoTable table, CardPlayer me, EntityPlayerMP player) {
