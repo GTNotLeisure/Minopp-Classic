@@ -845,5 +845,170 @@ public final class CardTypes {
             .effect(ctx -> ctx.game.suddenDeath(ctx.report))
             .build());
 
+    // UNO Infinity: only the cards no other pack already has
+    public static final CardType FAST_NUMBER = register(
+        CardType.builder("fast_number", CardPack.INFINITY)
+            .numbered()
+            .fast()
+            .sort(1)
+            .build());
+    public static final CardType COLORLESS_NUMBER = register(
+        CardType.builder("colorless_number", CardPack.INFINITY)
+            .numbered()
+            .fixedColor(CardColor.COLORLESS)
+            .sort(2)
+            .build());
+    public static final CardType MINUS_ONE = register(
+        CardType.builder("minus_one", CardPack.INFINITY)
+            .label("-1")
+            .sort(130)
+            .pick(1)
+            .effect(ctx -> ctx.game.discardPicked(ctx.player, ctx.face.type(), ctx.choices, ctx.report))
+            .build());
+    public static final CardType NUMBER_SIGN = register(
+        CardType.builder("number_sign", CardPack.INFINITY)
+            .label("#")
+            .sort(131)
+            .choice(Choice.NUMBER)
+            .effect(ctx -> ctx.game.numberSign(ctx.player, ctx.choices.number, false, ctx.report))
+            .build());
+    public static final CardType WILD_SKIP = register(
+        CardType.builder("wild_skip", CardPack.INFINITY)
+            .wild()
+            .label("WØ")
+            .sort(132)
+            .effect(ctx -> ctx.game.skipNext(1))
+            .build());
+    public static final CardType WILD_REVERSE = register(
+        CardType.builder("wild_reverse", CardPack.INFINITY)
+            .wild()
+            .label("W⇆")
+            .sort(133)
+            .effect(ctx -> ctx.game.reverse())
+            .build());
+    public static final CardType WILD_DRAW8 = register(
+        CardType.builder("wild_draw8", CardPack.INFINITY)
+            .wild()
+            .label("+8")
+            .sort(134)
+            .draw(8)
+            .effect(ctx -> ctx.game.addPendingDraw(8, ctx.player))
+            .build());
+    public static final CardType WILD_TIMES_TWO = register(
+        CardType.builder("wild_times_two", CardPack.INFINITY)
+            .wild()
+            .label("×2")
+            .sort(135)
+            .effect(ctx -> ctx.game.timesTwo(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_TARGET_DRAW1 = register(
+        CardType.builder("wild_target_draw1", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("➶1")
+            .sort(136)
+            .effect(ctx -> ctx.game.targetDraws(ctx.target(0), 1, ctx.report))
+            .build());
+    public static final CardType WILD_TARGET_DRAW4 = register(
+        CardType.builder("wild_target_draw4", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("➶4")
+            .sort(137)
+            .effect(ctx -> ctx.game.targetDraws(ctx.target(0), 4, ctx.report))
+            .build());
+    public static final CardType WILD_ALL_DRAW2 = register(
+        CardType.builder("wild_all_draw2", CardPack.INFINITY)
+            .wild()
+            .label("2E")
+            .sort(138)
+            .effect(ctx -> ctx.game.everyoneElseDraws(ctx.player, 2, ctx.report))
+            .build());
+    public static final CardType WILD_ALL_DRAW4 = register(
+        CardType.builder("wild_all_draw4", CardPack.INFINITY)
+            .wild()
+            .label("4E")
+            .sort(139)
+            .effect(ctx -> ctx.game.everyoneElseDraws(ctx.player, 4, ctx.report))
+            .build());
+    public static final CardType WILD_D4 = dice(4, 140);
+    public static final CardType WILD_D6 = dice(6, 141);
+    public static final CardType WILD_D8 = dice(8, 142);
+    public static final CardType WILD_D12 = dice(12, 143);
+    public static final CardType WILD_D20 = dice(20, 144);
+    public static final CardType WILD_HALVE = register(
+        CardType.builder("wild_halve", CardPack.INFINITY)
+            .wild()
+            .label("÷2")
+            .sort(145)
+            .pick(CardType.PICK_HALF)
+            .effect(ctx -> ctx.game.discardPicked(ctx.player, ctx.face.type(), ctx.choices, ctx.report))
+            .build());
+    public static final CardType WILD_MINUS_ONE = register(
+        CardType.builder("wild_minus_one", CardPack.INFINITY)
+            .wild()
+            .label("W-1")
+            .sort(146)
+            .pick(1)
+            .effect(ctx -> ctx.game.discardPicked(ctx.player, ctx.face.type(), ctx.choices, ctx.report))
+            .build());
+    public static final CardType WILD_MINUS_TWO = register(
+        CardType.builder("wild_minus_two", CardPack.INFINITY)
+            .wild()
+            .label("-2")
+            .sort(147)
+            .pick(2)
+            .effect(ctx -> ctx.game.discardPicked(ctx.player, ctx.face.type(), ctx.choices, ctx.report))
+            .build());
+    public static final CardType WILD_REVEAL_ONE = register(
+        CardType.builder("wild_reveal_one", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("W◉")
+            .sort(148)
+            .effect(ctx -> ctx.game.revealOne(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType JOKER = register(
+        CardType.builder("joker", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.NONE)
+            .label("★")
+            .sort(149)
+            .effect(ctx -> ctx.game.joker(ctx.player, ctx.report))
+            .build());
+    public static final CardType WILD_NUMBER_SIGN = register(
+        CardType.builder("wild_number_sign", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.NUMBER)
+            .label("W#")
+            .sort(150)
+            .effect(ctx -> ctx.game.numberSign(ctx.player, ctx.choices.number, true, ctx.report))
+            .build());
+    public static final CardType WILD_RECYCLE = register(
+        CardType.builder("wild_recycle", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("♻")
+            .sort(151)
+            .effect(ctx -> ctx.game.recycle(ctx.player, ctx.target(0), ctx.report))
+            .build());
+    public static final CardType WILD_LUCKY_SEVEN = register(
+        CardType.builder("wild_lucky_seven", CardPack.INFINITY)
+            .wild()
+            .label("777")
+            .sort(152)
+            .effect(ctx -> ctx.game.luckySeven(ctx.player, ctx.report))
+            .build());
+
+    private static CardType dice(int sides, int sort) {
+        return register(
+            CardType.builder("wild_d" + sides, CardPack.INFINITY)
+                .wild()
+                .label("D" + sides)
+                .sort(sort)
+                .effect(ctx -> ctx.game.rollDice(ctx.player, sides, ctx.report))
+                .build());
+    }
+
     public static void init() {}
 }

@@ -83,6 +83,7 @@ public final class Conflicts {
             "wild_double_speed",
             "wild_power_reverse");
         link(rule(GameRules.MULTI_PLAY), extraPlays);
+        link(rule(GameRules.MULTI_PLAY), card("fast_number"));
         link(rule(GameRules.MULTI_PLAY), rule(GameRules.BRING_CARD));
         // with bluffing ruled out there is nothing left to challenge
         link(rule(GameRules.CHALLENGE), rule(GameRules.NO_BLUFFING));

@@ -400,6 +400,11 @@ public class CardGame {
         return topCard.face(darkSide);
     }
 
+    /** What the top card matches by symbol: the number a Number Sign named, else its own symbol. */
+    public String topSymbolKey() {
+        return signNumber >= 0 ? "n" + signNumber : topFace().symbolKey();
+    }
+
     public CardFace face(Card card) {
         return card.face(darkSide);
     }
@@ -529,7 +534,7 @@ public class CardGame {
                 && (type.matchKey.equals("skip") || type.matchKey.equals("reverse"))
                 && (face.color == currentColor || face.isWild()
                     || face.symbolKey()
-                        .equals(topFace().symbolKey()))) {
+                        .equals(topSymbolKey()))) {
                 return null;
             }
             if (!type.isDraw() || useFlex) return "game.minopp.play.must_stack_or_draw";
@@ -555,9 +560,9 @@ public class CardGame {
         CardColor matchColor = useFlex && face.flexColor != null ? face.flexColor : face.color;
         if (currentColor == CardColor.WILD || matchColor == currentColor) return null;
         CardFace top = topFace();
-        if (!top.isWild() || top.type().keepsColor) {
+        if (!top.isWild() || top.type().keepsColor || signNumber >= 0) {
             if (face.symbolKey()
-                .equals(top.symbolKey())) return null;
+                .equals(topSymbolKey())) return null;
         }
         return "game.minopp.play.invalid_card";
     }
@@ -669,6 +674,10 @@ public class CardGame {
             }
         }
 
+        if (choice.needsNumber() && (choices.number < 1 || choices.number > 9)) {
+            choices.number = commonNumber(cardPlayer, card);
+        }
+        if (!isCut && currentPlayerPhase == PlayerActionPhase.FAST) currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         boolean brought = currentPlayerPhase == PlayerActionPhase.BRING && !isCut;
         int keptSkip = skipCount;
         boolean keptExtra = extraTurn;
@@ -762,6 +771,15 @@ public class CardGame {
                 advanceTurn(report);
                 return report.played();
             }
+            if (!isCut && type.fast
+                && !useFlex
+                && speedLevel <= 1
+                && pendingDraw == 0
+                && decisions.isEmpty()
+                && !cardPlayer.hand.isEmpty()) {
+                currentPlayerPhase = PlayerActionPhase.FAST;
+                return report.state(Chat.translatable("game.minopp.play.fast", cardPlayer.name));
+            }
             if (!isCut && !brought
                 && speedLevel <= 1
                 && rule(GameRules.BRING_CARD)
@@ -837,7 +855,8 @@ public class CardGame {
             advanceTurn(report);
             return report.state(Chat.translatable("game.minopp.play.crash", cardPlayer.name, amount));
         }
-        if (currentPlayerPhase == PlayerActionPhase.CHAIN || currentPlayerPhase == PlayerActionPhase.BRING) {
+        if (currentPlayerPhase == PlayerActionPhase.CHAIN || currentPlayerPhase == PlayerActionPhase.BRING
+            || currentPlayerPhase == PlayerActionPhase.FAST) {
             report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
             return report.state(Chat.translatable("game.minopp.play.chain_end", cardPlayer.name));
@@ -1080,6 +1099,7 @@ public class CardGame {
             pendingSpeed = 0;
         }
         if (revealTurns > 0) revealTurns--;
+        if (revealOneTurns > 0 && --revealOneTurns == 0) revealedOne = null;
         int previousIndex = currentPlayerIndex;
         if (forcedNext != null) {
             CardPlayer target = deAmputate(forcedNext);
@@ -2049,6 +2069,138 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.fifty_fifty", loser.name, amount));
     }
 
+    // ---- UNO Infinity
+
+    /** The number a Number Sign stands for until the next card is played, or -1. */
+    public int signNumber = -1;
+    /** The last die rolled, for the table animation and the HUD. */
+    public int diceSides, diceResult, diceSeq;
+    public UUID diceRoller;
+    /** The last Lucky Seven: whose it was and how the coin landed (or the three sevens shown). */
+    public UUID luckyPlayer;
+    public int luckyResult, luckySeq;
+    public static final int LUCKY_TAILS = 0, LUCKY_HEADS = 1, LUCKY_SEVENS = 2;
+    /** A hand shown to everyone until play comes back around to whoever revealed it. */
+    public UUID revealedOne;
+    public int revealOneTurns;
+
+    private int commonNumber(CardPlayer player, Card played) {
+        int[] counts = new int[10];
+        for (Card c : player.hand) {
+            CardFace f = face(c);
+            if (c != played && f.isNumber() && f.number >= 1 && f.number <= 9) counts[f.number]++;
+        }
+        int best = 1 + random.nextInt(9);
+        for (int n = 1; n <= 9; n++) if (counts[n] > counts[best]) best = n;
+        return best;
+    }
+
+    /** Discards the cards the player picked; missing or invalid picks are made up with their highest-scoring cards. */
+    public void discardPicked(CardPlayer player, CardType type, PlayContext.PlayChoices choices, ActionReport report) {
+        int need = type.pickCount(player.hand.size());
+        if (need == 0) return;
+        List<Card> chosen = new ArrayList<>();
+        for (int uid : choices.picks) {
+            if (chosen.size() >= need) break;
+            for (Card c : player.hand) if (c.uid == uid && !chosen.contains(c)) chosen.add(c);
+        }
+        if (chosen.size() < need) {
+            List<Card> rest = new ArrayList<>(player.hand);
+            rest.removeAll(chosen);
+            rest.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
+            for (Card c : rest) {
+                if (chosen.size() >= need) break;
+                chosen.add(c);
+            }
+        }
+        for (Card c : chosen) {
+            player.hand.remove(c);
+            discardDeck.add(c);
+        }
+        if (player.hand.size() == 1) player.hasShoutedMino = true;
+        report.messageAll(Chat.translatable("game.minopp.play.discarded", player.name, chosen.size()));
+    }
+
+    public void numberSign(CardPlayer player, int number, boolean colorless, ActionReport report) {
+        signNumber = Math.max(1, Math.min(9, number));
+        if (colorless) currentColor = CardColor.COLORLESS;
+        report.messageAll(Chat.translatable("game.minopp.play.number_sign", player.name, signNumber));
+    }
+
+    public void joker(CardPlayer player, ActionReport report) {
+        currentColor = CardColor.WILD;
+        report.messageAll(Chat.translatable("game.minopp.play.joker", player.name));
+    }
+
+    public void timesTwo(CardPlayer player, ActionReport report) {
+        CardPlayer victim = nextPlayer();
+        if (victim.equals(player)) return;
+        int n = Math.max(1, victim.hand.size());
+        drawCards(victim, n, report);
+        skipNext(1);
+        report.messageAll(Chat.translatable("game.minopp.play.times_two", victim.name, n));
+    }
+
+    public void rollDice(CardPlayer player, int sides, ActionReport report) {
+        CardPlayer victim = nextPlayer();
+        int roll = 1 + random.nextInt(sides);
+        diceSides = sides;
+        diceResult = roll;
+        diceRoller = victim.uuid;
+        diceSeq++;
+        if (!victim.equals(player)) {
+            drawCards(victim, roll, report);
+            skipNext(1);
+        }
+        report.messageAll(Chat.translatable("game.minopp.play.dice", victim.name, sides, roll));
+    }
+
+    public void revealOne(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target == null) return;
+        revealedOne = target.uuid;
+        revealOneTurns = activePlayers().size();
+        report.messageAll(Chat.translatable("game.minopp.play.reveal_one", player.name, target.name));
+    }
+
+    /** The highest-scoring card of the discard pile goes to a player of the player's choice. */
+    public void recycle(CardPlayer player, CardPlayer target, ActionReport report) {
+        if (target == null) target = player;
+        Card best = null;
+        for (Card c : discardDeck) if (best == null || cardPoints(c) > cardPoints(best)) best = c;
+        if (best == null) return;
+        discardDeck.remove(best);
+        target.hand.add(best);
+        target.hasShoutedMino = false;
+        report.messageAll(Chat.translatable("game.minopp.play.recycle", player.name, target.name));
+    }
+
+    /**
+     * Three sevens in hand: discard seven. Otherwise a coin: heads discards the seven highest-scoring cards, tails
+     * draws seven.
+     */
+    public void luckySeven(CardPlayer player, ActionReport report) {
+        long sevens = player.hand.stream()
+            .filter(c -> {
+                CardFace f = face(c);
+                return f.isNumber() && f.number == 7;
+            })
+            .count();
+        luckyPlayer = player.uuid;
+        luckySeq++;
+        if (sevens >= 3 || random.nextBoolean()) {
+            luckyResult = sevens >= 3 ? LUCKY_SEVENS : LUCKY_HEADS;
+            player.hand.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
+            int n = Math.min(7, player.hand.size());
+            for (int i = 0; i < n; i++) discardDeck.add(player.hand.remove(0));
+            if (player.hand.size() == 1) player.hasShoutedMino = true;
+            report.messageAll(Chat.translatable("game.minopp.play.lucky_win", player.name, n));
+        } else {
+            luckyResult = LUCKY_TAILS;
+            drawCards(player, 7, report);
+            report.messageAll(Chat.translatable("game.minopp.play.lucky_lose", player.name));
+        }
+    }
+
     public void attachBalloon(CardPlayer player, ActionReport report) {
         balloonHolder = player.uuid;
         balloonFuse = 3 + random.nextInt(6);
@@ -2090,6 +2242,7 @@ public class CardGame {
     }
 
     public void doDiscardCard(CardPlayer player, Card card, ActionReport report) {
+        signNumber = -1;
         discardDeck.add(topCard);
         topCard = card;
         card.owner = player.uuid;
@@ -2231,6 +2384,7 @@ public class CardGame {
         CHAIN,
         BRING,
         SPEED,
+        FAST,
     }
 
     private static List<Card> readCards(NBTTagList list) {
@@ -2267,6 +2421,16 @@ public class CardGame {
         tossTails = NbtUtil.hasUUID(tag, "tossTails") ? NbtUtil.getUUID(tag, "tossTails") : null;
         tossHeadsUp = tag.getBoolean("tossHeadsUp");
         tossSeq = tag.getInteger("tossSeq");
+        signNumber = tag.hasKey("signNumber") ? tag.getInteger("signNumber") : -1;
+        diceSides = tag.getInteger("diceSides");
+        diceResult = tag.getInteger("diceResult");
+        diceSeq = tag.getInteger("diceSeq");
+        diceRoller = NbtUtil.hasUUID(tag, "diceRoller") ? NbtUtil.getUUID(tag, "diceRoller") : null;
+        luckyPlayer = NbtUtil.hasUUID(tag, "luckyPlayer") ? NbtUtil.getUUID(tag, "luckyPlayer") : null;
+        luckyResult = tag.getInteger("luckyResult");
+        luckySeq = tag.getInteger("luckySeq");
+        revealedOne = NbtUtil.hasUUID(tag, "revealedOne") ? NbtUtil.getUUID(tag, "revealedOne") : null;
+        revealOneTurns = tag.getInteger("revealOneTurns");
         debug = tag.getBoolean("debug");
         debugHold = tag.getBoolean("debugHold");
         debugNext = tag.hasKey("debugNext") ? tag.getInteger("debugNext") : -1;
@@ -2347,6 +2511,16 @@ public class CardGame {
         if (tossTails != null) NbtUtil.putUUID(tag, "tossTails", tossTails);
         tag.setBoolean("tossHeadsUp", tossHeadsUp);
         tag.setInteger("tossSeq", tossSeq);
+        tag.setInteger("signNumber", signNumber);
+        tag.setInteger("diceSides", diceSides);
+        tag.setInteger("diceResult", diceResult);
+        tag.setInteger("diceSeq", diceSeq);
+        if (diceRoller != null) NbtUtil.putUUID(tag, "diceRoller", diceRoller);
+        if (luckyPlayer != null) NbtUtil.putUUID(tag, "luckyPlayer", luckyPlayer);
+        tag.setInteger("luckyResult", luckyResult);
+        tag.setInteger("luckySeq", luckySeq);
+        if (revealedOne != null) NbtUtil.putUUID(tag, "revealedOne", revealedOne);
+        tag.setInteger("revealOneTurns", revealOneTurns);
         if (debug) {
             tag.setBoolean("debug", true);
             tag.setBoolean("debugHold", debugHold);

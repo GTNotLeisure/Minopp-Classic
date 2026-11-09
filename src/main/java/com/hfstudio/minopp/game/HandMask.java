@@ -28,11 +28,14 @@ public final class HandMask {
         NBTTagCompound copy = (NBTTagCompound) tableTag.copy();
         NBTTagCompound game = copy.getCompoundTag("game");
         boolean darkSide = game.getBoolean("darkSide");
+        UUID revealed = game.getInteger("revealOneTurns") > 0 && NbtUtil.hasUUID(game, "revealedOne")
+            ? NbtUtil.getUUID(game, "revealedOne")
+            : null;
         NBTTagList players = game.getTagList("players", 10);
         for (int i = 0; i < players.tagCount(); i++) {
             NBTTagCompound player = players.getCompoundTagAt(i);
-            if (viewer != null && NbtUtil.hasUUID(player, "uuid") && viewer.equals(NbtUtil.getUUID(player, "uuid")))
-                continue;
+            UUID holder = NbtUtil.hasUUID(player, "uuid") ? NbtUtil.getUUID(player, "uuid") : null;
+            if (holder != null && (holder.equals(viewer) || holder.equals(revealed))) continue;
             maskCards(player.getTagList("hand", 10), darkSide, showBacks);
         }
         maskCards(game.getTagList("deck", 10), darkSide, showBacks);

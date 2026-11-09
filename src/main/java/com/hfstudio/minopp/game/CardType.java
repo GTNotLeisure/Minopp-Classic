@@ -9,7 +9,12 @@ public final class CardType {
         TARGET,
         COLOR_AND_TARGET,
         TWO_TARGETS,
-        COLOR_AND_TWO_TARGETS;
+        COLOR_AND_TWO_TARGETS,
+        NUMBER;
+
+        public boolean needsNumber() {
+            return this == NUMBER;
+        }
 
         public boolean needsColor() {
             return this == COLOR || this == COLOR_AND_TARGET || this == COLOR_AND_TWO_TARGETS;
@@ -53,6 +58,14 @@ public final class CardType {
     public final Condition condition;
     public final boolean answersDraw;
     public final int points;
+    /** Cards the player picks from their hand to discard: a count, {@link #PICK_HALF}, or 0 for none. */
+    public final int pick;
+    /** Fast cards: the player may play another card right after. */
+    public final boolean fast;
+    /** Cards printed in one color only, such as the colorless numbers; null for the usual four. */
+    public final CardColor fixedColor;
+
+    public static final int PICK_HALF = -1;
 
     private CardType(Builder b) {
         this.id = b.id;
@@ -72,6 +85,15 @@ public final class CardType {
         this.condition = b.condition;
         this.answersDraw = b.answersDraw;
         this.points = b.points;
+        this.pick = b.pick;
+        this.fast = b.fast;
+        this.fixedColor = b.fixedColor;
+    }
+
+    /** How many cards a player holding {@code handAfter} cards picks to discard. */
+    public int pickCount(int handAfter) {
+        int n = pick == PICK_HALF ? handAfter / 2 : pick;
+        return Math.max(0, Math.min(n, handAfter));
     }
 
     public boolean isDraw() {
@@ -94,7 +116,9 @@ public final class CardType {
 
         private final String id;
         private final String packId;
-        private boolean wild, numbered, keepsColor, answersDraw;
+        private boolean wild, numbered, keepsColor, answersDraw, fast;
+        private int pick;
+        private CardColor fixedColor;
         private String matchKey, shortLabel, symbol;
         private int sortOrder = 100, drawValue, points = 20;
         private Choice choice = Choice.NONE, flexChoice = Choice.NONE;
@@ -182,6 +206,21 @@ public final class CardType {
 
         public Builder points(int points) {
             this.points = points;
+            return this;
+        }
+
+        public Builder pick(int pick) {
+            this.pick = pick;
+            return this;
+        }
+
+        public Builder fast() {
+            this.fast = true;
+            return this;
+        }
+
+        public Builder fixedColor(CardColor color) {
+            this.fixedColor = color;
             return this;
         }
 

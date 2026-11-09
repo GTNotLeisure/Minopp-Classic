@@ -276,8 +276,9 @@ public class GameOverlayLayer {
                     .getFormattedText()
                     : Chat.translatable("gui.minopp.play.cursor.play")
                         .getFormattedText();
-                case DISCARD_DRAWN, CHAIN, BRING, SPEED -> isPass ? Chat.translatable("gui.minopp.play.cursor.pass")
-                    .getFormattedText()
+                case DISCARD_DRAWN, CHAIN, BRING, SPEED, FAST -> isPass
+                    ? Chat.translatable("gui.minopp.play.cursor.pass")
+                        .getFormattedText()
                     : Chat.translatable("gui.minopp.play.cursor.play")
                         .getFormattedText();
             };

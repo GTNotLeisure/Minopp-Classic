@@ -183,6 +183,8 @@ public class TableConfig {
         for (int number : numbers) {
             if (type.wild) {
                 faces.add(new CardFace(type.id, CardColor.WILD, number));
+            } else if (type.fixedColor != null) {
+                faces.add(new CardFace(type.id, type.fixedColor, number));
             } else {
                 for (CardColor color : CardColor.forSide(entry.dark())) {
                     faces.add(new CardFace(type.id, color, number, entry.flexColor() ? color.flexPartner() : null));

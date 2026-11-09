@@ -40,6 +40,7 @@ public final class CardPack {
     public static final String LOVE_ISLAND = "love_island";
     public static final String BILLIE = "billie";
     public static final String SHOW_EM = "show_em";
+    public static final String INFINITY = "infinity";
 
     /**
      * One line of a deck composition.
@@ -57,8 +58,13 @@ public final class CardPack {
             return CardTypes.get(typeId).wild;
         }
 
+        /** Printed once per number instead of once per color: wild cards and one-color cards. */
+        public boolean single() {
+            return isWild() || CardTypes.get(typeId).fixedColor != null;
+        }
+
         public int totalCards(int count) {
-            int perVariant = isWild() ? count : count * 4;
+            int perVariant = single() ? count : count * 4;
             return perVariant * Math.max(1, numbers.length);
         }
     }
@@ -81,7 +87,8 @@ public final class CardPack {
 
     public boolean isAddon() {
         if (backSideOnly) return false;
-        for (Entry e : entries) if (CardTypes.get(e.typeId).numbered) return false;
+        // a pack with plain number cards is a deck of its own; special numbers (Fast, Colorless) still ride on one
+        for (Entry e : entries) if (e.typeId.equals("number")) return false;
         return true;
     }
 
@@ -382,6 +389,38 @@ public final class CardPack {
         .entry("wild_sudden_death", 1)
         .rule(GameRules.COINS, 1)
         .players(2, 6)
+        .build();
+
+    public static final CardPack PACK_INFINITY = new Builder(INFINITY)
+        .entry("fast", "fast_number", ONE_TO_NINE, 2, false, false)
+        .entry("colorless", "colorless_number", ZERO_TO_NINE, 1, false, false)
+        .entry("draw1", 1)
+        .entry("minus_one", 1)
+        .entry("number_sign", 1)
+        .entry("wild_skip", 1)
+        .entry("wild_reverse", 1)
+        .entry("wild_draw8", 1)
+        .entry("wild_times_two", 1)
+        .entry("wild_target_draw1", 1)
+        .entry("wild_target_draw4", 1)
+        .entry("wild_all_draw2", 1)
+        .entry("wild_all_draw4", 1)
+        .entry("wild_d4", 1)
+        .entry("wild_d6", 1)
+        .entry("wild_d8", 1)
+        .entry("wild_d12", 1)
+        .entry("wild_d20", 1)
+        .entry("wild_halve", 1)
+        .entry("wild_minus_one", 1)
+        .entry("wild_minus_two", 1)
+        .entry("wild_reveal_one", 1)
+        .entry("joker", 1)
+        .entry("wild_number_sign", 1)
+        .entry("wild_recycle", 1)
+        .entry("wild_lucky_seven", 1)
+        .rule(GameRules.STACKING, 1)
+        .rule(GameRules.MERCY, 1)
+        .players(2, 10)
         .build();
 
     public static void init() {
