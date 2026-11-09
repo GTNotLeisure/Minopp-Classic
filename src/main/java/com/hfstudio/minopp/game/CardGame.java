@@ -15,6 +15,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import net.minecraft.nbt.NBTTagCompound;
@@ -264,7 +265,7 @@ public class CardGame {
         List<CardFace> pool = on ? new ArrayList<>(config().darkFaces()) : null;
         if (pool != null) Collections.shuffle(pool, random);
         int[] next = { 0 };
-        java.util.function.UnaryOperator<Card> fix = c -> {
+        UnaryOperator<Card> fix = c -> {
             if (c == null || (on ? c.dark != null : c.dark == null)) return c;
             return new Card(c.uid, c.light, on ? pool.get(next[0]++ % pool.size()) : null);
         };

@@ -57,7 +57,7 @@ public class GameOverlayLayer {
     private double zoomAnimationProgress = 0;
     private double zoomAnimationTarget = 0;
     private final Map<Integer, Float> handCardCurrentXOff = new HashMap<>();
-    private final java.util.Set<Integer> uidScratch = new java.util.HashSet<>();
+    private final Set<Integer> uidScratch = new HashSet<>();
 
     private void keepOnly(Map<Integer, ?> byUid, List<Card> hand) {
         if (byUid.isEmpty()) return;

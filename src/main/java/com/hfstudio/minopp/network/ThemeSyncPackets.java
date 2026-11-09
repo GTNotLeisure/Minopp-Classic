@@ -3,6 +3,7 @@ package com.hfstudio.minopp.network;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
@@ -22,7 +23,7 @@ public final class ThemeSyncPackets {
 
     private static final Map<UUID, String> SERVER_THEMES = new HashMap<>();
     private static final Map<UUID, Long> LAST_CHANGE = new HashMap<>();
-    private static final java.util.regex.Pattern THEME_ID = java.util.regex.Pattern.compile("[a-z0-9_.:-]{1,64}");
+    private static final Pattern THEME_ID = Pattern.compile("[a-z0-9_.:-]{1,64}");
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         String theme = Buf.readString(packet);

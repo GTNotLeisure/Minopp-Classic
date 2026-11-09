@@ -1,5 +1,6 @@
 package com.hfstudio.minopp.network;
 
+import java.util.Objects;
 import java.util.UUID;
 
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -75,7 +76,7 @@ public class C2SPlayCardPacket {
                 .anyMatch(d -> d.player.equals(cardPlayer.uuid));
         UUID who = active && mayChoose ? cardPlayer.uuid : null;
         if (who == null && !cardPlayer.uuid.equals(tableEntity.choosingUuid)) return;
-        if (java.util.Objects.equals(who, tableEntity.choosingUuid) && ring == tableEntity.choosingRing
+        if (Objects.equals(who, tableEntity.choosingUuid) && ring == tableEntity.choosingRing
             && hover == tableEntity.choosingHover) return;
         tableEntity.choosingUuid = who;
         tableEntity.choosingRing = ring;
