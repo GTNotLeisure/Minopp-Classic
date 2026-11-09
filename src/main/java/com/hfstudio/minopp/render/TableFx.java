@@ -358,16 +358,19 @@ public final class TableFx {
         }
 
         void pillar(boolean blocks) {
+            double[] dir = BlockEntityMinoTableRenderer
+                .seatDir(table, game, game.topCard == null ? null : game.topCard.owner);
+            if (dir == null) dir = new double[] { 0, 1 };
             s.fx.add(
                 new Fx(
                     Kind.WILD,
                     now,
-                    1800,
+                    1300,
                     1.5,
                     PILE_Y,
                     1.5,
                     game.currentColor.rgb,
-                    new Object[] { game.currentColor, blocks }));
+                    new Object[] { game.currentColor, blocks, dir[0], dir[1] }));
         }
 
         void slabs(int count, int rgb) {
@@ -615,62 +618,46 @@ public final class TableFx {
         }
     }
 
-    // the wild's color pillar: a see-through ring cut in four for a plain wild, four blocks for a draw wild. It rises
-    // and spins to a stop with the chosen color facing the viewer, the chosen piece pops up, then all four pull in
-    // together and sink into the pile, which bursts with blocks of the chosen color
+    // picks up where the color picker left off (same layout, facing the chooser's seat): the chosen piece lifts,
+    // then all four pull together and sink into the pile, which bursts with blocks of the chosen color
     private static void wildPillar(Fx f, float t) {
         Object[] d = (Object[]) f.data;
         CardColor chosen = (CardColor) d[0];
         boolean square = (Boolean) d[1];
+        double fx = (Double) d[2], fz = (Double) d[3], len = Math.max(1e-6, Math.hypot(fx, fz));
+        fx /= len;
+        fz /= len;
+        double[][] off = { { fx, fz }, { fz, -fx }, { -fx, -fz }, { -fz, fx } };
         List<CardColor> colors = CardColor.forSide(chosen.side == CardColor.Side.DARK);
         int pick = Math.max(0, colors.indexOf(chosen));
-        float stop = 0.42f;
-        float rise = easeOutCubic(Math.min(1f, t / 0.14f));
-        float spin = pick * 90 + (square ? 0 : 45) - 270 + (1 - easeOutCubic(Math.min(1f, t / stop))) * 720f;
-        float pop = easeOutCubic(Math.max(0f, Math.min(1f, (t - stop) / 0.12f)));
-        float pull = Math.max(0f, Math.min(1f, (t - 0.6f) / 0.22f));
+        float lift = easeOutCubic(Math.min(1f, t / 0.22f));
+        float pull = Math.max(0f, Math.min(1f, (t - 0.3f) / 0.3f));
         pull *= pull;
-        double height = (square ? 0.6 : 0.42) * rise;
-        if (pull >= 1f) height = 0;
         GL11.glPushMatrix();
-        GL11.glTranslated(f.x, PILE_Y - 0.5 * pull, f.z);
-        GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);
-        GL11.glRotatef(spin, 0, 1, 0);
-        GL11.glScalef(1 - 0.9f * pull, 1 - 0.8f * pull, 1 - 0.9f * pull);
+        GL11.glTranslated(f.x, PILE_Y - 0.005 - 0.3 * pull, f.z);
         Tessellator tes = Tessellator.instance;
         tes.startDrawingQuads();
-        for (int q = 0; q < 4; q++) {
+        for (int q = 0; q < Math.min(4, colors.size()); q++) {
             boolean picked = q == pick;
+            double h = (picked ? 0.55 + 0.3 * lift : 0.24) * (1 - 0.85 * pull);
+            double y0 = picked ? 0.12 * lift : 0;
+            if (h <= 0.005) continue;
             int rgb = colors.get(q).rgb & 0xFFFFFF;
-            double y0 = picked ? 0.28 * pop : 0;
-            double y1 = y0 + height * (picked ? 1 + 0.2 * pop : 1);
-            float alpha = 1f;
-            if (height <= 0.005) continue;
-            double c = Math.toRadians(q * 90 + (square ? 0 : 45));
             if (square) {
-                double cx = Math.cos(c) * 0.32, cz = Math.sin(c) * 0.32, w = 0.28;
-                cuboid(tes, cx - w / 2, y0, cz - w / 2, cx + w / 2, y1, cz + w / 2, rgb, alpha);
+                double cx = off[q][0] * 0.44 * (1 - pull), cz = off[q][1] * 0.44 * (1 - pull),
+                    hw = 0.17 * (1 - 0.6 * pull);
+                cuboid(tes, cx - hw, y0, cz - hw, cx + hw, y0 + h, cz + hw, rgb, 1f);
             } else {
-                ringQuarter(tes, q * 90 + 3, q * 90 + 87, 0.03, 0.56, y0, y1, rgb, alpha);
-            }
-            if (pull <= 0f) {
-                double top = y1 + 0.004, from = square ? 0.04 : 0.16, tip = square ? 0.19 : 0.36,
-                    base = square ? 0.07 : 0.09;
-                double nx = Math.cos(c), nz = Math.sin(c), px = -nz, pz = nx;
-                color(tes, 0xFF8A1E, Math.min(1f, alpha + 0.2f));
-                tes.addVertex(nx * tip, top, nz * tip);
-                tes.addVertex(nx * from + px * base, top, nz * from + pz * base);
-                tes.addVertex(nx * from - px * base, top, nz * from - pz * base);
-                tes.addVertex(nx * from - px * base, top, nz * from - pz * base);
+                double mid = Math.toDegrees(Math.atan2(off[q][1], off[q][0])), k = 1 - 0.9 * pull;
+                ringQuarter(tes, mid - 43, mid + 43, 0.03 * k, 0.56 * k, y0, y0 + h, rgb, 1f);
             }
         }
         tes.draw();
-        GL11.glDepthMask(true);
         GL11.glPopMatrix();
-        if (t >= 0.78f) {
-            float sec = (t - 0.78f) * f.duration / 1000f;
+        if (t >= 0.55f) {
+            float sec = (t - 0.55f) * f.duration / 1000f;
             int rgb = chosen.rgb & 0xFFFFFF;
-            float alpha = fadeOut(t, 0.88f);
+            float alpha = fadeOut(t, 0.85f);
             cubes(
                 f.x,
                 PILE_Y + 0.2,
@@ -682,7 +669,7 @@ public final class TableFx {
                 0.09f,
                 1.9f,
                 alpha);
-            float grow = Math.min(1f, (t - 0.78f) / 0.1f);
+            float grow = Math.min(1f, (t - 0.55f) / 0.1f);
             GL11.glPushMatrix();
             GL11.glTranslated(f.x, PILE_Y, f.z);
             GL11.glRotatef(-RenderManager.instance.playerViewY, 0, 1, 0);

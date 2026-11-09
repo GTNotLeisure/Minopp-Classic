@@ -96,8 +96,28 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         BATCH.flush();
         GL11.glPopMatrix();
 
+        // the color picker faces the chooser's seat, for the chooser and for everyone watching
         EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
-        if (viewer != null) ColorPicker3D.render(blockEntity.getBlockPos(), viewer.posX, viewer.posZ);
+        com.hfstudio.minopp.util.BlockPos pos = blockEntity.getBlockPos();
+        if (ColorPicker3D.isActiveFor(pos)) {
+            double[] dir = seatDir(
+                blockEntity,
+                game,
+                Minecraft.getMinecraft().thePlayer == null ? null
+                    : Minecraft.getMinecraft().thePlayer.getGameProfile()
+                        .getId());
+            if (dir != null) ColorPicker3D.render(pos, pos.x + 1.5 + dir[0], pos.z + 1.5 + dir[1]);
+            else if (viewer != null) ColorPicker3D.render(pos, viewer.posX, viewer.posZ);
+        } else if (blockEntity.choosingUuid != null) {
+            double[] dir = seatDir(blockEntity, game, blockEntity.choosingUuid);
+            if (dir != null) ColorPicker3D.renderRemote(
+                dir[0],
+                dir[1],
+                com.hfstudio.minopp.game.CardColor.forSide(game.darkSide),
+                blockEntity.choosingRing,
+                blockEntity.choosingHover,
+                blockEntity.choosingSeenAt);
+        }
 
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
         TableFx.render(blockEntity, game);
@@ -130,6 +150,18 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
     }
 
     private static final CardBatch BATCH = new CardBatch();
+
+    /** From the table's center toward a player's seat, or null when they are not seated in this game. */
+    static double[] seatDir(BlockEntityMinoTable table, CardGame game, java.util.UUID uuid) {
+        if (uuid == null) return null;
+        for (com.hfstudio.minopp.game.CardPlayer p : game.players) {
+            if (!p.uuid.equals(uuid)) continue;
+            com.hfstudio.minopp.util.Vec3d s = table.getSeatLocalPos(p.seat);
+            double dx = s.x - 1.5, dz = s.z - 1.5;
+            return dx * dx + dz * dz < 1e-6 ? null : new double[] { dx, dz };
+        }
+        return null;
+    }
 
     /** The viewer's own table's draw pile on screen last frame {minX, minY, maxX, maxY, cx, cy}, or null. */
     private static float[] deckBounds;

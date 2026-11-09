@@ -106,13 +106,27 @@ public final class ColorPicker3D {
 
     public static void render(BlockPos pos, double viewX, double viewZ) {
         if (!isActiveFor(pos)) return;
+        draw(viewX - (pos.x + 1.5), viewZ - (pos.z + 1.5), colors, ring, hovered, openedAt, height, true);
+    }
+
+    private static final float[] REMOTE_HEIGHT = new float[4];
+    private static long remoteNanos = System.nanoTime();
+
+    /** Another player choosing: the same picker, laid out toward their seat, with no hit testing. */
+    public static void renderRemote(double dirX, double dirZ, List<CardColor> choices, boolean asRing, int hover,
+        long since) {
+        draw(dirX, dirZ, choices, asRing, hover, since, REMOTE_HEIGHT, false);
+    }
+
+    private static void draw(double fx, double fz, List<CardColor> colors, boolean ring, int hovered, long openedAt,
+        float[] height, boolean local) {
         long now = System.nanoTime();
-        float dt = Math.min(0.1f, (now - lastNanos) / 1e9f);
-        lastNanos = now;
+        float dt = Math.min(0.1f, (now - (local ? lastNanos : remoteNanos)) / 1e9f);
+        if (local) lastNanos = now;
+        else remoteNanos = now;
         float ease = 1 - (float) Math.exp(-dt * 12);
         float appear = Math.min(1f, (System.currentTimeMillis() - openedAt) / 250f);
 
-        double fx = viewX - (pos.x + 1.5), fz = viewZ - (pos.z + 1.5);
         double len = Math.sqrt(fx * fx + fz * fz);
         if (len < 1e-3) {
             fx = 0;
@@ -167,12 +181,13 @@ public final class ColorPicker3D {
                 }
                 pts[12] = new double[] { 1.5, y0, 1.5 };
                 pts[13] = new double[] { 1.5, y1, 1.5 };
-                screenBounds[i] = projectPoints(pts, modelview, projection, viewport, scale, mc.displayHeight);
+                if (local)
+                    screenBounds[i] = projectPoints(pts, modelview, projection, viewport, scale, mc.displayHeight);
                 continue;
             }
             float alpha = hot ? 0.95f : 0.78f;
             drawBox(cx - half, y0, cz - half, cx + half, y1, cz + half, rgb, alpha, hot);
-            screenBounds[i] = project(
+            if (local) screenBounds[i] = project(
                 cx - half,
                 y0,
                 cz - half,

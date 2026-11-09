@@ -62,6 +62,11 @@ public class BlockEntityMinoTable extends TileEntity {
     public boolean demo = false;
     public boolean gameEnd = false;
     public UUID lastPlayedByUuid = null;
+    public UUID choosingUuid;
+    public boolean choosingRing;
+    public int choosingHover = -1;
+    /** Client side: when the current choice was first seen, for its pop-in. */
+    public long choosingSeenAt;
     public UUID ownerUuid;
     public String ownerName = "";
     public UUID hostUuid;
@@ -211,6 +216,11 @@ public class BlockEntityMinoTable extends TileEntity {
         compoundTag.setBoolean("gameEnd", gameEnd);
         if (lastPlayedByUuid != null) NbtUtil.putUUID(compoundTag, "lastPlayedBy", lastPlayedByUuid);
         if (ownerUuid != null) NbtUtil.putUUID(compoundTag, "owner", ownerUuid);
+        if (choosingUuid != null) {
+            NbtUtil.putUUID(compoundTag, "chooser", choosingUuid);
+            compoundTag.setBoolean("chooserRing", choosingRing);
+            compoundTag.setInteger("chooserHover", choosingHover);
+        }
         compoundTag.setString("ownerName", ownerName);
         if (worldObj != null && !worldObj.isRemote) hostUuid = currentHost();
         if (hostUuid != null) NbtUtil.putUUID(compoundTag, "host", hostUuid);
@@ -292,6 +302,11 @@ public class BlockEntityMinoTable extends TileEntity {
         gameEnd = compoundTag.getBoolean("gameEnd");
 
         ownerUuid = NbtUtil.hasUUID(compoundTag, "owner") ? NbtUtil.getUUID(compoundTag, "owner") : null;
+        UUID chooser = NbtUtil.hasUUID(compoundTag, "chooser") ? NbtUtil.getUUID(compoundTag, "chooser") : null;
+        if (chooser != null && !chooser.equals(choosingUuid)) choosingSeenAt = System.currentTimeMillis();
+        choosingUuid = chooser;
+        choosingRing = compoundTag.getBoolean("chooserRing");
+        choosingHover = chooser == null ? -1 : compoundTag.getInteger("chooserHover");
         ownerName = compoundTag.getString("ownerName");
         hostUuid = NbtUtil.hasUUID(compoundTag, "host") ? NbtUtil.getUUID(compoundTag, "host") : null;
         hostName = compoundTag.getString("hostName");
@@ -713,6 +728,7 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     public void handleActionResult(ActionReport result, CardPlayer cardPlayer, EntityPlayerMP player) {
+        if (result != null && !result.isFail) choosingUuid = null;
         if (result != null) {
             if (result.shouldDestroyGame) {
                 scoreRound(result.winners, result);

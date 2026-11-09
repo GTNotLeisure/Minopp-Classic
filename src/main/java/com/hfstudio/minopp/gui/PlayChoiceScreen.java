@@ -72,12 +72,11 @@ public class PlayChoiceScreen extends GuiScreen {
         int band = bandTop();
         if (colorStep) {
             List<CardColor> colors = CardColor.forSide(darkSide);
-            ColorPicker3D.open(
-                gamePos,
-                colors,
-                !card.face(darkSide)
-                    .type()
-                    .isDraw());
+            ringPicker = !card.face(darkSide)
+                .type()
+                .isDraw();
+            ColorPicker3D.open(gamePos, colors, ringPicker);
+            shareChoice(true, -1);
             int bw = 56, gap = 6, total = colors.size() * bw + (colors.size() - 1) * gap;
             for (int i = 0; i < colors.size(); i++) {
                 CardColor c = colors.get(i);
@@ -177,6 +176,15 @@ public class PlayChoiceScreen extends GuiScreen {
     }
 
     private int keyPick = -1;
+    private int sentHover = -2;
+    private boolean ringPicker;
+
+    private void shareChoice(boolean active, int hover) {
+        if (active && hover == sentHover) return;
+        sentHover = active ? hover : -2;
+        C2SPlayCardPacket.Client.sendChoosingC2S(gamePos, active, ringPicker, hover);
+    }
+
     private int lastMouseX = Integer.MIN_VALUE, lastMouseY;
 
     // WASD / arrows move between the pillars by where they appear on screen, so it works from any side of the table
@@ -281,6 +289,7 @@ public class PlayChoiceScreen extends GuiScreen {
     @Override
     public void onGuiClosed() {
         ColorPicker3D.close();
+        if (sentHover != -2) shareChoice(false, -1);
     }
 
     @Override
@@ -338,6 +347,7 @@ public class PlayChoiceScreen extends GuiScreen {
                 }
             }
             ColorPicker3D.hovered = hit;
+            shareChoice(true, hit);
             if (hit >= 0 && hit < colors.size()) {
                 String name = Chat.translatable(
                     colors.get(hit)

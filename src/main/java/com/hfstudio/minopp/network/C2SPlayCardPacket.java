@@ -20,7 +20,7 @@ public class C2SPlayCardPacket {
     public static final String ID = "minopp:play_card";
 
     private static final int ACTION_PLAY = 0, ACTION_NO_CARD = 1, ACTION_DOUBT = 2, ACTION_DECISION = 3,
-        ACTION_COIN = 4;
+        ACTION_COIN = 4, ACTION_CHOOSING = 5;
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         BlockPos gamePos = Buf.readBlockPos(packet);
@@ -49,6 +49,15 @@ public class C2SPlayCardPacket {
             }
             case ACTION_NO_CARD -> tableEntity.game.playNoCard(cardPlayer);
             case ACTION_COIN -> tableEntity.game.useCoin(cardPlayer, packet.readBoolean());
+            case ACTION_CHOOSING -> {
+                // the wild's color picker as the player sees it, so everyone at the table can watch the choice
+                boolean active = packet.readBoolean(), ring = packet.readBoolean();
+                int hover = packet.readByte();
+                tableEntity.choosingUuid = active ? cardPlayer.uuid : null;
+                tableEntity.choosingRing = ring;
+                tableEntity.choosingHover = Math.max(-1, Math.min(3, hover));
+                yield null;
+            }
             case ACTION_DOUBT -> tableEntity.game.doubtMino(cardPlayer, Buf.readUUID(packet));
             case ACTION_DECISION -> {
                 int answer = packet.readInt();
@@ -78,6 +87,14 @@ public class C2SPlayCardPacket {
             for (UUID target : choices.targets) Buf.writeUUID(packet, target);
             packet.writeBoolean(choices.useFlex);
             packet.writeBoolean(choices.shout);
+            MinoNetwork.sendPacketToServer(ID, packet);
+        }
+
+        public static void sendChoosingC2S(BlockPos gamePos, boolean active, boolean ring, int hover) {
+            ByteBuf packet = header(gamePos, ACTION_CHOOSING);
+            packet.writeBoolean(active);
+            packet.writeBoolean(ring);
+            packet.writeByte(hover);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
