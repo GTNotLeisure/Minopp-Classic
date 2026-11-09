@@ -16,7 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MovingObjectPosition;
@@ -59,6 +58,23 @@ public class GameOverlayLayer {
     private double zoomAnimationTarget = 0;
     private final Map<Integer, Float> handCardCurrentXOff = new HashMap<>();
     private final Set<Integer> uidScratch = new HashSet<>();
+
+    // the client gets a new game object with every sync, so what can be played holds until the next one
+    private CardGame playableFor;
+    private final Map<Integer, Boolean> playableCache = new HashMap<>();
+
+    private boolean playable(CardGame game, CardPlayer player, Card card) {
+        if (game != playableFor) {
+            playableCache.clear();
+            playableFor = game;
+        }
+        Boolean ok = playableCache.get(card.uid);
+        if (ok == null) {
+            ok = game.canPlay(player, card);
+            playableCache.put(card.uid, ok);
+        }
+        return ok;
+    }
 
     private void keepOnly(Map<Integer, ?> byUid, List<Card> hand) {
         if (byUid.isEmpty()) return;
@@ -586,7 +602,7 @@ public class GameOverlayLayer {
                         Math.max(1, CARD_WIDTH * 3 / 32),
                         0x60000000);
                 }
-                if (isMyTurn && game.canPlay(realPlayer, card)) {
+                if (isMyTurn && playable(game, realPlayer, card)) {
                     int rim = 0xA0 + (int) (0x5F * slowPulse());
                     UiDraw.roundRect(
                         x - 2,
@@ -602,7 +618,7 @@ public class GameOverlayLayer {
                     CardRenderer.drawCornerSymbol(face, theme, x + 3, y + 2, mini);
                 }
 
-                boolean playable = isMyTurn && game.canPlay(realPlayer, card);
+                boolean playable = isMyTurn && playable(game, realPlayer, card);
                 float shadowAlpha = !isMyTurn ? 0.5f : (playable ? 0f : 0.3f);
                 if (shadowAlpha > 0) {
                     int corner = Math.max(1, CARD_WIDTH * 3 / 32);
@@ -756,57 +772,13 @@ public class GameOverlayLayer {
         return diceAt > 0 && now - diceAt > DICE_LANDS_MS && now - diceAt < DICE_LANDS_MS + DICE_SHOWN_MS;
     }
 
-    private static final int[] DIE_RGB = { 0x3CAA50, 0xD23228, 0xE6BE1E, 0x286ED2, 0x8C46C8 };
-
     private void drawDiceBadge(FontRenderer font, int right, int height, int size) {
         long age = System.currentTimeMillis() - diceAt - DICE_LANDS_MS;
         float in = Math.min(1f, age / 250f), out = Math.min(1f, (DICE_SHOWN_MS - age) / 500f);
         float scale = (1 + 0.25f * (float) Math.sin(Math.min(1f, in) * Math.PI)) * Math.max(0f, out);
         int x = right - size - 10, y = height - size - 26;
-        float cx = x + size / 2f, cy = y + size / 2f, r = size / 2f;
-        int rgb = DIE_RGB[switch (diceSides) {
-            case 4 -> 0;
-            case 6 -> 1;
-            case 8 -> 2;
-            case 12 -> 3;
-            default -> 4;
-        }];
-        int corners = switch (diceSides) {
-            case 4 -> 3;
-            case 6 -> 4;
-            case 8 -> 4;
-            case 12 -> 5;
-            default -> 6;
-        };
-        double start = diceSides == 6 ? -Math.PI / 4 : -Math.PI / 2;
-        GL11.glPushMatrix();
-        GL11.glTranslatef(cx, cy, 0);
-        GL11.glScalef(scale, scale, 1);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        Tessellator t = Tessellator.instance;
-        for (int pass = 0; pass < 2; pass++) {
-            float rr = pass == 0 ? r + 1.5f : r;
-            int c = pass == 0 ? 0xF0F0F0 : rgb;
-            t.startDrawing(GL11.GL_TRIANGLE_FAN);
-            t.setColorRGBA((c >> 16) & 255, (c >> 8) & 255, c & 255, 255);
-            t.addVertex(0, 0, 0);
-            for (int i = corners; i >= 0; i--) {
-                double a = start + i * 2 * Math.PI / corners;
-                t.addVertex(Math.cos(a) * rr, Math.sin(a) * rr, 0);
-            }
-            t.draw();
-        }
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        String n = String.valueOf(diceResult);
-        float ts = size >= 30 ? 1.5f : 1.2f;
-        GL11.glScalef(ts, ts, 1);
-        int nx = -font.getStringWidth(n) / 2, ny = diceSides == 4 ? -2 : -4;
-        for (int[] o : new int[][] { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } })
-            font.drawString(n, nx + o[0], ny + o[1], 0xFF1A1A1A);
-        font.drawString(n, nx, ny, 0xFFFFFFFF);
-        GL11.glPopMatrix();
-        GL11.glColor4f(1, 1, 1, 1);
+        float cx = x + size / 2f, cy = y + size / 2f;
+        if (scale > 0.02f) com.hfstudio.minopp.render.Dice.drawBadge(diceSides, diceResult, cx, cy, size * scale, 1f);
         if (scale > 0.05f) {
             String label = "D" + diceSides;
             drawStringWithBackdrop(font, label, (int) cx - font.getStringWidth(label) / 2, y + size + 3, 0xFFE8E8E8);
@@ -944,7 +916,7 @@ public class GameOverlayLayer {
             int fresh = Math.min(game.debugDrawn.size(), Math.max(0, game.debugDrawSeq - ghostSeq));
             for (int k = 0; k < fresh; k++) {
                 Card c = game.debugDrawn.get(game.debugDrawn.size() - fresh + k);
-                ghosts.add(new Object[] { game.face(c), now + k * 120L, k - (fresh - 1) / 2f });
+                ghosts.add(new Object[] { game.face(c), now + k * 120L, k - (fresh - 1) / 2f, c });
             }
         }
         ghostSeq = game.debugDrawSeq;
@@ -956,7 +928,7 @@ public class GameOverlayLayer {
             drawDrawnCard(
                 game,
                 (CardFace) g[0],
-                null,
+                (Card) g[3],
                 theme,
                 width * 0.5f + (Float) g[2] * cw * 0.7f,
                 height - ch * 0.75f,
@@ -1009,7 +981,7 @@ public class GameOverlayLayer {
         boolean[] playables = new boolean[n];
         for (int i = 0; i < n; i++) {
             Card card = hand.get(i);
-            playables[i] = isMyTurn && game.canPlay(me, card);
+            playables[i] = isMyTurn && playable(game, me, card);
             float target = i == selectedIndex ? (interactive ? 26 : 10) : (playables[i] ? 5 : 0);
             Float cur = rowLift.get(card.uid);
             float lift = cur == null ? 0 : cur;
@@ -1024,11 +996,11 @@ public class GameOverlayLayer {
 
         long nowMs = System.currentTimeMillis();
         if (Objects.equals(rowGame, game.id)) {
+            uidScratch.clear();
+            for (Card c : fullHand) uidScratch.add(c.uid);
             for (Map.Entry<Integer, float[]> e : rowLast.entrySet()) {
                 int uid = e.getKey();
-                boolean gone = fullHand.stream()
-                    .noneMatch(c -> c.uid == uid);
-                if (gone && game.topCard != null && game.topCard.uid == uid) {
+                if (!uidScratch.contains(uid) && game.topCard != null && game.topCard.uid == uid) {
                     flyers.add(new Object[] { game.face(game.topCard), theme, e.getValue(), nowMs });
                 }
             }

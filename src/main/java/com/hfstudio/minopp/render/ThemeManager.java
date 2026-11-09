@@ -40,7 +40,8 @@ public final class ThemeManager implements IResourceManagerReloadListener {
 
     private final Map<String, ThemeInfo> themes = new LinkedHashMap<>();
     private final Map<ResourceLocation, Boolean> existsCache = new HashMap<>();
-    private final Map<String, ResourceLocation> textureCache = new HashMap<>();
+    private final Map<String, Map<String, ResourceLocation>> textureCache = new HashMap<>();
+    private static final ResourceLocation MISSING = new ResourceLocation(Mino.MOD_ID, "missing");
     public final Map<UUID, String> playerThemes = new HashMap<>();
     private String lastSentTheme = null;
 
@@ -155,8 +156,9 @@ public final class ThemeManager implements IResourceManagerReloadListener {
     }
 
     public ResourceLocation texture(String theme, String layer) {
-        String cacheKey = theme + "/" + layer;
-        if (textureCache.containsKey(cacheKey)) return textureCache.get(cacheKey);
+        Map<String, ResourceLocation> byLayer = textureCache.computeIfAbsent(theme, k -> new HashMap<>());
+        ResourceLocation cached = byLayer.get(layer);
+        if (cached != null) return cached == MISSING ? null : cached;
         ResourceLocation result = null;
         String t = theme;
         for (int depth = 0; depth < 5 && t != null && result == null; depth++) {
@@ -166,7 +168,7 @@ public final class ThemeManager implements IResourceManagerReloadListener {
             t = info == null ? (t.equals(DEFAULT) ? null : DEFAULT) : info.fallback();
         }
         if (result == null && !theme.equals(DEFAULT)) result = texture(DEFAULT, layer);
-        textureCache.put(cacheKey, result);
+        byLayer.put(layer, result == null ? MISSING : result);
         return result;
     }
 

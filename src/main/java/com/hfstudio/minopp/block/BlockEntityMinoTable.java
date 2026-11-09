@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.block;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +38,7 @@ import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionMessage;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.AutoPlayer;
+import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
@@ -153,14 +155,18 @@ public class BlockEntityMinoTable extends TileEntity {
         public final Vec3d fromPos;
         public final Vec3d toPos;
         public final int cardCount;
+        /** The cards in flight, whose backs show (their other side in Flip); empty for plain backs. */
+        public final List<Card> cards;
         public final long startTime;
         public static final long DURATION_MS = 1200;
         public static final float STAGGER = 0.08f;
 
-        public HandSwapAnimation(Vec3d fromPos, Vec3d toPos, int cardCount) {
+        public HandSwapAnimation(Vec3d fromPos, Vec3d toPos, int cardCount, List<Card> cards) {
             this.fromPos = fromPos;
             this.toPos = toPos;
             this.cardCount = cardCount;
+            this.cards = cards.isEmpty() ? Collections.emptyList()
+                : new ArrayList<>(cards.subList(Math.max(0, cards.size() - 10), cards.size()));
             this.startTime = System.currentTimeMillis();
         }
 
@@ -347,8 +353,8 @@ public class BlockEntityMinoTable extends TileEntity {
                     for (int i = 0; i < n; i++) {
                         CardPlayer from = active.get(i);
                         CardPlayer to = active.get(game.isAntiClockwise ? (i - 1 + n) % n : (i + 1) % n);
-                        activeAnimations
-                            .add(new HandSwapAnimation(getSeatLocalPos(from.seat), getSeatLocalPos(to.seat), 5));
+                        activeAnimations.add(
+                            new HandSwapAnimation(getSeatLocalPos(from.seat), getSeatLocalPos(to.seat), 5, to.hand));
                     }
                 }
                 case 7 -> {
@@ -359,18 +365,20 @@ public class BlockEntityMinoTable extends TileEntity {
                             new HandSwapAnimation(
                                 getSeatLocalPos(fromP.seat),
                                 getSeatLocalPos(toP.seat),
-                                toP.hand.size()));
+                                toP.hand.size(),
+                                toP.hand));
                         activeAnimations.add(
                             new HandSwapAnimation(
                                 getSeatLocalPos(toP.seat),
                                 getSeatLocalPos(fromP.seat),
-                                fromP.hand.size()));
+                                fromP.hand.size(),
+                                fromP.hand));
                     }
                 }
                 case 1 -> {
                     for (CardPlayer p : active) {
                         activeAnimations
-                            .add(new HandSwapAnimation(getSeatLocalPos(p.seat), new Vec3d(1.5, 0.94, 1.5), 4));
+                            .add(new HandSwapAnimation(getSeatLocalPos(p.seat), new Vec3d(1.5, 0.94, 1.5), 4, p.hand));
                     }
                 }
                 default -> {}
@@ -382,8 +390,12 @@ public class BlockEntityMinoTable extends TileEntity {
                 int prev = prevBoxed == null ? 0 : prevBoxed;
                 int curr = p.hand.size();
                 if (curr > prev) {
-                    activeAnimations
-                        .add(new HandSwapAnimation(new Vec3d(0.5, 0.94, 0.5), getSeatLocalPos(p.seat), curr - prev));
+                    activeAnimations.add(
+                        new HandSwapAnimation(
+                            new Vec3d(0.5, 0.94, 0.5),
+                            getSeatLocalPos(p.seat),
+                            curr - prev,
+                            p.hand.subList(prev, curr)));
                 }
             }
         }

@@ -142,7 +142,14 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
                 GL11.glRotatef((float) Math.toDegrees(-yaw + (float) Math.PI / 2), 0, 1, 0);
                 GL11.glRotatef(-90, 1, 0, 0);
                 GL11.glTranslated(0, 0, ci * (1f / 48f));
-                CardRenderer.renderBack3D(viewerTheme, game.darkSide, 0.32f, 0.5f, 0, 0xFFFFFF);
+                Card back = anim.cards.isEmpty() ? null : anim.cards.get(ci % anim.cards.size());
+                if (back != null && back.dark != null) {
+                    BATCH.at(0, 0, 0, 0);
+                    BATCH.back(back, game.darkSide, viewerTheme, 0.32f, 0.5f, 0, 0xFFFFFF, false);
+                    BATCH.flush();
+                } else {
+                    CardRenderer.renderBack3D(viewerTheme, game.darkSide, 0.32f, 0.5f, 0, 0xFFFFFF);
+                }
                 GL11.glPopMatrix();
             }
         }

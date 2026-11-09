@@ -55,7 +55,8 @@ public final class TableFx {
         TOSS,
         ROULETTE,
         SYMBOL,
-        DICE
+        DICE,
+        COIN3D
     }
 
     private record Fx(Kind kind, long start, int duration, double x, double y, double z, int color, Object data) {
@@ -87,6 +88,8 @@ public final class TableFx {
     private static final ResourceLocation TEX_COIN = Mino.id("textures/fx/coin.png");
     private static final ResourceLocation TEX_HEADS = Mino.id("textures/fx/coin_heads.png");
     private static final ResourceLocation TEX_TAILS = Mino.id("textures/fx/coin_tails.png");
+    private static final ResourceLocation TEX_MERCY = Mino.id("textures/fx/coin_mercy.png");
+    private static final ResourceLocation TEX_NO_MERCY = Mino.id("textures/fx/coin_no_mercy.png");
     static final double PILE_Y = 0.95;
 
     private static final Map<BlockEntityMinoTable, State> STATES = new WeakHashMap<>();
@@ -187,6 +190,7 @@ public final class TableFx {
                 case ROULETTE -> roulette(f, now);
                 case SYMBOL -> symbolPop(f, t);
                 case DICE -> dice(f, now);
+                case COIN3D -> coin3d(f, now);
                 case CUSTOM -> {
                     Object[] d = (Object[]) f.data;
                     GL11.glPushMatrix();
@@ -234,6 +238,14 @@ public final class TableFx {
             if (hs >= 0 && ts >= 0) {
                 Vec3d h = head(table, hs, 1.7), tl = head(table, ts, 1.7);
                 s.fx.add(new Fx(Kind.TOSS, now, 3200, 1.5, PILE_Y, 1.5, 0, new Object[] { h, tl, game.tossHeadsUp }));
+                s.fx.add(
+                    throwCoin(
+                        table,
+                        new double[] { 1.5, PILE_Y + 0.9, 0.85 },
+                        TEX_HEADS,
+                        TEX_TAILS,
+                        game.tossHeadsUp,
+                        now));
                 Vec3d loser = game.tossHeadsUp ? tl : h;
                 s.fx.add(new Fx(Kind.PLUS, now + 2300, 1300, loser.x, loser.y + 0.45, loser.z, 0xFFD040, "+4"));
             }
@@ -249,12 +261,16 @@ public final class TableFx {
             if (seat >= 0) {
                 Vec3d at = head(table, seat, 1.6);
                 boolean win = game.luckyResult != CardGame.LUCKY_TAILS;
-                if (game.luckyResult != CardGame.LUCKY_SEVENS)
-                    s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
+                long lands = 200;
+                if (game.luckyResult != CardGame.LUCKY_SEVENS) {
+                    Fx coin = throwCoin(table, fromSeat(table, seat), TEX_HEADS, TEX_TAILS, win, now);
+                    s.fx.add(coin);
+                    lands = landingMs(coin);
+                }
                 s.fx.add(
                     new Fx(
                         Kind.PLUS,
-                        now + (game.luckyResult == CardGame.LUCKY_SEVENS ? 200 : 1300),
+                        now + lands,
                         1500,
                         at.x,
                         at.y + 0.45,
@@ -267,9 +283,20 @@ public final class TableFx {
         for (CardPlayer p : game.players) {
             if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
                 Vec3d at = head(table, p.seat, 1.6);
-                s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
+                ResourceLocation side = p.coinNoMercy ? TEX_NO_MERCY : TEX_MERCY,
+                    other = p.coinNoMercy ? TEX_MERCY : TEX_NO_MERCY;
+                Fx coin = throwCoin(table, fromSeat(table, p.seat), side, other, true, now);
+                s.fx.add(coin);
                 s.fx.add(
-                    new Fx(Kind.POP, now + 700, 900, at.x, at.y + 0.6, at.z, p.coinNoMercy ? 0xE02020 : 0xFFD040, now));
+                    new Fx(
+                        Kind.POP,
+                        now + landingMs(coin),
+                        900,
+                        at.x,
+                        at.y + 0.6,
+                        at.z,
+                        p.coinNoMercy ? 0xE02020 : 0xFFD040,
+                        now));
             }
         }
         s.coins.clear();
@@ -769,6 +796,67 @@ public final class TableFx {
         "wild_lucky_seven");
 
     private static final int[] DIE_COLORS = { 0x3CAA50, 0xD23228, 0xE6BE1E, 0x286ED2, 0x8C46C8 };
+    private static final double COIN_R = 0.11, COIN_THICK = 0.026;
+
+    private static double[] fromSeat(BlockEntityMinoTable table, int seat) {
+        Vec3d h = head(table, seat, 1.35);
+        double dx = h.x - 1.5, dz = h.z - 1.5, len = Math.max(1e-3, Math.sqrt(dx * dx + dz * dz));
+        return new double[] { h.x - dx / len * 0.35, h.y, h.z - dz / len * 0.35 };
+    }
+
+    private static long landingMs(Fx f) {
+        return ((Dice.Roll) ((Object[]) f.data)[0]).settleEnd * 1000L / Dice.FPS;
+    }
+
+    // a coin thrown onto the table that lands with {@code top} up when {@code topUp}, else with {@code bottom} up
+    private static Fx throwCoin(BlockEntityMinoTable table, double[] start, ResourceLocation top,
+        ResourceLocation bottom, boolean topUp, long now) {
+        double dx = start[0] - 1.5, dz = start[2] - 1.5, len = Math.max(1e-3, Math.sqrt(dx * dx + dz * dz));
+        double side = (RANDOM.nextDouble() - 0.5) * 0.4;
+        double[] target = { 1.5 + dx / len * 0.42 - dz / len * side, PILE_Y, 1.5 + dz / len * 0.42 + dx / len * side };
+        Dice.Roll roll = Dice.simulateCoin(topUp, RANDOM.nextLong(), start, target, PILE_Y + 0.01, COIN_R, COIN_THICK);
+        int duration = (int) (roll.frames() * 1000L / Dice.FPS) + 2400;
+        double[] world = { table.xCoord, table.yCoord, table.zCoord };
+        return new Fx(
+            Kind.COIN3D,
+            now,
+            duration,
+            0,
+            0,
+            0,
+            0,
+            new Object[] { roll, world, new int[] { 0 }, top, bottom });
+    }
+
+    private static void coin3d(Fx f, long now) {
+        Object[] d = (Object[]) f.data;
+        Dice.Roll roll = (Dice.Roll) d[0];
+        double[] world = (double[]) d[1];
+        int[] heard = (int[]) d[2];
+        double sec = (now - f.start) / 1000.0;
+        while (heard[0] < roll.bounces.size() && roll.bounces.get(heard[0]) <= sec * Dice.FPS) {
+            double[] p = roll.pos.get(roll.bounces.get(heard[0]));
+            Minecraft.getMinecraft().theWorld.playSound(
+                world[0] + p[0],
+                world[1] + p[1],
+                world[2] + p[2],
+                "random.click",
+                0.45f / (1 + heard[0]),
+                1.9f + 0.05f * heard[0],
+                false);
+            heard[0]++;
+        }
+        Dice.drawCoin(
+            roll,
+            sec,
+            COIN_R,
+            COIN_THICK,
+            (ResourceLocation) d[3],
+            (ResourceLocation) d[4],
+            0xD9A42A,
+            fadeOut(f.t(now), 0.9f));
+    }
+
     private static final double DIE_SIZE = 0.17;
 
     private static int dieColor(int sides) {
@@ -826,7 +914,7 @@ public final class TableFx {
             heard[0]++;
         }
         float alpha = fadeOut(t, 0.88f);
-        double[] at = Dice.draw(roll, sec, DIE_SIZE, f.color, alpha);
+        double[] at = Dice.draw(roll, sec, DIE_SIZE, alpha);
         double settled = roll.settleEnd / (double) Dice.FPS;
         if (sec > settled) {
             float lt = (float) Math.min(1, (sec - settled) / (f.duration / 1000.0 - settled));
@@ -889,25 +977,6 @@ public final class TableFx {
         float out = fadeOut(t, 0.9f);
         smallCoin(headsAt, TEX_HEADS, overshoot(pop) * 0.32f, out, t > 0.72f ? (headsUp ? 1 : -1) : 0, t);
         smallCoin(tailsAt, TEX_TAILS, overshoot(pop) * 0.32f, out, t > 0.72f ? (headsUp ? -1 : 1) : 0, t);
-        float fly = Math.max(0f, Math.min(1f, (t - 0.15f) / 0.5f));
-        double height = 0.55 + Math.sin(fly * Math.PI) * 0.9;
-        float spins = 5;
-        float angle = easeOutCubic(fly) * spins * 360 + (headsUp ? 0 : 180);
-        float scale = 0.55f * Math.min(1f, t / 0.15f) * out;
-        GL11.glPushMatrix();
-        GL11.glTranslated(f.x, f.y + height, f.z);
-        billboard();
-        GL11.glRotatef(angle, 1, 0, 0);
-        GL11.glScalef(scale, scale, scale);
-        boolean front = Math.cos(Math.toRadians(angle)) >= 0;
-        for (int i = 0; i < 3; i++) {
-            GL11.glPushMatrix();
-            GL11.glTranslatef(0, 0, (i - 1) * 0.04f);
-            if (!front) GL11.glScalef(1, -1, 1);
-            sprite(front ? TEX_HEADS : TEX_TAILS, 1f, false);
-            GL11.glPopMatrix();
-        }
-        GL11.glPopMatrix();
     }
 
     // verdict: 1 ticked, -1 crossed, 0 none yet

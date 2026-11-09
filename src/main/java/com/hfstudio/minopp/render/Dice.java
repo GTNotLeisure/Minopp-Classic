@@ -9,27 +9,30 @@ import java.util.Map;
 import java.util.Random;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
+
+import com.hfstudio.minopp.Mino;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 /**
- * Polyhedral dice thrown onto the table: the throw is simulated once (gravity, bounces losing speed, spin dying down)
- * and played back; after the last bounce the die tips over onto the rolled number.
+ * Polyhedral dice and coins thrown onto the table: the throw is simulated once as a tumbling rigid body and played
+ * back. Where it comes to rest decides nothing: the art is turned onto the solid so the rolled number ends on top.
  */
 @SideOnly(Side.CLIENT)
-final class Dice {
+public final class Dice {
 
     private Dice() {}
 
     static final int FPS = 60;
-    private static final double GRAVITY = -14, RESTITUTION = 0.42, BOUNCE_FRICTION = 0.62;
-    private static final int SETTLE_FRAMES = 22;
+    private static final int SUBSTEPS = 8, MAX_FRAMES = FPS * 4;
+    private static final double GRAVITY = -14, RESTITUTION = 0.38, FRICTION = 0.5;
+    private static final double TABLE_CENTER = 1.5, TABLE_REACH = 1.2;
 
     /** A convex die of unit circumradius: faces as vertex index loops, counter-clockwise seen from outside. */
     static final class Poly {
@@ -41,6 +44,8 @@ final class Dice {
         final int[] values;
         final boolean vertexValues;
         final double inradius;
+        /** Atlas coordinates {u, v} of every corner of every face. */
+        double[][][] uv;
 
         Poly(double[][] v, int[][] faces, double[][] normals, int[] values, boolean vertexValues, double inradius) {
             this.v = v;
@@ -63,7 +68,122 @@ final class Dice {
     private static final Map<Integer, Poly> POLYS = new HashMap<>();
 
     static Poly poly(int sides) {
-        return POLYS.computeIfAbsent(sides, Dice::build);
+        return POLYS.computeIfAbsent(sides, s -> {
+            Poly p = build(s);
+            if (s == 4) matchD4(p);
+            p.uv = atlasUv(s, p);
+            return p;
+        });
+    }
+
+    // the face art of each die, one tile per number (the D4: one per face) in rows of COLS
+    private static int cols(int sides) {
+        return switch (sides) {
+            case 4 -> 2;
+            case 6 -> 3;
+            case 8, 12 -> 4;
+            default -> 5;
+        };
+    }
+
+    private static int tiles(int sides) {
+        return sides;
+    }
+
+    private static int rows(int sides) {
+        return (tiles(sides) + cols(sides) - 1) / cols(sides);
+    }
+
+    /** The D4 faces of the art: the numbers at its top, bottom left and bottom right corners. */
+    private static final int[][] D4_TILES = { { 2, 1, 3 }, { 3, 1, 4 }, { 2, 3, 4 }, { 2, 4, 1 } };
+
+    private static int d4Tile(Poly p, int[] face) {
+        for (int t = 0; t < D4_TILES.length; t++) {
+            int hit = 0;
+            for (int i : face) for (int n : D4_TILES[t]) if (p.values[i] == n) hit++;
+            if (hit == 3) return t;
+        }
+        return 0;
+    }
+
+    private static int vertexWith(Poly p, int[] face, int value) {
+        for (int i : face) if (p.values[i] == value) return i;
+        return face[0];
+    }
+
+    // numbers the corners so that every face reads like its art, not mirrored
+    private static void matchD4(Poly p) {
+        int[][] perms = { { 1, 2, 3, 4 }, { 1, 2, 4, 3 }, { 1, 3, 2, 4 }, { 1, 3, 4, 2 }, { 1, 4, 2, 3 },
+            { 1, 4, 3, 2 } };
+        for (int[] perm : perms) {
+            System.arraycopy(perm, 0, p.values, 0, 4);
+            boolean ok = true;
+            for (int f = 0; f < p.faces.length && ok; f++) {
+                int[] face = p.faces[f];
+                int[] tile = D4_TILES[d4Tile(p, face)];
+                double[] c = centroid(p, face);
+                double[] up = sub(p.v[vertexWith(p, face, tile[0])], c);
+                double[] right = cross(up, p.normals[f]);
+                ok = dot(sub(p.v[vertexWith(p, face, tile[2])], c), right)
+                    > dot(sub(p.v[vertexWith(p, face, tile[1])], c), right);
+            }
+            if (ok) return;
+        }
+    }
+
+    private static double[] centroid(Poly p, int[] face) {
+        double[] c = new double[3];
+        for (int i : face) for (int k = 0; k < 3; k++) c[k] += p.v[i][k] / face.length;
+        return c;
+    }
+
+    // each face is laid on its tile with one corner up (an edge for the D6) and stretched to the tile's bounds,
+    // which is how the art was cut
+    private static double[][][] atlasUv(int sides, Poly p) {
+        int cols = cols(sides), rows = rows(sides);
+        double[][][] out = new double[p.faces.length][][];
+        for (int f = 0; f < p.faces.length; f++) {
+            int[] face = p.faces[f];
+            double[] c = centroid(p, face);
+            double[][] local = new double[face.length][2];
+            int tile;
+            if (sides == 4) {
+                tile = d4Tile(p, face);
+                int[] corners = D4_TILES[tile];
+                for (int k = 0; k < face.length; k++) {
+                    int value = p.values[face[k]];
+                    local[k] = value == corners[0] ? new double[] { 0.5, 0.03 }
+                        : value == corners[1] ? new double[] { 0.03, 0.97 } : new double[] { 0.97, 0.97 };
+                }
+            } else {
+                tile = p.values[f] - 1;
+                double[] top = sides == 6 ? mid(p.v[face[0]], p.v[face[1]]) : p.v[face[0]];
+                double[] up = norm(sub(top, c));
+                double[] right = cross(up, p.normals[f]);
+                double minX = 9, maxX = -9, minY = 9, maxY = -9;
+                for (int k = 0; k < face.length; k++) {
+                    double[] d = sub(p.v[face[k]], c);
+                    local[k] = new double[] { dot(d, right), dot(d, up) };
+                    minX = Math.min(minX, local[k][0]);
+                    maxX = Math.max(maxX, local[k][0]);
+                    minY = Math.min(minY, local[k][1]);
+                    maxY = Math.max(maxY, local[k][1]);
+                }
+                for (double[] l : local) {
+                    l[0] = 0.015 + 0.97 * (l[0] - minX) / (maxX - minX);
+                    l[1] = 0.015 + 0.97 * (maxY - l[1]) / (maxY - minY);
+                }
+            }
+            out[f] = new double[face.length][];
+            for (int k = 0; k < face.length; k++) {
+                out[f][k] = new double[] { (tile % cols + local[k][0]) / cols, (tile / cols + local[k][1]) / rows };
+            }
+        }
+        return out;
+    }
+
+    private static double[] mid(double[] a, double[] b) {
+        return new double[] { (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2 };
     }
 
     private static Poly build(int sides) {
@@ -196,62 +316,237 @@ final class Dice {
         }
     }
 
+    /** A die thrown from {@code start} towards {@code target}, ending with {@code result} on top. */
     static Roll simulate(int sides, int result, long seed, double[] start, double[] target, double floor, double r) {
-        Roll roll = new Roll(sides, result);
         Poly poly = poly(sides);
+        Roll roll = new Roll(sides, result);
+        double[] q = fly(roll, poly.v, 0.36, seed, start, target, floor, r);
+        int down = 0;
+        for (int f = 1; f < poly.normals.length; f++) {
+            if (rotate(q, poly.normals[f])[1] < rotate(q, poly.normals[down])[1]) down = f;
+        }
+        q = settle(roll, q, rotate(q, poly.normals[down]), floor + r * poly.inradius);
+        // the die lies the same either way: its art is turned with a turn of the solid onto itself instead of the die
+        double[] localUp = rotate(conj(q), new double[] { 0, 1, 0 });
+        double[][] features = poly.vertexValues ? poly.v : poly.normals;
+        double[] top = features[0];
+        for (double[] f : features) if (dot(f, localUp) > dot(top, localUp)) top = f;
+        turnArt(roll, symmetry(poly, poly.upFor(result), top));
+        return roll;
+    }
+
+    /** A coin of radius {@code r} thrown onto the table, ending with its top side up when {@code topUp}. */
+    static Roll simulateCoin(boolean topUp, long seed, double[] start, double[] target, double floor, double r,
+        double thickness) {
+        Roll roll = new Roll(2, topUp ? 1 : 2);
+        double h = thickness / 2 / r;
+        int seg = 16;
+        double[][] rim = new double[seg * 2][];
+        for (int i = 0; i < seg; i++) {
+            double a = Math.PI * 2 * i / seg;
+            rim[i * 2] = new double[] { Math.cos(a), h, Math.sin(a) };
+            rim[i * 2 + 1] = new double[] { Math.cos(a), -h, Math.sin(a) };
+        }
+        double[] q = fly(roll, rim, 0.3, seed, start, target, floor, r);
+        boolean up = rotate(q, new double[] { 0, 1, 0 })[1] >= 0;
+        q = settle(roll, q, rotate(q, new double[] { 0, up ? -1 : 1, 0 }), floor + thickness / 2);
+        if (up != topUp) turnArt(roll, axisAngle(new double[] { 1, 0, 0 }, Math.PI));
+        return roll;
+    }
+
+    private static void turnArt(Roll roll, double[] s) {
+        for (int i = 0; i < roll.rot.size(); i++) roll.rot.set(i, mul(roll.rot.get(i), s));
+    }
+
+    /**
+     * The free flight and tumble of a rigid body given by its corner points (in units of {@code r}): gravity, impacts
+     * and friction on every corner touching the table, until it lies still. Returns the last orientation.
+     */
+    private static double[] fly(Roll roll, double[][] shape, double inertia, long seed, double[] start, double[] target,
+        double floor, double r) {
         Random rnd = new Random(seed);
-        double flight = 0.5;
-        double[] p = start.clone();
-        double[] vel = { (target[0] - start[0]) / flight * 0.8, 0, (target[2] - start[2]) / flight * 0.8 };
-        vel[1] = (floor + r - start[1] - 0.5 * GRAVITY * flight * flight) / flight;
-        double[] spin = norm(new double[] { rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian() });
-        double spinSpeed = 14 + rnd.nextDouble() * 6;
+        double flight = 0.42 + rnd.nextDouble() * 0.12;
+        double[] x = start.clone();
+        double[] v = { (target[0] - start[0]) / flight * 0.62, 0, (target[2] - start[2]) / flight * 0.62 };
+        v[1] = (floor + r - start[1] - 0.5 * GRAVITY * flight * flight) / flight;
         double[] q = norm4(
             new double[] { rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian() });
-        double dt = 1.0 / FPS;
-        boolean grounded = false;
-        int frame = 0;
-        for (; frame < FPS * 3; frame++) {
-            if (!grounded) vel[1] += GRAVITY * dt;
-            for (int k = 0; k < 3; k++) p[k] += vel[k] * dt;
-            if (p[1] <= floor + r && vel[1] < 0) {
-                p[1] = floor + r;
-                roll.bounces.add(frame);
-                vel[1] = -vel[1] * RESTITUTION;
-                vel[0] *= BOUNCE_FRICTION;
-                vel[2] *= BOUNCE_FRICTION;
-                spinSpeed *= BOUNCE_FRICTION;
-                spin = norm(
-                    new double[] { spin[0] + rnd.nextGaussian() * 0.5, spin[1] + rnd.nextGaussian() * 0.5,
-                        spin[2] + rnd.nextGaussian() * 0.5 });
-                if (vel[1] < 0.6) {
-                    grounded = true;
-                    vel[1] = 0;
+        // a throw rolls forwards off the fingers, with some wobble
+        double[] forward = cross(new double[] { 0, 1, 0 }, v);
+        double roll0 = (0.5 + rnd.nextDouble() * 0.4) / r;
+        double[] w = { forward[0] * roll0 + rnd.nextGaussian() * 4, rnd.nextGaussian() * 4,
+            forward[2] * roll0 + rnd.nextGaussian() * 4 };
+        double[][] pts = new double[shape.length][];
+        for (int i = 0; i < shape.length; i++)
+            pts[i] = new double[] { shape[i][0] * r, shape[i][1] * r, shape[i][2] * r };
+        double iinv = 1 / (inertia * r * r);
+        double dt = 1.0 / (FPS * SUBSTEPS);
+        int still = 0, lastHit = -99;
+        for (int frame = 0; frame < MAX_FRAMES; frame++) {
+            boolean touching = false;
+            double hit = 0;
+            for (int sub = 0; sub < SUBSTEPS; sub++) {
+                v[1] += GRAVITY * dt;
+                List<double[]> arms = new ArrayList<>();
+                for (double[] p : pts) {
+                    double[] arm = rotate(q, p);
+                    if (x[1] + arm[1] < floor + 0.002) arms.add(arm);
                 }
+                if (!arms.isEmpty()) {
+                    touching = true;
+                    hit = Math.max(hit, contact(arms, v, w, iinv));
+                }
+                for (int k = 0; k < 3; k++) x[k] += v[k] * dt;
+                double[] spin = mul(new double[] { 0, w[0], w[1], w[2] }, q);
+                q = norm4(
+                    new double[] { q[0] + spin[0] * dt / 2, q[1] + spin[1] * dt / 2, q[2] + spin[2] * dt / 2,
+                        q[3] + spin[3] * dt / 2 });
+                double deepest = 0;
+                for (double[] p : pts) deepest = Math.max(deepest, floor - x[1] - rotate(q, p)[1]);
+                x[1] += deepest;
+                keepOnTable(x, v);
             }
-            if (grounded) {
-                vel[0] *= 0.86;
-                vel[2] *= 0.86;
-                spinSpeed *= 0.86;
+            if (touching) {
+                for (int k = 0; k < 3; k++) w[k] *= 0.97;
             }
-            q = mul(axisAngle(spin, spinSpeed * dt), q);
-            roll.pos.add(p.clone());
+            if (hit > 0.45 && frame - lastHit > 5) {
+                roll.bounces.add(frame);
+                lastHit = frame;
+            }
+            roll.pos.add(x.clone());
             roll.rot.add(q.clone());
-            if (grounded && spinSpeed < 1.2 && Math.hypot(vel[0], vel[2]) < 0.05) break;
+            still = touching && Math.sqrt(dot(v, v)) < 0.04 && Math.sqrt(dot(w, w)) < 0.6 ? still + 1 : 0;
+            if (still > 10) break;
         }
-        // tip over: the shortest turn that brings the rolled number to the top, while sinking to rest on a face
-        double[] upNow = rotate(q, poly.upFor(result));
-        double[] fix = fromTo(upNow, new double[] { 0, 1, 0 });
+        return q;
+    }
+
+    // sequential impulses on the corners touching the table; returns the hardest impact speed
+    private static double contact(List<double[]> arms, double[] v, double[] w, double iinv) {
+        int n = arms.size();
+        double[] jn = new double[n], jx = new double[n], jz = new double[n], bounce = new double[n];
+        double impact = 0;
+        for (int i = 0; i < n; i++) {
+            double vn = v[1] + cross(w, arms.get(i))[1];
+            impact = Math.max(impact, -vn);
+            bounce[i] = vn < -0.6 ? -RESTITUTION * vn : 0;
+        }
+        for (int it = 0; it < 8; it++) {
+            for (int i = 0; i < n; i++) {
+                double[] a = arms.get(i);
+                double[] vel = add(v, cross(w, a));
+                double dj = (bounce[i] - vel[1]) / (1 + iinv * (a[0] * a[0] + a[2] * a[2]));
+                double nj = Math.max(0, jn[i] + dj);
+                push(v, w, a, 0, nj - jn[i], 0, iinv);
+                jn[i] = nj;
+                double limit = FRICTION * jn[i];
+                vel = add(v, cross(w, a));
+                nj = Math.max(-limit, Math.min(limit, jx[i] - vel[0] / (1 + iinv * (a[1] * a[1] + a[2] * a[2]))));
+                push(v, w, a, nj - jx[i], 0, 0, iinv);
+                jx[i] = nj;
+                vel = add(v, cross(w, a));
+                nj = Math.max(-limit, Math.min(limit, jz[i] - vel[2] / (1 + iinv * (a[0] * a[0] + a[1] * a[1]))));
+                push(v, w, a, 0, 0, nj - jz[i], iinv);
+                jz[i] = nj;
+            }
+        }
+        return impact;
+    }
+
+    private static void push(double[] v, double[] w, double[] arm, double px, double py, double pz, double iinv) {
+        double[] p = { px, py, pz }, dw = cross(arm, p);
+        for (int k = 0; k < 3; k++) {
+            v[k] += p[k];
+            w[k] += dw[k] * iinv;
+        }
+    }
+
+    // nothing rolls off the table: its rim pushes back
+    private static void keepOnTable(double[] x, double[] v) {
+        double dx = x[0] - TABLE_CENTER, dz = x[2] - TABLE_CENTER, d = Math.sqrt(dx * dx + dz * dz);
+        if (d < TABLE_REACH) return;
+        double out = (v[0] * dx + v[2] * dz) / d;
+        if (out <= 0) return;
+        v[0] -= 1.4 * out * dx / d;
+        v[2] -= 1.4 * out * dz / d;
+    }
+
+    // the last few degrees onto the face it lies nearest to, falling faster as it goes
+    private static double[] settle(Roll roll, double[] q, double[] down, double restY) {
+        double[] fix = fromTo(down, new double[] { 0, -1, 0 });
+        double angle = 2 * Math.acos(Math.min(1, Math.abs(fix[0])));
         double[] q1 = mul(fix, q);
-        double restY = floor + r * poly.inradius;
-        double[] from = p.clone();
-        for (int i = 1; i <= SETTLE_FRAMES; i++) {
-            double t = i / (double) SETTLE_FRAMES, e = t * t * (3 - 2 * t);
+        double[] from = roll.pos.get(roll.frames() - 1);
+        int n = 2 + (int) (angle * 14);
+        for (int i = 1; i <= n; i++) {
+            double t = i / (double) n, e = t * t;
             roll.pos.add(new double[] { from[0], from[1] + (restY - from[1]) * e, from[2] });
             roll.rot.add(slerp(q, q1, e));
         }
         roll.settleEnd = roll.frames();
-        return roll;
+        return q1;
+    }
+
+    /** A turn of the solid onto itself that takes the local direction {@code from} to {@code to}. */
+    private static double[] symmetry(Poly p, double[] from, double[] to) {
+        double[] a = p.v[0];
+        int k = 1;
+        while (Math.abs(dot(a, p.v[k])) > 0.99) k++;
+        double ab = dot(a, p.v[k]);
+        double[][] f1 = frame(a, p.v[k]);
+        for (double[] vi : p.v) for (double[] vj : p.v) {
+            if (Math.abs(dot(vi, vj) - ab) > 1e-6) continue;
+            double[][] f2 = frame(vi, vj);
+            double[][] m = new double[3][3];
+            for (int r = 0; r < 3; r++) for (int c = 0; c < 3; c++) {
+                for (int e = 0; e < 3; e++) m[r][c] += f2[e][r] * f1[e][c];
+            }
+            double[] moved = apply(m, from);
+            if (Math.sqrt(dot(sub(moved, to), sub(moved, to))) > 1e-6 || !onto(p, m)) continue;
+            return quat(m);
+        }
+        return new double[] { 1, 0, 0, 0 };
+    }
+
+    private static double[][] frame(double[] a, double[] b) {
+        double[] e1 = norm(sub(b, new double[] { a[0] * dot(a, b), a[1] * dot(a, b), a[2] * dot(a, b) }));
+        return new double[][] { a, e1, cross(a, e1) };
+    }
+
+    private static double[] apply(double[][] m, double[] v) {
+        return new double[] { m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+            m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2], m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] };
+    }
+
+    private static boolean onto(Poly p, double[][] m) {
+        for (double[] v : p.v) {
+            double[] u = apply(m, v);
+            boolean found = false;
+            for (double[] w : p.v) if (Math.abs(dot(u, w) - 1) < 1e-6) found = true;
+            if (!found) return false;
+        }
+        return true;
+    }
+
+    private static double[] quat(double[][] m) {
+        double tr = m[0][0] + m[1][1] + m[2][2];
+        if (tr > 0) {
+            double s = Math.sqrt(tr + 1) * 2;
+            return norm4(
+                new double[] { s / 4, (m[2][1] - m[1][2]) / s, (m[0][2] - m[2][0]) / s, (m[1][0] - m[0][1]) / s });
+        }
+        if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+            double s = Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]) * 2;
+            return norm4(
+                new double[] { (m[2][1] - m[1][2]) / s, s / 4, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s });
+        }
+        if (m[1][1] > m[2][2]) {
+            double s = Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]) * 2;
+            return norm4(
+                new double[] { (m[0][2] - m[2][0]) / s, (m[0][1] + m[1][0]) / s, s / 4, (m[1][2] + m[2][1]) / s });
+        }
+        double s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2;
+        return norm4(new double[] { (m[1][0] - m[0][1]) / s, (m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, s / 4 });
     }
 
     // ------------------------------------------------------------------ drawing
@@ -262,95 +557,154 @@ final class Dice {
         static final FloatBuffer MATRIX = BufferUtils.createFloatBuffer(16);
     }
 
-    /** Draws the die at frame time {@code seconds}, in table space; returns its center. */
-    static double[] draw(Roll roll, double seconds, double r, int rgb, float alpha) {
-        Poly poly = poly(roll.sides);
+    private static final Map<Integer, ResourceLocation> ART = new HashMap<>(), BADGE = new HashMap<>();
+
+    private static ResourceLocation art(int sides, boolean badge) {
+        return (badge ? BADGE : ART)
+            .computeIfAbsent(sides, s -> Mino.id("textures/fx/dice_d" + s + (badge ? "_hud" : "") + ".png"));
+    }
+
+    /** Position and orientation at {@code seconds}: {x, y, z} and {w, x, y, z}. */
+    private static double[][] pose(Roll roll, double seconds) {
         double fi = Math.min(roll.frames() - 1, Math.max(0, seconds * FPS));
         int i0 = (int) fi, i1 = Math.min(roll.frames() - 1, i0 + 1);
         double f = fi - i0;
         double[] a = roll.pos.get(i0), b = roll.pos.get(i1);
-        double[] p = { a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f };
-        double[] q = slerp(roll.rot.get(i0), roll.rot.get(i1), f);
+        return new double[][] { { a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f },
+            slerp(roll.rot.get(i0), roll.rot.get(i1), f) };
+    }
 
+    /** Draws the die at frame time {@code seconds}, in table space; returns its center. */
+    static double[] draw(Roll roll, double seconds, double r, float alpha) {
+        Poly poly = poly(roll.sides);
+        double[][] pose = pose(roll, seconds);
+        double[] p = pose[0], q = pose[1];
         GL11.glPushMatrix();
         GL11.glTranslated(p[0], p[1], p[2]);
         multiply(q);
         GL11.glScaled(r, r, r);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glDisable(GL11.GL_CULL_FACE);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(art(roll.sides, false));
         Tessellator t = Tessellator.instance;
         t.startDrawing(GL11.GL_TRIANGLES);
         for (int fIdx = 0; fIdx < poly.faces.length; fIdx++) {
             int[] face = poly.faces[fIdx];
-            double[] worldN = rotate(q, poly.normals[fIdx]);
-            double light = 0.55 + 0.45 * Math.max(0, dot(worldN, LIGHT));
-            int shade = shade(rgb, light);
-            t.setColorRGBA((shade >> 16) & 255, (shade >> 8) & 255, shade & 255, (int) (alpha * 255));
+            double[][] uv = poly.uv[fIdx];
+            int g = (int) (255 * (0.6 + 0.4 * Math.max(0, dot(rotate(q, poly.normals[fIdx]), LIGHT))));
+            t.setColorRGBA(g, g, g, (int) (alpha * 255));
             for (int k = 1; k + 1 < face.length; k++) {
-                vertex(t, poly.v[face[0]]);
-                vertex(t, poly.v[face[k]]);
-                vertex(t, poly.v[face[k + 1]]);
+                vertex(t, poly.v[face[0]], uv[0]);
+                vertex(t, poly.v[face[k]], uv[k]);
+                vertex(t, poly.v[face[k + 1]], uv[k + 1]);
             }
         }
         t.draw();
-        drawNumbers(poly, alpha);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glPopMatrix();
         return p;
     }
 
-    private static final double[] LIGHT = norm(new double[] { 0.35, 1, 0.25 });
-
-    private static void drawNumbers(Poly poly, float alpha) {
-        FontRenderer font = Minecraft.getMinecraft().fontRenderer;
+    /**
+     * A coin of radius {@code r} and the given thickness: its two faces carry their own art, its rim is plain metal.
+     * Returns its center.
+     */
+    static double[] drawCoin(Roll roll, double seconds, double r, double thickness, ResourceLocation top,
+        ResourceLocation bottom, int rimRgb, float alpha) {
+        double[][] pose = pose(roll, seconds);
+        double[] p = pose[0], q = pose[1];
+        double h = thickness / 2 / r;
+        int seg = 24;
+        GL11.glPushMatrix();
+        GL11.glTranslated(p[0], p[1], p[2]);
+        multiply(q);
+        GL11.glScaled(r, r, r);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        for (int i = 0; i < seg; i++) {
+            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg, am = (a0 + a1) / 2;
+            double[] n = rotate(q, new double[] { Math.cos(am), 0, Math.sin(am) });
+            int c = shade(rimRgb, 0.55 + 0.45 * Math.max(0, dot(n, LIGHT)));
+            t.setColorRGBA((c >> 16) & 255, (c >> 8) & 255, c & 255, (int) (alpha * 255));
+            t.addVertex(Math.cos(a0), -h, Math.sin(a0));
+            t.addVertex(Math.cos(a1), -h, Math.sin(a1));
+            t.addVertex(Math.cos(a1), h, Math.sin(a1));
+            t.addVertex(Math.cos(a0), h, Math.sin(a0));
+        }
+        t.draw();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
-        int a = Math.max(4, (int) (alpha * 255)) << 24;
-        for (int f = 0; f < poly.faces.length; f++) {
-            int[] face = poly.faces[f];
-            double[] c = new double[3];
-            for (int i : face) for (int k = 0; k < 3; k++) c[k] += poly.v[i][k] / face.length;
-            double[] n = poly.normals[f];
-            if (poly.vertexValues) {
-                // a D4 reads at its top corner: each face shows the number of each corner next to it
-                for (int i : face) {
-                    double[] toCorner = sub(poly.v[i], c);
-                    double[] at = { c[0] + toCorner[0] * 0.55, c[1] + toCorner[1] * 0.55, c[2] + toCorner[2] * 0.55 };
-                    label(font, String.valueOf(poly.values[i]), at, n, norm(toCorner), 0.05, a);
-                }
-            } else {
-                double[] up = norm(sub(poly.v[face[0]], c));
-                double size = switch (poly.faces.length) {
-                    case 6 -> 0.085;
-                    case 8 -> 0.07;
-                    case 12 -> 0.06;
-                    default -> 0.045;
-                };
-                label(font, String.valueOf(poly.values[f]), c, n, up, size, a);
+        for (int side = 0; side < 2; side++) {
+            double y = side == 0 ? h : -h;
+            double[] n = rotate(q, new double[] { 0, side == 0 ? 1 : -1, 0 });
+            int g = (int) (255 * (0.6 + 0.4 * Math.max(0, dot(n, LIGHT))));
+            Minecraft.getMinecraft()
+                .getTextureManager()
+                .bindTexture(side == 0 ? top : bottom);
+            t.startDrawing(GL11.GL_TRIANGLE_FAN);
+            t.setColorRGBA(g, g, g, (int) (alpha * 255));
+            t.addVertexWithUV(0, y, 0, 0.5, 0.5);
+            for (int i = 0; i <= seg; i++) {
+                double a = Math.PI * 2 * i / seg;
+                // the underside is mirrored so its art reads the right way round from below
+                double u = 0.5 + 0.5 * Math.cos(a) * (side == 0 ? 1 : -1), v = 0.5 + 0.5 * Math.sin(a);
+                t.addVertexWithUV(Math.cos(a), y, Math.sin(a), u, v);
             }
+            t.draw();
         }
         GL11.glDisable(GL11.GL_TEXTURE_2D);
-    }
-
-    // text lying on a face: +X to its right, down along -up, facing out along the normal
-    private static void label(FontRenderer font, String text, double[] at, double[] n, double[] up, double size,
-        int alpha) {
-        double[] down = { -up[0], -up[1], -up[2] };
-        double[] right = cross(down, n);
-        GL11.glPushMatrix();
-        Gl.MATRIX.clear();
-        float[] m = { (float) right[0], (float) right[1], (float) right[2], 0, (float) down[0], (float) down[1],
-            (float) down[2], 0, (float) n[0], (float) n[1], (float) n[2], 0, (float) (at[0] + n[0] * 0.012),
-            (float) (at[1] + n[1] * 0.012), (float) (at[2] + n[2] * 0.012), 1 };
-        Gl.MATRIX.put(m);
-        Gl.MATRIX.flip();
-        GL11.glMultMatrix(Gl.MATRIX);
-        GL11.glScaled(size / 8, size / 8, size / 8);
-        int w = font.getStringWidth(text);
-        font.drawString(text, -w / 2, -4, alpha | 0xFFFFFF);
         GL11.glPopMatrix();
+        return p;
     }
 
-    private static void vertex(Tessellator t, double[] v) {
-        t.addVertex(v[0], v[1], v[2]);
+    /** The corner badge: the face with the rolled number, its art straight from the texture. */
+    public static void drawBadge(int sides, int result, float cx, float cy, float size, float alpha) {
+        int cols = cols(sides), rows = rows(sides);
+        int tile = result - 1;
+        float turn = 0;
+        if (sides == 4) {
+            // the D4 reads at a corner: the face showing the number turns that corner to the top
+            for (int t = 0; t < D4_TILES.length; t++) for (int k = 0; k < 3; k++) if (D4_TILES[t][k] == result) {
+                tile = t;
+                turn = k == 0 ? 0 : k == 1 ? 120 : -120;
+                t = D4_TILES.length;
+                break;
+            }
+        }
+        float aspect = sides == 6 ? 1f : sides == 12 ? 1.04f : 1.13f;
+        float w = size * Math.min(1f, aspect), hgt = size / Math.max(1f, aspect);
+        double u0 = (tile % cols) / (double) cols, u1 = u0 + 1.0 / cols;
+        double v0 = (tile / cols) / (double) rows, v1 = v0 + 1.0 / rows;
+        // triangles turn about their middle, two thirds of the way down
+        float pivot = sides == 4 || sides == 8 || sides == 20 ? hgt * 2 / 3f - hgt / 2f : 0;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(cx, cy + pivot, 0);
+        GL11.glRotatef(turn, 0, 0, 1);
+        GL11.glTranslatef(0, -pivot, 0);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glColor4f(1, 1, 1, alpha);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(art(sides, true));
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.addVertexWithUV(-w / 2, hgt / 2, 0, u0, v1);
+        t.addVertexWithUV(w / 2, hgt / 2, 0, u1, v1);
+        t.addVertexWithUV(w / 2, -hgt / 2, 0, u1, v0);
+        t.addVertexWithUV(-w / 2, -hgt / 2, 0, u0, v0);
+        t.draw();
+        GL11.glPopMatrix();
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private static final double[] LIGHT = norm(new double[] { 0.35, 1, 0.25 });
+
+    private static void vertex(Tessellator t, double[] v, double[] uv) {
+        t.addVertexWithUV(v[0], v[1], v[2], uv[0], uv[1]);
     }
 
     private static int shade(int rgb, double k) {
@@ -375,6 +729,14 @@ final class Dice {
 
     static double dot(double[] a, double[] b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    private static double[] add(double[] a, double[] b) {
+        return new double[] { a[0] + b[0], a[1] + b[1], a[2] + b[2] };
+    }
+
+    private static double[] conj(double[] q) {
+        return new double[] { q[0], -q[1], -q[2], -q[3] };
     }
 
     private static double[] sub(double[] a, double[] b) {
