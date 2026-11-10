@@ -366,7 +366,7 @@ public class CardGame {
         me.eliminated = false;
         // Replace transferred debug cards with a normal hand of at most seven cards.
         for (CardPlayer p : players) {
-            if (p == me) continue;
+            if (p.uuid.equals(debugger)) continue;
             int taken = 0;
             for (Iterator<Card> it = p.hand.iterator(); it.hasNext();) {
                 if (it.next().uid >= 2_000_000) {
@@ -1473,16 +1473,24 @@ public class CardGame {
      * card played.
      */
     public ActionReport useCoin(CardPlayer player, boolean flip) {
-        return debugged(useCoinInner(player, flip));
+        CardPlayer member = player == null ? null : deAmputate(player.uuid);
+        if (member == null) return ActionReport.builder(this, player)
+            .fail(Chat.translatable("game.minopp.play.no_player"));
+        try {
+            return useCoinInner(member, flip);
+        } finally {
+            restoreDebugHand();
+        }
     }
 
     private ActionReport useCoinInner(CardPlayer player, boolean flip) {
         ActionReport report = ActionReport.builder(this, player);
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
         if (!rule(GameRules.COINS)) return report.fail(Chat.translatable("game.minopp.coin.off"));
-        if (player.coinUsed) return report.fail(Chat.translatable("game.minopp.coin.used"));
+        boolean preview = isDebugger(player);
+        if (player.coinUsed && !preview) return report.fail(Chat.translatable("game.minopp.coin.used"));
         if (flip) {
-            if (player.coinLocked) return report.fail(Chat.translatable("game.minopp.coin.locked"));
+            if (player.coinLocked && !preview) return report.fail(Chat.translatable("game.minopp.coin.locked"));
             player.coinNoMercy = !player.coinNoMercy;
             report.sound(new ResourceLocation("minecraft", "random.click"), 0, 0.6f, 1.6f);
             return report.state(
@@ -1493,6 +1501,7 @@ public class CardGame {
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         }
         player.coinUsed = true;
+        player.coinUseSeq++;
         player.coinLocked = true;
         if (player.coinNoMercy) {
             player.coinArmed = true;
@@ -2583,6 +2592,7 @@ public class CardGame {
             if (rule(GameRules.COINS) && !p.coinUsed && !p.coinNoMercy) {
                 // an unspent Mercy coin saves its holder from being knocked out
                 p.coinUsed = true;
+                p.coinUseSeq++;
                 p.coinLocked = true;
                 mercySwap(p, report);
                 report.messageAll(Chat.translatable("game.minopp.coin.saved", p.name));

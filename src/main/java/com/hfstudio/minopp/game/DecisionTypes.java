@@ -6,9 +6,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Custom decisions shared by the server, the default client screen and automatic players.
- */
 public class DecisionTypes {
 
     private static final Map<String, Definition> REGISTRY = new LinkedHashMap<>();

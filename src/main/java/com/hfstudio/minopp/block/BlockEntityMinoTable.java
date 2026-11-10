@@ -14,10 +14,8 @@ import java.util.function.Consumer;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -46,6 +44,8 @@ import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.HandMask;
 import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.game.Teams;
+import com.hfstudio.minopp.item.HandCardAccess;
+import com.hfstudio.minopp.item.HandCardBinding;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CChoosingPacket;
@@ -63,6 +63,12 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public final CardPlayer[] seats = new CardPlayer[MAX_SEATS];
     public CardGame game = null;
+    private final HandCardAccess handCardAccess = new HandCardAccess();
+
+    public HandCardAccess handCardAccess() {
+        return handCardAccess;
+    }
+
     public ActionMessage state = ActionMessage.NO_GAME;
     public List<Pair<ActionMessage, Long>> clientMessageList = new ArrayList<>();
     public static final Map<UUID, Long> hideHandUntil = new HashMap<>();
@@ -235,6 +241,7 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         compoundTag.setTag("seats", playersTag);
         if (game != null) compoundTag.setTag("game", game.toTag());
+        compoundTag.setTag("handAccess", handCardAccess.toTag());
         compoundTag.setTag("state", state.toTag());
         if (award != null) compoundTag.setTag("award", award.writeToNBT(new NBTTagCompound()));
         compoundTag.setBoolean("demo", demo);
@@ -297,6 +304,7 @@ public class BlockEntityMinoTable extends TileEntity {
             if (seats[i] != null) seats[i].seat = i;
         }
         CardGame previousGame = game;
+        handCardAccess.fromTag(compoundTag.getCompoundTag("handAccess"));
         if (compoundTag.hasKey("game")) {
             game = new CardGame(compoundTag.getCompoundTag("game"));
             game.tableEntity = this;
@@ -596,7 +604,6 @@ public class BlockEntityMinoTable extends TileEntity {
                     if (cardPlayer.uuid.equals(
                         mcPlayer.getGameProfile()
                             .getId())) {
-                        giveHandCards(mcPlayer, cardPlayer);
                         playerFound = true;
                     }
                 } else if (cardPlayer.uuid.equals(entity.getUniqueID())) {
@@ -629,28 +636,15 @@ public class BlockEntityMinoTable extends TileEntity {
         matchWinner = "";
         ActionReport report = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND));
         lastHandMoveCounter = 0;
-        if (!report.shouldDestroyGame) sendSeatActionTakenToAll();
+        if (!report.shouldDestroyGame) {
+            recoverHandCards(true);
+            sendSeatActionTakenToAll();
+        }
         handleActionResult(report, initiator, null);
     }
 
-    private void giveHandCards(EntityPlayer mcPlayer, CardPlayer cardPlayer) {
-        ItemStack handCard = new ItemStack(Mino.ITEM_HAND_CARDS);
-        ItemDataUtils.setCardGameBinding(handCard, getBlockPos(), cardPlayer.uuid);
-        InventoryPlayer inv = mcPlayer.inventory;
-        if (inv.currentItem < InventoryPlayer.getHotbarSize() && inv.getCurrentItem() == null) {
-            inv.setInventorySlotContents(inv.currentItem, handCard);
-        } else {
-            boolean addSuccessful = inv.addItemStackToInventory(handCard);
-            if (!addSuccessful) {
-                EntityItem itemEntity = mcPlayer.dropPlayerItemWithRandomChoice(handCard, false);
-                if (itemEntity != null) {
-                    itemEntity.delayBeforeCanPickup = 0;
-                    itemEntity.func_145797_a(mcPlayer.getCommandSenderName());
-                }
-            }
-            mcPlayer.addChatComponentMessage(Chat.translatable("game.minopp.play.hand_card_in_inventory"));
-        }
-        mcPlayer.inventoryContainer.detectAndSendChanges();
+    private void recoverHandCards(boolean requested) {
+        for (EntityPlayer player : worldObj.playerEntities) handCardAccess.recover(this, player, requested);
     }
 
     public void destroyGame(CardPlayer initiator) {
@@ -665,7 +659,9 @@ public class BlockEntityMinoTable extends TileEntity {
                 ItemStack invItem = items[i];
                 if (invItem == null || invItem.getItem() != Mino.ITEM_HAND_CARDS) continue;
                 BlockPos tablePos = ItemDataUtils.getBlockPos(invItem);
-                if (tablePos != null && tablePos.equals(getBlockPos())) items[i] = null;
+                HandCardBinding binding = ItemDataUtils.getBinding(invItem);
+                if (tablePos != null && tablePos.equals(getBlockPos())
+                    && (binding == null || binding.dimension() == worldObj.provider.dimensionId)) items[i] = null;
             }
             mcPlayer.inventoryContainer.detectAndSendChanges();
         }
@@ -810,6 +806,7 @@ public class BlockEntityMinoTable extends TileEntity {
     @Override
     public void updateEntity() {
         if (worldObj.isRemote || game == null) return;
+        if (worldObj.getTotalWorldTime() % 20 == 0) recoverHandCards(false);
         ActionReport timed = game.tickTurnTimers();
         if (timed != null) handleActionResult(timed, game.currentPlayer(), null);
         if (game == null) return;
@@ -831,16 +828,19 @@ public class BlockEntityMinoTable extends TileEntity {
     private UUID absentId;
     private long absentSince;
 
-    private boolean present(MinecraftServer server, UUID uuid) {
-        return AutoPlayer.isOnlinePlayer(server, uuid)
-            || WorldUtil.getEntityByUUID(worldObj, uuid) instanceof EntityAutoPlayer;
+    private boolean present(UUID uuid) {
+        Entity entity = WorldUtil.getEntityByUUID(worldObj, uuid);
+        if (entity instanceof EntityAutoPlayer) return entity.isEntityAlive();
+        return entity instanceof EntityPlayer player && player.isEntityAlive()
+            && HandCardAccess.inReach(player, getBlockPos())
+            && handCardAccess.hasItem(this, player);
     }
 
-    // Play disconnected seats automatically until their players return.
+    // Cover unavailable seats until their players can use the table again.
     private void tickAbsent(MinecraftServer server) {
         if (game.awaitingCutIn) return;
         CardPlayer current = game.currentPlayer();
-        if (current == null || present(server, current.uuid)) {
+        if (current == null || present(current.uuid)) {
             if (current != null) standingIn.remove(current.uuid);
             absentId = null;
             return;

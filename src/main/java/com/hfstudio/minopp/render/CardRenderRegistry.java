@@ -12,9 +12,6 @@ import com.hfstudio.minopp.game.CardTypes;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
-/**
- * Optional card artwork providers. Layers are ordered from the frame to the front and cached per face and theme.
- */
 @SideOnly(Side.CLIENT)
 public class CardRenderRegistry {
 

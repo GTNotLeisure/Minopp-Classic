@@ -11,12 +11,12 @@ import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardColor;
-import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PlayContext;
@@ -24,7 +24,6 @@ import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
-import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
@@ -32,6 +31,8 @@ import com.hfstudio.minopp.util.Chat;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
 
 @SideOnly(Side.CLIENT)
 public class PlayChoiceScreen extends GuiScreen {
@@ -53,11 +54,8 @@ public class PlayChoiceScreen extends GuiScreen {
     private final int pickCount;
     private boolean numberStep, targetsDone, pickStep;
     private final List<Card> pickable = new ArrayList<>();
-    private final List<Integer> picked = new ArrayList<>();
-    /**
-     * Card rects of the pick grid last frame: {index, x, y, w, h}.
-     */
-    private final List<int[]> pickRects = new ArrayList<>();
+    private final IntSet picked = new IntLinkedOpenHashSet();
+    private final CardGrid pickGrid = new CardGrid();
 
     public PlayChoiceScreen(BlockPos gamePos, CardPlayer player, Card card, PlayContext.PlayChoices choices,
         boolean needsColor, int targetCount, boolean darkSide) {
@@ -94,6 +92,7 @@ public class PlayChoiceScreen extends GuiScreen {
             List<Card> hand = table != null && table.game != null ? ItemHandCards.sortedHand(table.game, player)
                 : player.hand;
             for (Card c : hand) if (c.uid != card.uid) pickable.add(c);
+            pickGrid.setCards(pickable);
         }
         if (init) initGui();
     }
@@ -169,6 +168,7 @@ public class PlayChoiceScreen extends GuiScreen {
                     Chat.translatable("gui.cancel")
                         .getFormattedText()));
         } else if (pickStep) {
+            pickGrid.layout(width, height, 8);
             int by = height - 26;
             UiButton ok = new UiButton(
                 -3,
@@ -375,10 +375,10 @@ public class PlayChoiceScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         if (pickStep && button == 0) {
-            for (int[] r : pickRects) {
-                if (mouseX < r[1] || mouseX >= r[1] + r[3] || mouseY < r[2] || mouseY >= r[2] + r[4]) continue;
-                int uid = pickable.get(r[0]).uid;
-                if (picked.contains(uid)) picked.remove((Integer) uid);
+            Card hit = pickGrid.hit(mouseX, mouseY, picked::contains);
+            if (hit != null) {
+                int uid = hit.uid;
+                if (picked.contains(uid)) picked.remove(uid);
                 else if (picked.size() < pickCount) picked.add(uid);
                 mc.getSoundHandler()
                     .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("random.click"), 1.6F));
@@ -404,6 +404,13 @@ public class PlayChoiceScreen extends GuiScreen {
     public void onGuiClosed() {
         ColorPicker3D.close();
         if (sentHover != -2) shareChoice(false, -1);
+    }
+
+    @Override
+    public void handleMouseInput() {
+        super.handleMouseInput();
+        int wheel = Mouse.getEventDWheel();
+        if (pickStep && wheel != 0) pickGrid.scroll(-Integer.signum(wheel));
     }
 
     @Override
@@ -516,44 +523,16 @@ public class PlayChoiceScreen extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    // Raise selected cards above the grid and outline them in gold.
     private void drawPickGrid(String theme, int mouseX, int mouseY) {
-        pickRects.clear();
-        int n = pickable.size();
-        int avail = width - 40;
-        int cw = 30, gap = 4;
-        int rows = 1;
-        // Fit the grid and title above the buttons.
-        while (true) {
-            int perRow = Math.max(1, (avail + gap) / (cw + gap));
-            rows = (n + perRow - 1) / perRow;
-            int ch = Math.round(cw * 8.9f / 5.6f);
-            if (rows * (ch + gap) <= height - 34 - 34 || cw <= 8) break;
-            cw--;
-            if (cw < 18) gap = 2;
-        }
-        int perRow = Math.max(1, (avail + gap) / (cw + gap));
-        int ch = Math.round(cw * 8.9f / 5.6f);
-        int gridH = rows * (ch + gap) - gap;
-        int top = height - 34 - gridH;
-        UiDraw.gradient(0, top - 26, width, height, 0x80200404, 0xD0200404);
+        pickGrid.layout(width, height, 8);
+        UiDraw.gradient(0, pickGrid.top() - 26, width, height, 0x80200404, 0xD0200404);
         String title = Chat.translatable("gui.minopp.choice.pick", pickCount, picked.size(), pickCount)
             .getFormattedText();
-        GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, top - 18, 0xFFFFE070);
-        for (int i = 0; i < n; i++) {
-            int row = i / perRow, col = i % perRow;
-            int inRow = Math.min(perRow, n - row * perRow);
-            int x0 = width / 2 - (inRow * (cw + gap) - gap) / 2;
-            int x = x0 + col * (cw + gap), y = top + row * (ch + gap);
-            Card c = pickable.get(i);
-            boolean sel = picked.contains(c.uid);
-            boolean hover = mouseX >= x && mouseX < x + cw && mouseY >= y && mouseY < y + ch;
-            if (sel) y -= 5;
-            if (sel || hover) UiDraw.roundRect(x - 2, y - 2, x + cw + 2, y + ch + 2, 3, sel ? 0xFFFFC020 : 0x90FFFFFF);
-            CardFace face = c.face(darkSide);
-            CardRenderer.drawFace2D(face, theme, x, y, cw, ch);
-            pickRects.add(new int[] { i, x, y, cw, ch });
-        }
+        if (pickGrid.pages() > 1)
+            title += "  " + Chat.translatable("gui.minopp.hand.page", pickGrid.page() + 1, pickGrid.pages())
+                .getFormattedText();
+        GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, pickGrid.top() - 18, 0xFFFFE070);
+        pickGrid.draw(theme, darkSide, mouseX, mouseY, picked::contains);
     }
 
     @Override

@@ -14,7 +14,6 @@ import org.lwjgl.opengl.GL12;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
-import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardPlayer;
@@ -47,12 +46,11 @@ public class HandCardsItemRenderer implements IItemRenderer {
         if (type == ItemRenderType.EQUIPPED_FIRST_PERSON) return;
 
         World level = Minecraft.getMinecraft().theWorld;
-        BlockPos tablePos = ItemDataUtils.getBlockPos(itemStack);
+        BlockPos tablePos = ItemHandCards.getGamePos(level, itemStack);
         UUID bearerId = ItemDataUtils.getBearerId(itemStack);
         Long hideUntil = BlockEntityMinoTable.hideHandUntil.get(bearerId);
         if (hideUntil != null && System.currentTimeMillis() < hideUntil) return;
         if (tablePos == null || level == null) return;
-        tablePos = BlockMinoTable.getCore(level, tablePos.x, tablePos.y, tablePos.z);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(level, tablePos);
         if (tableEntity == null || tableEntity.game == null) return;
         CardPlayer realPlayer = tableEntity.game.deAmputate(bearerId);

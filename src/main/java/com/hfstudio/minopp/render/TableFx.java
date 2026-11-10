@@ -34,6 +34,8 @@ import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 @SideOnly(Side.CLIENT)
 public class TableFx {
@@ -83,7 +85,7 @@ public class TableFx {
         final List<Fx> fx = new ArrayList<>();
         final Set<UUID> shouted = new HashSet<>();
         int shoutSeq = -1;
-        final Set<UUID> coins = new HashSet<>();
+        final Object2IntMap<UUID> coins = new Object2IntOpenHashMap<>();
         int tossSeq = -1;
         int diceSeq = -1, luckySeq = -1;
     }
@@ -339,7 +341,7 @@ public class TableFx {
         }
         s.luckySeq = game.luckySeq;
         for (CardPlayer p : game.players) {
-            if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
+            if (p.coinUsed && (p.coinUseSeq != s.coins.getInt(p.uuid) || !s.coins.containsKey(p.uuid)) && !first) {
                 if (!enabled) {
                     skipThrow();
                     continue;
@@ -362,7 +364,7 @@ public class TableFx {
             }
         }
         s.coins.clear();
-        for (CardPlayer p : game.players) if (p.coinUsed) s.coins.add(p.uuid);
+        for (CardPlayer p : game.players) if (p.coinUsed) s.coins.put(p.uuid, p.coinUseSeq);
         if (enabled && !first && game.darkSide != s.dark && game.topCard != null) {
             CardFace[] faces = { s.dark ? game.topCard.dark : game.topCard.light,
                 game.darkSide ? game.topCard.dark : game.topCard.light };
@@ -1019,27 +1021,7 @@ public class TableFx {
         GL11.glScalef(scale, scale, scale);
         Tessellator tes = Tessellator.instance;
         tes.startDrawingQuads();
-        int seg = 20;
-        for (int i = 0; i < seg; i++) {
-            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg;
-            prism(
-                tes,
-                new double[] { 0, Math.cos(a0) * 0.62, Math.cos(a1) * 0.62 },
-                new double[] { 0, Math.sin(a0) * 0.62, Math.sin(a1) * 0.62 },
-                0.08,
-                rgb,
-                alpha);
-        }
-        for (int i = 0; i < seg; i++) {
-            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg;
-            prism(
-                tes,
-                new double[] { Math.cos(a0) * 0.62, Math.cos(a0) * 0.7, Math.cos(a1) * 0.7, Math.cos(a1) * 0.62 },
-                new double[] { Math.sin(a0) * 0.62, Math.sin(a0) * 0.7, Math.sin(a1) * 0.7, Math.sin(a1) * 0.62 },
-                0.09,
-                0xFFFFFF,
-                alpha);
-        }
+        symbolDisc(tes, rgb, alpha);
         tes.draw();
         if (tex != null) {
             GL11.glPushMatrix();
@@ -1049,6 +1031,46 @@ public class TableFx {
             GL11.glPopMatrix();
         }
         GL11.glPopMatrix();
+    }
+
+    private static final int SYMBOL_SEGMENTS = 20;
+    private static final double[] SYMBOL_X = symbolCircle(true), SYMBOL_Y = symbolCircle(false);
+
+    private static double[] symbolCircle(boolean xAxis) {
+        double[] values = new double[SYMBOL_SEGMENTS + 1];
+        for (int i = 0; i < SYMBOL_SEGMENTS; i++) {
+            double angle = Math.PI * 2 * i / SYMBOL_SEGMENTS;
+            values[i] = xAxis ? Math.cos(angle) : Math.sin(angle);
+        }
+        values[SYMBOL_SEGMENTS] = values[0];
+        return values;
+    }
+
+    // The billboard exposes one face and its rim; radial joins have no internal walls.
+    private static void symbolDisc(Tessellator tessellator, int rgb, float alpha) {
+        color(tessellator, rgb, alpha);
+        for (int i = 0; i < SYMBOL_SEGMENTS; i++) {
+            tessellator.addVertex(0, 0, -0.04);
+            tessellator.addVertex(SYMBOL_X[i] * 0.62, SYMBOL_Y[i] * 0.62, -0.04);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.62, SYMBOL_Y[i + 1] * 0.62, -0.04);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.62, SYMBOL_Y[i + 1] * 0.62, -0.04);
+        }
+        color(tessellator, 0xFFFFFF, alpha);
+        for (int i = 0; i < SYMBOL_SEGMENTS; i++) {
+            tessellator.addVertex(SYMBOL_X[i] * 0.62, SYMBOL_Y[i] * 0.62, -0.04);
+            tessellator.addVertex(SYMBOL_X[i] * 0.7, SYMBOL_Y[i] * 0.7, -0.045);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.7, SYMBOL_Y[i + 1] * 0.7, -0.045);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.62, SYMBOL_Y[i + 1] * 0.62, -0.04);
+        }
+        for (int i = 0; i < SYMBOL_SEGMENTS; i++) {
+            double dx = SYMBOL_X[i + 1] - SYMBOL_X[i], dy = SYMBOL_Y[i + 1] - SYMBOL_Y[i];
+            float shade = (float) (0.72 - 0.22 * dx / Math.hypot(dx, dy));
+            color(tessellator, shade(0xFFFFFF, shade), alpha);
+            tessellator.addVertex(SYMBOL_X[i] * 0.7, SYMBOL_Y[i] * 0.7, -0.045);
+            tessellator.addVertex(SYMBOL_X[i] * 0.7, SYMBOL_Y[i] * 0.7, 0.045);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.7, SYMBOL_Y[i + 1] * 0.7, 0.045);
+            tessellator.addVertex(SYMBOL_X[i + 1] * 0.7, SYMBOL_Y[i + 1] * 0.7, -0.045);
+        }
     }
 
     private static void toss(Fx f, float t) {

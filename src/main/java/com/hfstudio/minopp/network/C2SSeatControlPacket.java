@@ -14,6 +14,7 @@ import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.TableConfig;
+import com.hfstudio.minopp.item.HandCardAccess;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
@@ -32,7 +33,7 @@ public class C2SSeatControlPacket {
      * Close enough to the table to use it, checked before the table is looked up so no chunk gets loaded.
      */
     static boolean inReach(EntityPlayerMP player, BlockPos gamePos) {
-        return gamePos != null && player.getDistanceSq(gamePos.x + 1.5, gamePos.y + 0.5, gamePos.z + 1.5) <= 16 * 16;
+        return HandCardAccess.inReach(player, gamePos);
     }
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {

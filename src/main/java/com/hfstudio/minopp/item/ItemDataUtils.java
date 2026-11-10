@@ -15,6 +15,7 @@ public class ItemDataUtils {
     public static final String CARD_GAME_BINDING_TABLE_POS = "card_game_binding_table_pos";
     public static final String CARD_GAME_BINDING_BEARER_ID = "card_game_binding_bearer_id";
     public static final String CLIENT_HAND_INDEX = "client_hand_index";
+    private static final String DIMENSION = "binding_dimension", GAME_ID = "binding_game", TOKEN = "binding_token";
 
     private ItemDataUtils() {}
 
@@ -60,7 +61,8 @@ public class ItemDataUtils {
 
     public static BlockPos getBlockPos(ItemStack stack) {
         NBTTagCompound dataMap = getDataMapIfPresent(stack);
-        return dataMap == null ? null : BlockPos.of(dataMap.getLong(CARD_GAME_BINDING_TABLE_POS));
+        return dataMap == null || !dataMap.hasKey(CARD_GAME_BINDING_TABLE_POS, 4) ? null
+            : BlockPos.of(dataMap.getLong(CARD_GAME_BINDING_TABLE_POS));
     }
 
     public static UUID getBearerId(ItemStack stack) {
@@ -89,7 +91,37 @@ public class ItemDataUtils {
     }
 
     public static void setCardGameBinding(ItemStack stack, BlockPos blockPos, UUID uuid) {
+        NBTTagCompound data = getDataMap(stack);
+        data.removeTag(DIMENSION);
+        data.removeTag(GAME_ID);
+        data.removeTag(TOKEN + "M");
+        data.removeTag(TOKEN + "L");
         setBlockPos(stack, blockPos);
         setBearerId(stack, uuid);
+    }
+
+    public static HandCardBinding getBinding(ItemStack stack) {
+        NBTTagCompound data = getDataMapIfPresent(stack);
+        BlockPos table = getBlockPos(stack);
+        UUID bearer = getBearerId(stack);
+        if (data == null || table == null
+            || bearer == null
+            || !data.hasKey(DIMENSION, 3)
+            || !data.hasKey(GAME_ID, 4)
+            || !NbtUtil.hasUUID(data, TOKEN)) return null;
+        return new HandCardBinding(
+            data.getInteger(DIMENSION),
+            table,
+            data.getLong(GAME_ID),
+            bearer,
+            NbtUtil.getUUID(data, TOKEN));
+    }
+
+    public static void setCardGameBinding(ItemStack stack, HandCardBinding binding) {
+        setCardGameBinding(stack, binding.table(), binding.bearer());
+        NBTTagCompound data = getDataMap(stack);
+        data.setInteger(DIMENSION, binding.dimension());
+        data.setLong(GAME_ID, binding.gameId());
+        NbtUtil.putUUID(data, TOKEN, binding.token());
     }
 }

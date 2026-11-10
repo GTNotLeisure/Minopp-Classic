@@ -45,7 +45,8 @@ public class HandScreen extends GuiScreen {
 
     private static boolean resumeAfterChoice;
 
-    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100, BTN_RULE = 200;
+    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_CARD_JUMP = 3, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100,
+        BTN_RULE = 200;
 
     private static String query = "";
     private static final Set<String> PLAIN = Set.of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
@@ -140,6 +141,17 @@ public class HandScreen extends GuiScreen {
         search = new GuiTextField(fontRendererObj, bx, by - 32, sw, 13);
         search.setMaxStringLength(40);
         search.setText(query);
+        Context context = Context.resolve(mc);
+        if (context != null && context.game.isDebugger(context.me)) buttonList.add(
+            new UiButton(
+                BTN_CARD_JUMP,
+                bx,
+                by - 56,
+                Math.max(sw, 84),
+                bh,
+                Chat.translatable("gui.minopp.debug.card_jump")
+                    .getFormattedText(),
+                0xFF8A2FB0));
         hintBottom = 6 + hintLines(hintText(), width - 24).size() * 12;
         addDebugButtons();
         updateButtons();
@@ -374,8 +386,9 @@ public class HandScreen extends GuiScreen {
                     .getFormattedText());
             tip.add(
                 Chat.translatable(
-                    ctx.me.coinUsed ? "gui.minopp.coin.spent_label"
-                        : ctx.me.coinLocked ? "gui.minopp.coin.tip_use" : "gui.minopp.coin.tip_flip")
+                    ctx.game.isDebugger(ctx.me) ? "gui.minopp.coin.tip_debug"
+                        : ctx.me.coinUsed ? "gui.minopp.coin.spent_label"
+                            : ctx.me.coinLocked ? "gui.minopp.coin.tip_use" : "gui.minopp.coin.tip_flip")
                     .getFormattedText());
             UiDraw.tooltip(fontRendererObj, tip, mouseX, mouseY, width, height);
         }
@@ -521,7 +534,8 @@ public class HandScreen extends GuiScreen {
             && mouseY >= coin[1]
             && mouseY < coin[1] + coin[2]) {
             Context ctx = Context.resolve(mc);
-            if (ctx != null && !ctx.me.coinUsed) C2SPlayCardPacket.Client.sendCoinC2S(ctx.pos, !ctx.me.coinLocked);
+            if (ctx != null && (!ctx.me.coinUsed || ctx.game.isDebugger(ctx.me))) C2SPlayCardPacket.Client
+                .sendCoinC2S(ctx.pos, ctx.game.isDebugger(ctx.me) ? isShiftKeyDown() : !ctx.me.coinLocked);
             return;
         }
         if (button == 0 && overDebugBar(mouseX, mouseY)) {
@@ -594,6 +608,21 @@ public class HandScreen extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (button.id == BTN_CARD_JUMP) {
+            Context ctx = Context.resolve(mc);
+            if (ctx != null && ctx.game.isDebugger(ctx.me))
+                mc.displayGuiScreen(new DebugCardScreen(this, ctx.pos, ctx.game.id, ctx.me.uuid, card -> {
+                    query = "";
+                    mc.displayGuiScreen(this);
+                    Context current = Context.resolve(mc);
+                    if (current == null) return;
+                    for (int i = 0; i < current.hand.size(); i++) if (current.hand.get(i).uid == card.uid) {
+                        select(current, i);
+                        break;
+                    }
+                }));
+            return;
+        }
         Context ctx = Context.resolve(mc);
         if (ctx == null) return;
         if (button.id == BTN_DRAW) draw(ctx);

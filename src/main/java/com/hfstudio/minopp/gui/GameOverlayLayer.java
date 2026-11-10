@@ -798,6 +798,7 @@ public class GameOverlayLayer {
     private static int[] coinRect;
     private Object coinGame;
     private boolean coinSide, coinSpent;
+    private int coinUseSeqSeen;
     private long coinFlipAt, coinUseAt;
 
     /**
@@ -861,13 +862,16 @@ public class GameOverlayLayer {
             coinGame = game.id;
             coinSide = me.coinNoMercy;
             coinSpent = me.coinUsed;
+            coinUseSeqSeen = me.coinUseSeq;
         }
         if (me.coinNoMercy != coinSide) {
             coinSide = me.coinNoMercy;
             coinFlipAt = now;
         }
-        if (me.coinUsed && !coinSpent) coinUseAt = now;
+        if (me.coinUsed && (!coinSpent || coinUseSeqSeen != me.coinUseSeq)) coinUseAt = now;
         coinSpent = me.coinUsed;
+        coinUseSeqSeen = me.coinUseSeq;
+        boolean spent = me.coinUsed && !game.isDebugger(me);
         int x = width - size - 10, y = height - size - 26;
         coinRect = new int[] { x, y, size };
         float flipT = Math.min(1f, (now - coinFlipAt) / 350f), useT = Math.min(1f, (now - coinUseAt) / 900f);
@@ -895,14 +899,14 @@ public class GameOverlayLayer {
             .bindTexture(me.coinNoMercy ? COIN_NO_MERCY : COIN_MERCY);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-        if (me.coinUsed && useT >= 1) GL11.glColor4f(0.45f, 0.45f, 0.45f, 0.8f);
+        if (spent && useT >= 1) GL11.glColor4f(0.45f, 0.45f, 0.45f, 0.8f);
         else GL11.glColor4f(1, 1, 1, 1);
         GuiDraw.blitBound(-size / 2f, -size / 2f, size, size, 0, 0, 1, 1, 1, 1);
         GL11.glPopMatrix();
         GL11.glColor4f(1, 1, 1, 1);
         String label = Chat
             .translatable(
-                me.coinUsed ? "gui.minopp.coin.spent_label"
+                spent ? "gui.minopp.coin.spent_label"
                     : me.coinNoMercy ? "gui.minopp.coin.no_mercy" : "gui.minopp.coin.mercy")
             .getFormattedText();
         int lw = font.getStringWidth(label);
@@ -911,7 +915,7 @@ public class GameOverlayLayer {
             label,
             Math.min(width - lw - 4, (int) cx - lw / 2),
             y + size + 3,
-            me.coinUsed ? 0xFF909090 : me.coinNoMercy ? 0xFFFF6050 : 0xFFFFD860);
+            spent ? 0xFF909090 : me.coinNoMercy ? 0xFFFF6050 : 0xFFFFD860);
     }
 
     private void drawCallouts(FontRenderer font, CardGame game, CardPlayer me, int width, int height) {

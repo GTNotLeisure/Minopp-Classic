@@ -34,6 +34,8 @@ public class C2SPlayCardPacket {
         int actionType = packet.readInt();
 
         if (!C2SSeatControlPacket.inReach(player, gamePos)) return;
+        boolean holdsAccess = gamePos.equals(ItemHandCards.getHandCardGamePos(player));
+        if (!holdsAccess && actionType != ACTION_CHOOSING) return;
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, gamePos);
         if (tableEntity == null || tableEntity.game == null) return;
         CardPlayer cardPlayer = tableEntity.game.deAmputate(playerUuid);
@@ -41,7 +43,7 @@ public class C2SPlayCardPacket {
         if (actionType == ACTION_PLAY || actionType == ACTION_NO_CARD) tableEntity.lastPlayedByUuid = playerUuid;
 
         if (actionType == ACTION_CHOOSING) {
-            choosing(tableEntity, cardPlayer, packet);
+            choosing(tableEntity, cardPlayer, packet, holdsAccess);
             return;
         }
         ActionReport result = switch (actionType) {
@@ -76,8 +78,10 @@ public class C2SPlayCardPacket {
         tableEntity.handleActionResult(result, cardPlayer, player);
     }
 
-    private static void choosing(BlockEntityMinoTable tableEntity, CardPlayer cardPlayer, ByteBuf packet) {
+    private static void choosing(BlockEntityMinoTable tableEntity, CardPlayer cardPlayer, ByteBuf packet,
+        boolean holdsAccess) {
         boolean active = packet.readBoolean(), ring = packet.readBoolean();
+        if (active && !holdsAccess) return;
         int hover = Math.max(-1, Math.min(3, packet.readByte()));
         // only whoever is choosing right now may show a picker, and only changes go out to the table
         boolean mayChoose = tableEntity.game.currentPlayer()

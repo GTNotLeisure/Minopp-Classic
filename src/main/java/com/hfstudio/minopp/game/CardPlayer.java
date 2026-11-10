@@ -28,6 +28,7 @@ public class CardPlayer {
      * Show 'Em No Mercy coin: which side was declared, whether it is spent, locked in, or armed to double a draw.
      */
     public boolean coinNoMercy, coinUsed, coinLocked, coinArmed;
+    public int coinUseSeq;
 
     public CardPlayer(EntityPlayer mcPlayer) {
         this.uuid = mcPlayer.getGameProfile()
@@ -54,6 +55,7 @@ public class CardPlayer {
         this.team = tag.hasKey("team") ? tag.getInteger("team") : -1;
         this.coinNoMercy = tag.getBoolean("coinNoMercy");
         this.coinUsed = tag.getBoolean("coinUsed");
+        this.coinUseSeq = tag.hasKey("coinUseSeq") ? tag.getInteger("coinUseSeq") : coinUsed ? 1 : 0;
         this.coinLocked = tag.getBoolean("coinLocked");
         this.coinArmed = tag.getBoolean("coinArmed");
     }
@@ -72,6 +74,7 @@ public class CardPlayer {
         tag.setInteger("team", team);
         tag.setBoolean("coinNoMercy", coinNoMercy);
         tag.setBoolean("coinUsed", coinUsed);
+        tag.setInteger("coinUseSeq", coinUseSeq);
         tag.setBoolean("coinLocked", coinLocked);
         tag.setBoolean("coinArmed", coinArmed);
         return tag;

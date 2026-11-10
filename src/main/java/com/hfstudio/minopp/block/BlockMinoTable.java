@@ -78,7 +78,7 @@ public class BlockMinoTable extends Block {
             if (level.isRemote && itemStack.getItem() == Mino.ITEM_HAND_CARDS
                 && blockEntity instanceof BlockEntityMinoTable tableEntity
                 && tableEntity.game != null) {
-                BlockPos tablePos = ItemDataUtils.getBlockPos(itemStack);
+                BlockPos tablePos = ItemHandCards.getHandCardGamePos(player);
                 if (tablePos == null || !tablePos.equals(corePos)) {
                     Client.displayActionBar(
                         Chat.translatable("game.minopp.play.no_player")
@@ -107,8 +107,14 @@ public class BlockMinoTable extends Block {
                 return false;
             }
             if (level.isRemote) {
+                if (tableEntity.game != null && tableEntity.game.deAmputate(cardPlayer) != null && !player.isSneaking())
+                    return true;
                 Client.openSeatControlScreen(corePos);
                 return true;
+            }
+            if (tableEntity.game != null && !player.isSneaking()) {
+                return tableEntity.handCardAccess()
+                    .recover(tableEntity, player, true);
             }
             if (tableEntity.game == null && !player.isSneaking()) {
                 tableEntity.joinPlayerToTable(cardPlayer, new Vec3d(player.posX, player.posY, player.posZ));
@@ -344,6 +350,13 @@ public class BlockMinoTable extends Block {
     @Override
     public int damageDropped(int meta) {
         return 0;
+    }
+
+    @Override
+    public void breakBlock(World world, int x, int y, int z, Block oldBlock, int meta) {
+        if (!world.isRemote && world.getTileEntity(x, y, z) instanceof BlockEntityMinoTable table && table.game != null)
+            table.destroyGame(null);
+        super.breakBlock(world, x, y, z, oldBlock, meta);
     }
 
     public static BlockPos getCore(IBlockAccess level, int x, int y, int z) {

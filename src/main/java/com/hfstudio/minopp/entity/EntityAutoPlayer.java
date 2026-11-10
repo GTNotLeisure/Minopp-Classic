@@ -156,6 +156,15 @@ public class EntityAutoPlayer extends EntityLiving {
             if (tableEntity.game != null) {
                 heal(10);
                 CardGame game = tableEntity.game;
+                CardPlayer member = game.deAmputate(getUniqueID());
+                if (member != null && !member.eliminated
+                    && !tableEntity.handCardAccess()
+                        .matches(tableEntity, ItemDataUtils.getBinding(getHeldItem()))) {
+                    setHandStack(
+                        tableEntity.handCardAccess()
+                            .create(tableEntity, member.uuid));
+                    tableEntity.sync();
+                }
                 if (game.awaitingCutIn || !game.decisions.isEmpty()) {
                     isThinking = false;
                     return;
@@ -254,7 +263,9 @@ public class EntityAutoPlayer extends EntityLiving {
     }
 
     @Override
-    public void setCurrentItemOrArmor(int slot, ItemStack stack) {}
+    public void setCurrentItemOrArmor(int slot, ItemStack stack) {
+        if (slot == 0 && (stack == null || stack.getItem() == Mino.ITEM_HAND_CARDS)) setHandStack(stack);
+    }
 
     @Override
     public ItemStack[] getLastActiveItems() {
@@ -356,8 +367,13 @@ public class EntityAutoPlayer extends EntityLiving {
         summoned = compound.getBoolean("Summoned");
 
         if (tablePos != null && cardPlayer != null) {
-            ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
-            ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);
+            ItemStack handStack = compound.hasKey("HandStack", 10)
+                ? ItemStack.loadItemStackFromNBT(compound.getCompoundTag("HandStack"))
+                : null;
+            if (handStack == null || handStack.getItem() != Mino.ITEM_HAND_CARDS) {
+                handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
+                ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);
+            }
             setHandStack(handStack);
         } else {
             setHandStack(null);
