@@ -188,6 +188,7 @@ public class GameSettingsScreen extends GuiScreen {
         private final List<String> packs;
         private final int deckSize;
         private List<CardFace> preview;
+        private Set<String> activeConflicts;
 
         private ConfigView(TableConfig config) {
             rules = new HashMap<>(config.rules);
@@ -1432,13 +1433,19 @@ public class GameSettingsScreen extends GuiScreen {
         List<String> others = Conflicts.of(key);
         if (others.isEmpty()) return;
         t.conflictKey = key;
-        boolean self = cfg != null && Conflicts.isActive(key, cfg);
+        Set<String> active = Set.of();
+        if (cfg != null) {
+            ConfigView view = configView(cfg);
+            if (view.activeConflicts == null) view.activeConflicts = Conflicts.activeKeys(cfg);
+            active = view.activeConflicts;
+        }
+        boolean self = active.contains(key);
         String sep = tr("gui.minopp.conflict.sep");
         t.warn.add(EnumChatFormatting.GOLD + tr("gui.minopp.conflict.title"));
         StringBuilder line = new StringBuilder();
         for (int i = 0; i < others.size(); i++) {
             String o = others.get(i);
-            boolean on = cfg != null && Conflicts.isActive(o, cfg);
+            boolean on = active.contains(o);
             if (on && self) t.clash = true;
             if (i % 4 != 0) line.append(EnumChatFormatting.GOLD)
                 .append(sep);

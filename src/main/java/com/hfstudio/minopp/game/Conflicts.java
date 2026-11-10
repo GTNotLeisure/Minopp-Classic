@@ -8,10 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Rules and cards that are not recommended together: they still work, but one makes the other pointless or drags
- * games out. Keys are {@code rule:<id>} and {@code card:<typeId>}; every link goes both ways.
- */
 public class Conflicts {
 
     private Conflicts() {}
@@ -42,14 +38,15 @@ public class Conflicts {
      * Marks every key in {@code a} as not recommended with every key in {@code b}.
      */
     public static void link(String[] a, String... b) {
-        revision++;
+        boolean changed = false;
         for (String x : a) for (String y : b) {
             if (x.equals(y)) continue;
-            LINKS.computeIfAbsent(x, k -> new LinkedHashSet<>())
+            changed |= LINKS.computeIfAbsent(x, k -> new LinkedHashSet<>())
                 .add(y);
-            LINKS.computeIfAbsent(y, k -> new LinkedHashSet<>())
+            changed |= LINKS.computeIfAbsent(y, k -> new LinkedHashSet<>())
                 .add(x);
         }
+        if (changed) revision++;
     }
 
     public static void link(String a, String... b) {
@@ -57,7 +54,7 @@ public class Conflicts {
     }
 
     static {
-        // any draw stacks on any draw: blocking and bouncing a penalty is never needed
+        // Broad stacking overlaps with draw defenses without replacing their targeted-effect responses.
         link(
             rule(GameRules.STACK_ANY_DRAW),
             cards(
@@ -69,7 +66,7 @@ public class Conflicts {
                 "wild_block_rebound",
                 "wild_block_deflect",
                 "wild_redirect"));
-        // Skip and Reverse already send penalties on; these cards do the same
+        // Skip and Reverse can also pass draw penalties on.
         link(
             rule(GameRules.DEFLECT_DRAW),
             cards(
@@ -79,9 +76,15 @@ public class Conflicts {
                 "wild_block_rebound",
                 "wild_block_deflect",
                 "wild_redirect"));
-        // Both NO U variants return draw penalties to their source.
+        // Keep distinct matching symbols, scoring and response rules for these overlapping effects.
+        link(card("wild_draw6"), card("wild_plus6"));
+        String[] repeatTurns = cards("skip_everyone", "bonus_turn", "play_again_10");
+        link(repeatTurns, repeatTurns);
+        link(card("wild_drawn_together"), card("wild_eggs_basket"));
+        link(card("wild_draw_color"), card("wild_infinity"));
+        link(card("wild_block"), card("wild_shield"));
         link(card("wild_no_u"), card("wild_infinity_no_u"));
-        // 7-0 swaps hands on every 7 and 0; these cards already trade hands
+        // The 7-0 rule already swaps and rotates whole hands.
         link(
             rule(GameRules.SEVEN_ZERO),
             cards(
@@ -92,18 +95,25 @@ public class Conflicts {
                 "wild_crossfade",
                 "wild_pass_hands",
                 "wild_force_trade"));
-        // extra plays on top of extra plays end games too quickly
+        // Extra plays compound with cards that grant another play or increase the turn quota.
         String[] extraPlays = cards(
             "skip_everyone",
             "bonus_turn",
             "play_again_10",
             "speed_up",
             "wild_double_speed",
-            "wild_power_reverse");
+            "wild_power_reverse",
+            "flex_skip",
+            "replay",
+            "wild_replay",
+            "trick_wild");
         link(rule(GameRules.MULTI_PLAY), extraPlays);
         link(rule(GameRules.MULTI_PLAY), card("fast_number"));
         link(rule(GameRules.MULTI_PLAY), rule(GameRules.BRING_CARD));
-        // with bluffing ruled out there is nothing left to challenge
+        // Public hands remove the information gained from temporary reveals.
+        link(rule(GameRules.PEEK_HANDS), cards("reveal_hands", "wild_reveal_one"));
+        link(rule(GameRules.STACK_ANY_DRAW), rule(GameRules.STACK_DRAW4_ON_DRAW2));
+        // No-bluffing prevents the illegal plays that a challenge detects.
         link(rule(GameRules.CHALLENGE), rule(GameRules.NO_BLUFFING));
     }
 
@@ -120,20 +130,28 @@ public class Conflicts {
     }
 
     /**
+     * Returns an immutable snapshot of active rule and card keys, using merged counts and enabled card sides.
+     */
+    public static Set<String> activeKeys(TableConfig cfg) {
+        Set<String> active = new LinkedHashSet<>();
+        for (GameRules.Rule rule : GameRules.all()) if (cfg.getBool(rule.id())) active.add(rule(rule.id()));
+        addActiveCards(active, cfg.faceCounts(false));
+        if (cfg.getBool(GameRules.FLIP_MODE)) addActiveCards(active, cfg.faceCounts(true));
+        return Collections.unmodifiableSet(active);
+    }
+
+    private static void addActiveCards(Set<String> active, Map<CardFace, Integer> counts) {
+        for (Map.Entry<CardFace, Integer> entry : counts.entrySet()) {
+            if (entry.getValue() > 0) active.add(card(entry.getKey().typeId));
+        }
+    }
+
+    /**
      * Whether a rule is on or a card is in the deck of this table.
      */
     public static boolean isActive(String key, TableConfig cfg) {
         if (key.startsWith("rule:")) return cfg.getBool(key.substring(5));
-        if (key.startsWith("card:")) {
-            String type = key.substring(5);
-            for (CardPack pack : CardPack.all()) {
-                for (CardPack.Entry e : pack.entries) {
-                    if (e.typeId()
-                        .equals(type) && cfg.getCount(pack, e) > 0) return true;
-                }
-            }
-        }
-        return false;
+        return key.startsWith("card:") && activeKeys(cfg).contains(key);
     }
 
     /**
@@ -141,8 +159,13 @@ public class Conflicts {
      */
     public static List<String> clashes(String key, TableConfig cfg) {
         List<String> out = new ArrayList<>();
-        if (!isActive(key, cfg)) return out;
-        for (String o : of(key)) if (isActive(o, cfg)) out.add(o);
+        Set<String> others = LINKS.get(key);
+        if (others == null) return out;
+        Set<String> active = activeKeys(cfg);
+        if (!active.contains(key)) return out;
+        for (String other : others) {
+            if (active.contains(other)) out.add(other);
+        }
         return out;
     }
 }
