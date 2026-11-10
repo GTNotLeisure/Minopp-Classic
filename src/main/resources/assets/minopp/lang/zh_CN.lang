@@ -273,7 +273,7 @@ game.minopp.card.type.trick_wild.desc=指定颜色。如果下家没有该颜色
 game.minopp.card.type.wild_color_challenge=万能颜色挑战
 game.minopp.card.type.wild_color_challenge.desc=指定颜色。没有该颜色牌的人各罚摸 2 张；如果所有人都有，你罚摸 3 张。
 game.minopp.card.type.reveal_hands=亮出手牌
-game.minopp.card.type.reveal_hands.desc=所有人的手牌明牌展示，直到再次轮到你。
+game.minopp.card.type.reveal_hands.desc=所有人的手牌公开 15 秒。
 
 # Cards: Show 'Em No Mercy Expansion
 game.minopp.card.type.play_again_10=再来一次 10
@@ -283,7 +283,7 @@ game.minopp.card.type.wild_discard_all.desc=指定颜色：弃掉手中所有该
 game.minopp.card.type.wild_reverse_draw8=万能反转+8
 game.minopp.card.type.wild_reverse_draw8.desc=指定颜色并反转出牌方向；反转后的下家罚摸 8 张牌，并暂停出牌一次。
 game.minopp.card.type.wild_final_attack=万能最终攻击
-game.minopp.card.type.wild_final_attack.desc=亮出你的手牌。下家暂停出牌一次，并按其中功能牌和万能牌的张数罚摸；达到 7 张及以上时改为罚摸 25 张，其他所有人各罚摸 5 张。
+game.minopp.card.type.wild_final_attack.desc=亮出你的手牌 15 秒。下家暂停出牌一次，并按其中功能牌和万能牌的张数罚摸；达到 7 张及以上时改为罚摸 25 张，其他所有人各罚摸 5 张。
 game.minopp.card.type.wild_sudden_death=万能突然死亡
 game.minopp.card.type.wild_sudden_death.desc=包括你在内的所有人摸牌，直到手里有 24 张。由你指定颜色。
 
@@ -329,7 +329,7 @@ game.minopp.card.type.wild_minus_one.desc=指定颜色，并自选弃掉一张�
 game.minopp.card.type.wild_minus_two=万能-2
 game.minopp.card.type.wild_minus_two.desc=指定颜色，并自选弃掉两张牌。
 game.minopp.card.type.wild_reveal_one=万能指定亮牌
-game.minopp.card.type.wild_reveal_one.desc=指定颜色并选择一名玩家：其手牌向所有人公开，直到再次轮到你。
+game.minopp.card.type.wild_reveal_one.desc=指定颜色并选择一名玩家：其手牌公开 15 秒。
 game.minopp.card.type.joker=小丑
 game.minopp.card.type.joker.desc=同时代表所有颜色：任何牌都可以接在它后面。
 game.minopp.card.type.wild_number_sign=万能指定数字
@@ -350,6 +350,8 @@ game.minopp.card.type.wild_infinity=无限
 game.minopp.card.type.wild_infinity.desc=指定颜色，下家摸牌直到出现该颜色的牌，并跳过回合。此牌计无限分。
 game.minopp.card.type.wild_infinity_no_u=万能 NO U (Infinity)
 game.minopp.card.type.wild_infinity_no_u.desc=将摸牌处罚或针对你的卡牌效果反弹给原出牌者，然后指定颜色。从原出牌者之后继续游戏；也可当作普通万能牌使用。
+game.minopp.card.type.wild_combat=万能战斗
+game.minopp.card.type.wild_combat.desc=指定颜色，对另一名玩家造成等于剩余手牌数的魔法伤害。
 
 # Card packs
 gui.minopp.pack.all_wild=全万能
@@ -362,6 +364,8 @@ gui.minopp.pack.blaster=冲击炮扩展
 gui.minopp.pack.blaster.desc=灵感来自发牌器玩法：冲击炮、万能群体冲击、交换手牌与同色全弃。
 gui.minopp.pack.classic=经典
 gui.minopp.pack.classic.desc=原版 108 张牌组。
+gui.minopp.pack.combat=UNO Combat
+gui.minopp.pack.combat.desc=在经典牌组中加入1张万能战斗。以剩余手牌数为伤害，对指定玩家发动魔法攻击。
 gui.minopp.pack.comeback=逆袭扩展
 gui.minopp.pack.comeback.desc=落后也能翻盘：万能换手牌、万能看齐最多与万能同甘共苦。
 gui.minopp.pack.dance=舞会扩展
@@ -492,6 +496,10 @@ gui.minopp.rule.teamMode=团队模式
 gui.minopp.rule.teamMode.desc=玩家在大厅中分队，同队一起获胜。每个队伍人数必须相等才能开始。
 gui.minopp.rule.teamRelay=团队接力
 gui.minopp.rule.teamRelay.desc=出完手牌时拿走队友一半的手牌继续游戏；当没有队友还能接力时，你的队伍获胜。
+gui.minopp.rule.turnTimeLimit=出牌时限
+gui.minopp.rule.turnTimeLimit.desc=每次出牌可设为不限制、10、15、20、30、60秒，或自定义5至99999秒。超时自动出牌；无牌可出时按房间规则摸牌并出牌。等待决策和抢出窗口期间暂停计时。
+gui.minopp.rule.turnTimeLimit.unlimited=不限制
+gui.minopp.rule.turnTimeLimit.seconds=%s秒
 
 # Compatibility warnings
 gui.minopp.conflict.active=这张桌子上两者都已开启。
@@ -583,8 +591,18 @@ gui.minopp.hand.pass=过牌
 gui.minopp.hand.search=F：搜索…
 gui.minopp.hand.shout=MINO！
 
+# Revealed hands
+gui.minopp.reveal.open=查看亮牌
+gui.minopp.reveal.title=公开手牌
+gui.minopp.reveal.player=%1$s（%2$s 张）
+gui.minopp.reveal.hint=有人亮牌：按 %s 打开手牌界面，点击头像或玩家查看。
+gui.minopp.reveal.players_page=玩家 %1$s/%2$s
+gui.minopp.reveal.click=点击查看手牌
+
 # Card choices and decisions
 gui.minopp.choice.confirm=确认
+gui.minopp.choice.confirm_count=确认（%1$s/%2$s）
+gui.minopp.choice.random=随机选择
 gui.minopp.choice.number=指定一个数字（1-9）
 gui.minopp.choice.pick=选择 %1$s 张要弃掉的牌（%2$s/%3$s）
 gui.minopp.choice.recipient=接收者：%s
@@ -637,6 +655,7 @@ gui.minopp.play.start_hint=走到桌子旁，右键以加入对局。
 gui.minopp.play.top_card=上张牌：%s
 gui.minopp.play.top_card_wild_color=颜色是 %s
 gui.minopp.play.turn_other=现在轮到 %s。
+gui.minopp.play.turn_time=出牌剩余时间：%s秒
 gui.minopp.settle.loser=%1$s  剩 %2$s 张，%3$s 分
 gui.minopp.settle.match=%s 赢得了整场比赛！
 gui.minopp.settle.title=本局结算
@@ -801,8 +820,8 @@ game.minopp.play.recycle=%1$s 把一张牌回收到 %2$s 的手里。
 game.minopp.play.redirect=%1$s 转移了罚牌：%2$s 摸 %3$s 张。
 game.minopp.play.refresh_hand=%1$s 刷新了手牌（%2$s 张）。
 game.minopp.play.relay=%1$s 出完了手牌，从 %2$s 那里拿走 %3$s 张牌继续！
-game.minopp.play.reveal_hands=%s 让所有人亮出手牌，直到再次轮到自己！
-game.minopp.play.reveal_one=%1$s 公开了 %2$s 的手牌。
+game.minopp.play.reveal_hands=%s 让所有人的手牌公开 15 秒！
+game.minopp.play.reveal_one=%1$s 将 %2$s 的手牌公开了 15 秒。
 game.minopp.play.roulette=%1$s 一直摸到了 %2$s，共 %3$s 张。
 game.minopp.play.rule_forbid=按照规则，只有在没有其他牌可出的时候，才可以出这张牌。
 game.minopp.play.seats_reset=%1$s 清空了座位。请重新入座。
@@ -836,6 +855,8 @@ game.minopp.play.text.3=%s 收到短信：颜色挑战！
 game.minopp.play.thief=%1$s 从 %2$s 手中偷走了一张牌。
 game.minopp.play.times_two=%1$s 摸了 %2$s 张，手牌翻倍！
 game.minopp.play.too_slow=%1$s 太慢了：摸 1 张牌。
+game.minopp.play.turn_timeout=出牌超时，已自动选择行动。
+death.attack.minopp.combat=%1$s被%2$s的战斗卡击败了
 game.minopp.play.trap_armed=%1$s 布下了诡雷：下一个摸牌的人额外摸 3 张。
 game.minopp.play.trap_sprung=轰！%1$s 触发了诡雷：额外摸 3 张。
 game.minopp.play.trial=%1$s 发起了%2$s试炼：弃一张或摸一张！

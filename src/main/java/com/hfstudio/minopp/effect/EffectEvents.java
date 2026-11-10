@@ -37,12 +37,15 @@ public class EffectEvents {
     public static final EffectEvent.Type<SeatActionTakenEffectEvent> SEAT_ACTION_TAKEN = new EffectEvent.Type<>(
         "minopp:seat_action_taken",
         SeatActionTakenEffectEvent::decode);
+    public static final EffectEvent.Type<CombatDamageEffectEvent> COMBAT_DAMAGE = new EffectEvent.Type<>(
+        "minopp:combat_damage",
+        CombatDamageEffectEvent::decode);
 
     public static final Map<String, EffectEvent.Type<?>> REGISTRY = new HashMap<>();
 
     static {
         for (EffectEvent.Type<?> type : new EffectEvent.Type<?>[] { SOUND, PLAYER_FIREWORK, PLAYER_GLOW, GRANT_REWARD,
-            SEAT_ACTION_TAKEN }) {
+            SEAT_ACTION_TAKEN, COMBAT_DAMAGE }) {
             register(type);
         }
     }

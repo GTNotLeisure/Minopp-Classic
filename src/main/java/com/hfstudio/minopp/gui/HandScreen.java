@@ -25,7 +25,6 @@ import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
-import com.hfstudio.minopp.gui.ui.SearchMatch;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemDataUtils;
@@ -44,14 +43,15 @@ public class HandScreen extends GuiScreen {
 
     private static boolean resumeAfterChoice;
 
-    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_CARD_JUMP = 3, BTN_DEBUG_TOGGLE = 99, BTN_DEBUG = 100,
-        BTN_RULE = 200;
+    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_CARD_JUMP = 3, BTN_REVEAL = 4, BTN_DEBUG_TOGGLE = 99,
+        BTN_DEBUG = 100, BTN_RULE = 200;
 
     private static String query = "";
     private static final Set<String> PLAIN = Set.of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
     private static boolean debugOpen = true;
     private GuiTextField search;
     private int hintBottom;
+    private int revealHudHeight;
     private int edgeDir;
     private long edgeSince, edgeLast;
 
@@ -80,11 +80,7 @@ public class HandScreen extends GuiScreen {
         if (!query.isEmpty() && open) {
             List<Card> out = new ArrayList<>();
             for (Card c : hand) {
-                if (SearchMatch.matches(
-                    game.face(c)
-                        .getDisplayName()
-                        .getUnformattedText(),
-                    query)) out.add(c);
+                if (CardTooltips.matches(game.face(c), query)) out.add(c);
             }
             if (!out.isEmpty()) hand = out;
         }
@@ -98,7 +94,7 @@ public class HandScreen extends GuiScreen {
     }
 
     private int lastMouseX = Integer.MIN_VALUE, lastMouseY = Integer.MIN_VALUE;
-    private UiButton drawButton, shoutButton;
+    private UiButton drawButton, shoutButton, revealButton;
 
     private static String noticeText;
     private static long noticeUntil;
@@ -151,7 +147,19 @@ public class HandScreen extends GuiScreen {
                 Chat.translatable("gui.minopp.debug.card_jump")
                     .getFormattedText(),
                 0xFF8A2FB0));
+        revealButton = new UiButton(
+            BTN_REVEAL,
+            bx,
+            by - (context != null && context.game.isDebugger(context.me) ? 80 : 56),
+            Math.max(sw, 84),
+            bh,
+            Chat.translatable("gui.minopp.reveal.open")
+                .getFormattedText(),
+            0xFF2A7FD4);
+        revealButton.visible = context != null && RevealedHandsScreen.available(context.game, context.me.uuid);
+        buttonList.add(revealButton);
         hintBottom = 6 + hintLines(hintText(), width - 24).size() * 12;
+        revealHudHeight = context == null ? 0 : RevealedHandTargets.hudHeight(context.table, width);
         addDebugButtons();
         updateButtons();
     }
@@ -159,6 +167,7 @@ public class HandScreen extends GuiScreen {
     private static final int DEBUG_ROWS = 8;
     private static int debugScroll;
     private boolean draggingDebugBar;
+    private long debugRulesRevision = -1;
     /**
      * {x, y, w, h, rows shown, rows in all} of the debug list, or null when there is none.
      */
@@ -167,6 +176,7 @@ public class HandScreen extends GuiScreen {
     // the toggle sits at the right edge; under it one column of actions and mechanics that the wheel scrolls
     private void addDebugButtons() {
         debugPanel = null;
+        debugRulesRevision = GameRules.revision();
         Context ctx = Context.resolve(mc);
         if (ctx == null || !ctx.game.isDebugger(ctx.me)) return;
         List<String> actions = CardGame.DEBUG_ACTIONS;
@@ -183,7 +193,7 @@ public class HandScreen extends GuiScreen {
         int bh = 12, gap = 2;
         int bw = Math.max(labelW + 10, fontRendererObj.getStringWidth(title) + 10);
         int x0 = width - 6 - bw;
-        int top = hintBottom + 16;
+        int top = hintBottom + 16 + revealHudHeight;
         buttonList.add(new UiButton(BTN_DEBUG_TOGGLE, x0, top - 14, bw, bh, title, 0xFF8A2FB0));
         if (!debugOpen) return;
         int total = actions.size() + rules.size();
@@ -295,6 +305,10 @@ public class HandScreen extends GuiScreen {
         updateButtons(Context.resolve(mc));
     }
 
+    public int revealHudBottom() {
+        return revealHudHeight == 0 ? 0 : hintBottom + 6 + revealHudHeight;
+    }
+
     private void updateButtons(Context ctx) {
         boolean myTurn = ctx != null && ctx.isMyTurn();
         boolean drawn = ctx != null && ctx.game.currentPlayerPhase != CardGame.PlayerActionPhase.DISCARD_HAND;
@@ -310,8 +324,17 @@ public class HandScreen extends GuiScreen {
     @Override
     public void updateScreen() {
         Context live = Context.resolve(mc);
-        if (live == null) mc.displayGuiScreen(null);
-        else for (Object o : buttonList) {
+        if (live == null) {
+            mc.displayGuiScreen(null);
+            return;
+        }
+        int newRevealHeight = RevealedHandTargets.hudHeight(live.table, width);
+        if (debugRulesRevision != GameRules.revision() || newRevealHeight != revealHudHeight) {
+            revealHudHeight = newRevealHeight;
+            rebuildDebugButtons();
+        }
+        revealButton.visible = RevealedHandsScreen.available(live.game, live.me.uuid);
+        for (Object o : buttonList) {
             if (o instanceof UiButton b && b.id >= BTN_RULE && b.id - BTN_RULE < CardGame.DEBUG_RULES.size()) {
                 String r = CardGame.DEBUG_RULES.get(b.id - BTN_RULE);
                 b.displayString = ruleLabel(live, r);
@@ -348,7 +371,8 @@ public class HandScreen extends GuiScreen {
             fontRendererObj.drawStringWithShadow(line, tx, ty, 0xFFE8E8E8);
             ty += 12;
         }
-        boolean found = query.isEmpty() || ctx.hand.size() < ctx.me.hand.size();
+        boolean found = query.isEmpty()
+            || !ctx.hand.isEmpty() && CardTooltips.matches(ctx.game.face(ctx.hand.get(0)), query);
         search.setTextColor(found ? 0xFFFFFFFF : 0xFFFF6060);
         search.drawTextBox();
         if (search.getText()
@@ -405,6 +429,7 @@ public class HandScreen extends GuiScreen {
             UiDraw.roundRect(nx - 6, ny - 3, nx + nw + 5, ny + 10, 4, 0xC0401010);
             fontRendererObj.drawStringWithShadow(noticeText, nx, ny, 0xFFFFE0A0);
         }
+        RevealedHandTargets.drawHud(ctx.table, width, height, hintBottom + 6, mouseX, mouseY);
     }
 
     private void edgeTurn(Context ctx, int mouseX, int mouseY) {
@@ -494,6 +519,10 @@ public class HandScreen extends GuiScreen {
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
+        if (wheel != 0 && RevealedHandTargets.scrollHud(
+            Mouse.getEventX() * width / mc.displayWidth,
+            height - Mouse.getEventY() * height / mc.displayHeight - 1,
+            -Integer.signum(wheel))) return;
         Context ctx = Context.resolve(mc);
         if (wheel != 0 && debugPanel != null) {
             int mx = Mouse.getEventX() * width / mc.displayWidth;
@@ -526,6 +555,7 @@ public class HandScreen extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        if (button == 0 && RevealedHandTargets.clickHud(this, mouseX, mouseY)) return;
         int[] coin = GameOverlayLayer.coinRect();
         if (button == 0 && coin != null
             && mouseX >= coin[0]
@@ -551,6 +581,13 @@ public class HandScreen extends GuiScreen {
             && mouseY >= search.yPosition
             && mouseY < search.yPosition + search.height) return;
         super.mouseClicked(mouseX, mouseY, button);
+        if (mc.currentScreen != this) return;
+        for (GuiButton control : buttonList) {
+            if (control.visible && mouseX >= control.xPosition
+                && mouseX < control.xPosition + control.width
+                && mouseY >= control.yPosition
+                && mouseY < control.yPosition + control.height) return;
+        }
         if (button != 0) return;
         Context ctx = Context.resolve(mc);
         if (ctx == null) return;
@@ -570,6 +607,7 @@ public class HandScreen extends GuiScreen {
             return;
         }
         if (hit >= 0) play(ctx, hit);
+        else RevealedHandTargets.clickWorld(this, mouseX, mouseY);
     }
 
     private void drawCardInfo(Context ctx, Card card) {
@@ -577,7 +615,8 @@ public class HandScreen extends GuiScreen {
         String title = CardTooltips.title(ctx.game, card);
         String desc = CardTooltips.description(face);
         int maxW = Math.min(380, width - 40);
-        List<?> lines = fontRendererObj.listFormattedStringToWidth(desc, maxW);
+        List<String> lines = new ArrayList<>(fontRendererObj.listFormattedStringToWidth(desc, maxW));
+        lines.addAll(fontRendererObj.listFormattedStringToWidth(CardTooltips.packLine(face), maxW));
         int bandH = 24 + lines.size() * 11;
         int cw = GameOverlayLayer.cardWidth(width), ch = Math.round(cw * 8.9f / 5.6f);
         int y = Math.max(40, height - ch / 2 - bandH / 2 - 6);
@@ -587,7 +626,7 @@ public class HandScreen extends GuiScreen {
         int tw = fontRendererObj.getStringWidth(title);
         fontRendererObj.drawStringWithShadow(title, width / 2 - tw / 2, y + 6, 0xFFFFD040);
         for (int i = 0; i < lines.size(); i++) {
-            String l = (String) lines.get(i);
+            String l = lines.get(i);
             fontRendererObj.drawStringWithShadow(
                 l,
                 width / 2 - fontRendererObj.getStringWidth(l) / 2,
@@ -617,6 +656,8 @@ public class HandScreen extends GuiScreen {
         if (ctx == null) return;
         if (button.id == BTN_DRAW) draw(ctx);
         else if (button.id == BTN_SHOUT) shout(ctx);
+        else if (button.id == BTN_REVEAL && RevealedHandsScreen.available(ctx.game, ctx.me.uuid))
+            mc.displayGuiScreen(new RevealedHandsScreen(this, ctx.pos, ctx.game.id));
         else if (button.id >= BTN_RULE && button.id - BTN_RULE < CardGame.DEBUG_RULES.size()) {
             mc.thePlayer.sendChatMessage("/minopp debug rule:" + CardGame.DEBUG_RULES.get(button.id - BTN_RULE));
         } else if (button.id == BTN_DEBUG_TOGGLE) {

@@ -815,6 +815,7 @@ public class BlockEntityMinoTable extends TileEntity {
     @Override
     public void updateEntity() {
         if (worldObj.isRemote || game == null) return;
+        if (game.refreshDebugCatalog()) sync();
         if (worldObj.getTotalWorldTime() % 20 == 0) recoverHandCards(false);
         ActionReport timed = game.tickTurnTimers();
         if (timed != null) handleActionResult(timed, game.currentPlayer(), null);
@@ -909,7 +910,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (worldObj != null && !worldObj.isRemote) choosingRevision++;
         markDirty();
         if (worldObj == null) return;
-        if (worldObj.isRemote || peekAll() || game == null) {
+        if (worldObj.isRemote || game == null) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
             return;
         }
@@ -962,8 +963,7 @@ public class BlockEntityMinoTable extends TileEntity {
     private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
         UUID viewer = player.getGameProfile()
             .getId();
-        boolean reveal = peekAll() || game != null && game.isPeeking(viewer);
-        NBTTagCompound tag = HandMask.clientTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS), reveal);
+        NBTTagCompound tag = HandMask.clientTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS), peekAll());
         player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }
 

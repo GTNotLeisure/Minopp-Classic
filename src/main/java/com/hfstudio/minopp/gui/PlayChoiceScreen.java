@@ -56,6 +56,7 @@ public class PlayChoiceScreen extends GuiScreen {
     private final List<Card> pickable = new ArrayList<>();
     private final IntSet picked = new IntLinkedOpenHashSet();
     private final CardGrid pickGrid = new CardGrid();
+    private final CardGridSelection pickSelection = new CardGridSelection(pickGrid, picked);
 
     public PlayChoiceScreen(BlockPos gamePos, CardPlayer player, Card card, PlayContext.PlayChoices choices,
         boolean needsColor, int targetCount, boolean darkSide) {
@@ -126,6 +127,7 @@ public class PlayChoiceScreen extends GuiScreen {
 
     @Override
     public void initGui() {
+        pickSelection.release();
         buttonList.clear();
         int cy = height / 2;
         int band = bandTop();
@@ -182,22 +184,25 @@ public class PlayChoiceScreen extends GuiScreen {
                     Chat.translatable("gui.cancel")
                         .getFormattedText()));
         } else if (pickStep) {
-            pickGrid.layout(width, height, 8);
+            pickGrid.layout(width, height, 8, 34, 58);
+            String randomLabel = Chat.translatable("gui.minopp.choice.random")
+                .getFormattedText();
+            int randomWidth = Math.max(80, fontRendererObj.getStringWidth(randomLabel) + 12);
+            UiButton random = new UiButton(-4, (width - randomWidth) / 2, height - 50, randomWidth, 20, randomLabel);
+            random.enabled = pickCount > 0 && pickCount <= pickGrid.cards()
+                .size();
+            buttonList.add(random);
             int by = height - 26;
-            UiButton ok = new UiButton(
-                -3,
-                width / 2 - 84,
-                by,
-                80,
-                20,
-                Chat.translatable("gui.minopp.choice.confirm")
-                    .getFormattedText());
+            boolean cancel = canCancel();
+            int confirmWidth = Math.max(80, fontRendererObj.getStringWidth(pickConfirmLabel(pickCount)) + 12);
+            int left = (width - confirmWidth - (cancel ? 84 : 0)) / 2;
+            UiButton ok = new UiButton(-3, left, by, confirmWidth, 20, pickConfirmLabel(picked.size()));
             ok.enabled = picked.size() == pickCount;
             buttonList.add(ok);
-            if (canCancel()) buttonList.add(
+            if (cancel) buttonList.add(
                 new UiButton(
                     -1,
-                    width / 2 + 4,
+                    left + confirmWidth + 4,
                     by,
                     80,
                     20,
@@ -259,6 +264,13 @@ public class PlayChoiceScreen extends GuiScreen {
             choices.picks.clear();
             choices.picks.addAll(picked);
             advance(true);
+            return;
+        }
+        if (button.id == -4) {
+            if (pickStep) {
+                pickSelection.selectRandom(pickCount);
+                updatePickConfirm();
+            }
             return;
         }
         if (button.id > 300 && button.id <= 309) {
@@ -389,14 +401,10 @@ public class PlayChoiceScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         if (pickStep && button == 0) {
-            Card hit = pickGrid.hit(mouseX, mouseY, picked::contains);
-            if (hit != null) {
-                int uid = hit.uid;
-                if (picked.contains(uid)) picked.remove(uid);
-                else if (picked.size() < pickCount) picked.add(uid);
+            if (pickSelection.press(mouseX, mouseY, pickCount, Minecraft.getSystemTime())) {
                 mc.getSoundHandler()
                     .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("random.click"), 1.6F));
-                for (GuiButton b : buttonList) if (b.id == -3) b.enabled = picked.size() == pickCount;
+                updatePickConfirm();
                 return;
             }
         }
@@ -415,7 +423,17 @@ public class PlayChoiceScreen extends GuiScreen {
     }
 
     @Override
+    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+        if (state == 0) {
+            if (pickStep && pickSelection.drag(mouseX, mouseY, Minecraft.getSystemTime())) updatePickConfirm();
+            pickSelection.release();
+        }
+        super.mouseMovedOrUp(mouseX, mouseY, state);
+    }
+
+    @Override
     public void onGuiClosed() {
+        pickSelection.release();
         ColorPicker3D.close();
         if (sentHover != -2) shareChoice(false, -1);
     }
@@ -535,10 +553,25 @@ public class PlayChoiceScreen extends GuiScreen {
                 0xFFFFD040);
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+        BlockEntityMinoTable table = table();
+        int seconds = table == null || table.game == null ? -1 : table.game.turnSecondsRemaining();
+        if (seconds >= 0) {
+            UiDraw.fittedCentered(
+                fontRendererObj,
+                Chat.translatable("gui.minopp.play.turn_time", seconds)
+                    .getFormattedText(),
+                width / 2f,
+                6,
+                width - 16,
+                seconds <= 5 ? 0xFFFF7050 : 0xFFFFE070);
+        }
+        if (pickStep) drawPickTooltip(mouseX, mouseY);
     }
 
     private void drawPickGrid(String theme, int mouseX, int mouseY) {
-        pickGrid.layout(width, height, 8);
+        pickGrid.layout(width, height, 8, 34, 58);
+        if (!Mouse.isButtonDown(0)) pickSelection.release();
+        else if (pickSelection.drag(mouseX, mouseY, Minecraft.getSystemTime())) updatePickConfirm();
         UiDraw.gradient(0, pickGrid.top() - 26, width, height, 0x80200404, 0xD0200404);
         String title = Chat.translatable("gui.minopp.choice.pick", pickCount, picked.size(), pickCount)
             .getFormattedText();
@@ -547,13 +580,31 @@ public class PlayChoiceScreen extends GuiScreen {
                 .getFormattedText();
         GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, pickGrid.top() - 18, 0xFFFFE070);
         pickGrid.draw(theme, darkSide, mouseX, mouseY, picked::contains);
+    }
+
+    private void drawPickTooltip(int mouseX, int mouseY) {
+        if (pickSelection.isDragging()) return;
         Card hover = pickGrid.hit(mouseX, mouseY, picked::contains);
         BlockEntityMinoTable table = table();
-        if (hover != null && table != null && table.game != null) drawHoveringText(
+        if (hover != null && table != null && table.game != null) UiDraw.tooltip(
+            fontRendererObj,
             CardTooltips.lines(fontRendererObj, table.game, hover, width),
             mouseX,
             mouseY,
-            fontRendererObj);
+            width,
+            height);
+    }
+
+    private void updatePickConfirm() {
+        for (GuiButton button : buttonList) if (button.id == -3) {
+            button.enabled = picked.size() == pickCount;
+            button.displayString = pickConfirmLabel(picked.size());
+        }
+    }
+
+    private String pickConfirmLabel(int count) {
+        return Chat.translatable("gui.minopp.choice.confirm_count", count, pickCount)
+            .getFormattedText();
     }
 
     @Override

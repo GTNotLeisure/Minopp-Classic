@@ -1,10 +1,14 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import it.unimi.dsi.fastutil.objects.Reference2IntMap;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 
 public class GameRules {
 
@@ -36,11 +40,15 @@ public class GameRules {
         }
 
         public int clamp(int value) {
-            return Math.max(min, Math.min(max, value));
+            int clamped = Math.max(min, Math.min(max, value));
+            return clamped <= 0 ? clamped : Math.max(MINIMUM_ENABLED.getInt(this), clamped);
         }
     }
 
     private static final Map<String, Rule> REGISTRY = new LinkedHashMap<>();
+    private static final Reference2IntMap<Rule> MINIMUM_ENABLED = new Reference2IntOpenHashMap<>();
+    private static final List<String> BOOLEAN_IDS = new ArrayList<>();
+    private static final List<String> BOOLEAN_ID_VIEW = Collections.unmodifiableList(BOOLEAN_IDS);
     private static volatile List<Rule> rules = List.of();
     private static long revision;
 
@@ -48,6 +56,7 @@ public class GameRules {
         Objects.requireNonNull(rule, "rule");
         if (REGISTRY.putIfAbsent(rule.id(), rule) != null)
             throw new IllegalArgumentException("Rule already registered: " + rule.id());
+        if (rule.bool()) BOOLEAN_IDS.add(rule.id());
         rules = null;
         revision++;
         return rule;
@@ -64,6 +73,18 @@ public class GameRules {
 
     public static String integer(String id, Category category, int def, int min, int max) {
         register(new Rule(id, category, def, min, max, false));
+        return id;
+    }
+
+    /**
+     * Registers an integer rule whose zero value disables it; positive values have a separate minimum.
+     */
+    public static String zeroOrInteger(String id, Category category, int def, int minEnabled, int max) {
+        if (minEnabled < 1 || minEnabled > max || def != 0 && def < minEnabled) {
+            throw new IllegalArgumentException("Invalid enabled range: " + id);
+        }
+        Rule rule = register(new Rule(id, category, def, 0, max, false));
+        MINIMUM_ENABLED.put(rule, minEnabled);
         return id;
     }
 
@@ -101,6 +122,7 @@ public class GameRules {
     public static final String INITIAL_HAND = integer("initialHand", Category.TABLE, 7, 1, 15);
     public static final String DECK_COPIES = integer("deckCopies", Category.TABLE, 0, 0, 8);
     public static final String JUMP_IN_SECONDS = integer("jumpInSeconds", Category.TABLE, 5, 1, 15);
+    public static final String TURN_TIME_LIMIT = zeroOrInteger("turnTimeLimit", Category.TABLE, 0, 5, 99999);
     public static final String SHOUT_PENALTY = integer("shoutPenalty", Category.TABLE, 2, 0, 6);
     public static final String BALLOON_PENALTY = integer("balloonPenalty", Category.TABLE, 4, 1, 10);
     public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 10000);
@@ -111,6 +133,7 @@ public class GameRules {
 
     static {
         registerPresets(SCORE_TARGET, 0, 200, 300, 500, 750, 1000);
+        registerPresets(TURN_TIME_LIMIT, 0, 10, 15, 20, 30, 60);
     }
 
     public static void registerPresets(String id, int... values) {
@@ -118,7 +141,7 @@ public class GameRules {
         if (values.length == 0) throw new IllegalArgumentException("Presets cannot be empty");
         int[] copy = values.clone();
         for (int i = 0; i < copy.length; i++) {
-            if (copy[i] < rule.min() || copy[i] > rule.max() || i > 0 && copy[i] <= copy[i - 1]) {
+            if (rule.clamp(copy[i]) != copy[i] || i > 0 && copy[i] <= copy[i - 1]) {
                 throw new IllegalArgumentException("Presets must be ordered, unique and within the rule range");
             }
         }
@@ -144,6 +167,13 @@ public class GameRules {
 
     public static Rule get(String id) {
         return REGISTRY.get(id);
+    }
+
+    /**
+     * Returns a read-only live view of boolean rule IDs in registration order.
+     */
+    public static List<String> booleanIds() {
+        return BOOLEAN_ID_VIEW;
     }
 
     public static List<Rule> all() {

@@ -31,7 +31,7 @@ public class DecisionScreen extends GuiScreen {
     private final PendingDecision.Type type;
     private final PendingDecision decision;
     private PlayerPicker picker;
-    private int customPage;
+    private int customPage, customTop;
 
     public DecisionScreen(BlockPos gamePos, CardPlayer self, PendingDecision decision) {
         this.gamePos = gamePos;
@@ -62,15 +62,17 @@ public class DecisionScreen extends GuiScreen {
                 customPage = Math.floorMod(customPage, pages);
                 int from = customPage * pageSize, to = Math.min(options.size(), from + pageSize);
                 int rows = (to - from + columns - 1) / columns;
-                int top = Math.max(50, cy - rows * 12);
+                customTop = height - 28 - (pages > 1 ? 28 : 0) - Math.max(0, rows - 1) * 24;
                 for (int i = from; i < to; i++) {
                     DecisionTypes.Option option = options.get(i);
                     int index = i - from;
+                    int rowCount = Math.min(columns, to - from - index / columns * columns);
+                    int rowWidth = rowCount * 124 + (rowCount - 1) * 6;
                     buttonList.add(
                         new UiButton(
                             option.value(),
-                            width / 2 - columns * 65 + index % columns * 130,
-                            top + index / columns * 24,
+                            (width - rowWidth) / 2 + index % columns * 130,
+                            customTop + index / columns * 24,
                             124,
                             20,
                             Chat.translatable(option.labelKey())
@@ -168,7 +170,9 @@ public class DecisionScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
+        if (type == PendingDecision.Type.CUSTOM)
+            UiDraw.gradient(0, customTop - 48, width, height, 0x00200404, 0xB0200404);
+        else UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
         CardGame game = game();
         PendingDecision current = game == null ? null : game.decisionFor(self.uuid);
         if (current == null || !current.id.equals(decision.id)) {
@@ -182,8 +186,9 @@ public class DecisionScreen extends GuiScreen {
                     .toLowerCase(),
             game.pendingDraw)
             .getFormattedText();
-        int y = type == PendingDecision.Type.POINT_TAKEN || type == PendingDecision.Type.CUSTOM ? 24 : height / 2 - 30;
-        GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, y, 0xFFFFFFFF);
+        int y = type == PendingDecision.Type.CUSTOM ? customTop - 34
+            : type == PendingDecision.Type.POINT_TAKEN ? 24 : height / 2 - 30;
+        UiDraw.fittedCentered(fontRendererObj, title, width / 2f, y, width - 24, 0xFFFFFFFF);
         long left = Math.max(0, (current.deadline - System.currentTimeMillis()) / 1000);
         GuiDraw.drawCenteredString(fontRendererObj, left + "s", width / 2, y + 12, 0xFFAAAAAA);
         if (picker != null) picker.draw(fontRendererObj, mouseX, mouseY);

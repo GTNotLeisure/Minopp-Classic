@@ -207,6 +207,7 @@ public class MinoCommand extends CommandBase {
         if (args.length == 2 && args[0].equals("debug")) {
             List<String> modes = new ArrayList<>(CardGame.DEBUG_ACTIONS);
             modes.add(0, "start");
+            for (String rule : CardGame.DEBUG_RULES) modes.add("rule:" + rule);
             return getListOfStringsMatchingLastWord(args, modes.toArray(new String[0]));
         }
         if (args.length == 2 && args[0].equals("set_table_demo")) {

@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,9 @@ import com.hfstudio.minopp.effect.PlayerFireworkEffectEvent;
 import com.hfstudio.minopp.effect.PlayerGlowEffectEvent;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
+
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
 
 public class CardGame {
 
@@ -77,6 +81,10 @@ public class CardGame {
     private boolean decisionRepeatsTurn;
     private int cutInTicks = -1;
     private int hurryTicks = -1;
+    private int turnTimeTicks = -1;
+    private long turnTimeSnapshot = System.nanoTime();
+    private UUID automaticDrawPlayer;
+    private static final AutoPlayer TIMEOUT_PLAYER = timeoutPlayer();
     private ResumePoint resumePoint = ResumePoint.NONE;
     private DrawProgress suspendedDraw;
 
@@ -126,23 +134,67 @@ public class CardGame {
     private final List<Card> debugHand = new ArrayList<>();
     private int debugUid = 2_000_000;
     private boolean debugSide;
+    private long debugCatalogRevision = -1;
+    private boolean debugCatalogFlip;
+    private boolean debugCatalogExpanded;
 
-    // every face of the side in play, each backed by its counterpart on the other side (same type where it exists,
-    // the color in the same position: red and pink, yellow and teal, ...)
     private List<Card> debugCards(boolean dark) {
+        return debugCards(dark, Map.of());
+    }
+
+    private List<Card> debugCards(boolean dark, Map<CardFace, Card> existing) {
+        boolean flip = rule(GameRules.FLIP_MODE);
+        boolean expanded = rule(GameRules.EIGHT_COLORS);
         Set<CardFace> light = new LinkedHashSet<>(), darkFaces = new LinkedHashSet<>();
-        for (CardFace[] pair : debugCatalog(rule(GameRules.EIGHT_COLORS))) {
+        for (CardFace[] pair : debugCatalog(expanded)) {
             light.add(pair[0]);
             if (pair[1] != null) darkFaces.add(pair[1]);
         }
-        Set<CardFace> active = dark ? darkFaces : light, other = dark ? light : darkFaces;
-        List<Card> out = new ArrayList<>();
+        Set<CardFace> active = new LinkedHashSet<>(dark ? darkFaces : light);
+        if (flip) active.addAll(dark ? light : darkFaces);
+        List<Card> out = new ArrayList<>(active.size());
         for (CardFace f : active) {
-            CardFace back = other.isEmpty() || !dark && !rule(GameRules.FLIP_MODE) ? null
-                : counterpart(f, other, !dark);
-            out.add(dark ? new Card(debugUid++, back == null ? f : back, f) : new Card(debugUid++, f, back));
+            boolean fromDark = !light.contains(f);
+            Set<CardFace> other = fromDark ? light : darkFaces;
+            CardFace back = other.isEmpty() || !dark && !flip ? null : counterpart(f, other, !fromDark);
+            CardFace front = dark ? back == null ? f : back : f;
+            CardFace reverse = dark ? f : back;
+            Card previous = existing.get(f);
+            out.add(
+                previous != null && previous.light.equals(front) && Objects.equals(previous.dark, reverse) ? previous
+                    : new Card(debugUid++, front, reverse));
         }
+        debugCatalogRevision = CardPack.revision();
+        debugCatalogFlip = flip;
+        debugCatalogExpanded = expanded;
         return out;
+    }
+
+    /**
+     * Refreshes a debug catalog on the game thread and reports whether its hand needs synchronization.
+     */
+    public boolean refreshDebugCatalog() {
+        if (!debug || debugCatalogRevision == CardPack.revision() && debugCatalogFlip == rule(GameRules.FLIP_MODE)
+            && debugCatalogExpanded == rule(GameRules.EIGHT_COLORS)
+            && debugSide == darkSide) return false;
+        CardPlayer me = deAmputate(debugger);
+        if (me == null) return false;
+        Map<CardFace, Card> existing = new HashMap<>();
+        IntSet previousUids = new IntOpenHashSet(debugHand.size());
+        for (Card card : debugHand) {
+            existing.put(card.face(darkSide), card);
+            previousUids.add(card.uid);
+        }
+        List<Card> catalog = debugCards(darkSide, existing);
+        debugSide = darkSide;
+        if (catalog.size() == debugHand.size() && catalog.stream()
+            .allMatch(card -> previousUids.contains(card.uid))) return false;
+        for (Card card : catalog) previousUids.remove(card.uid);
+        me.hand.removeIf(card -> previousUids.contains(card.uid));
+        debugHand.clear();
+        debugHand.addAll(catalog);
+        restoreDebugHand();
+        return true;
     }
 
     private static CardFace counterpart(CardFace f, Set<CardFace> other, boolean toDark) {
@@ -161,18 +213,9 @@ public class CardGame {
     private int debugShoutCursor;
 
     /**
-     * Mechanics the debug toolbar can switch during a game.
+     * Registered boolean rules exposed by the debug toolbar, including later registrations.
      */
-    public static final List<String> DEBUG_RULES = Arrays.asList(
-        GameRules.COINS,
-        GameRules.FLIP_MODE,
-        GameRules.FLEX_POWER,
-        GameRules.MERCY,
-        GameRules.STACKING,
-        GameRules.JUMP_IN,
-        GameRules.SEVEN_ZERO,
-        GameRules.BRING_CARD,
-        GameRules.MULTI_PLAY);
+    public static final List<String> DEBUG_RULES = GameRules.booleanIds();
 
     public static final List<String> DEBUG_ACTIONS = Arrays.asList(
         "turn",
@@ -259,14 +302,11 @@ public class CardGame {
             default -> {
                 GameRules.Rule r = action.startsWith("rule:") ? GameRules.get(action.substring(5)) : null;
                 if (r == null || !r.bool()) return report.fail(Chat.translatable("game.minopp.debug.unknown", action));
-                boolean on = !config().getBool(r.id());
-                config().set(r.id(), on ? 1 : 0);
-                if (r.id()
-                    .equals(GameRules.FLIP_MODE)) applyFlipMode(on);
+                setDebugRule(r, !rule(r.id()));
                 restoreDebugHand();
                 return report.state(
                     Chat.translatable(
-                        on ? "game.minopp.debug.rule_on" : "game.minopp.debug.rule_off",
+                        rule(r.id()) ? "game.minopp.debug.rule_on" : "game.minopp.debug.rule_off",
                         Chat.translatable(r.langKey())));
             }
         }
@@ -275,6 +315,38 @@ public class CardGame {
         if (!hadDecisions) pauseForDecision(ResumePoint.HOLD);
         return report
             .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
+    }
+
+    private void setDebugRule(GameRules.Rule rule, boolean enabled) {
+        TableConfig config = config();
+        boolean flip = config.getBool(GameRules.FLIP_MODE);
+        boolean expandedColors = config.getBool(GameRules.EIGHT_COLORS);
+        boolean teams = Teams.enabled(config);
+        config.set(rule.id(), enabled ? 1 : 0);
+        if (flip != config.getBool(GameRules.FLIP_MODE)) applyFlipMode(config.getBool(GameRules.FLIP_MODE));
+        if (expandedColors != config.getBool(GameRules.EIGHT_COLORS)) {
+            invalidateDebugHand();
+            List<CardColor> colors = colors();
+            if (currentColor.side != CardColor.Side.ANY && !colors.contains(currentColor)) currentColor = colors.get(0);
+        }
+        if (teams != Teams.enabled(config)) {
+            if (Teams.enabled(config)) Teams.normalize(players, Teams.count(config));
+            else for (CardPlayer player : players) player.team = -1;
+        }
+        boolean separate = config.getBool(GameRules.DISCARD_PILE);
+        if (separateDiscardPile != separate) {
+            List<Card> source = separate ? discardDeck : playedDeck;
+            List<Card> destination = separate ? playedDeck : discardDeck;
+            destination.addAll(source);
+            source.clear();
+            separateDiscardPile = separate;
+        }
+    }
+
+    private void invalidateDebugHand() {
+        CardPlayer me = deAmputate(debugger);
+        if (me != null) me.hand.removeIf(c -> c.uid >= 2_000_000);
+        debugHand.clear();
     }
 
     // Apply the Flip setting to cards already in play.
@@ -298,9 +370,7 @@ public class CardGame {
         playedDeck.replaceAll(fix);
         topCard = fix.apply(topCard);
         for (CardPlayer p : players) p.hand.replaceAll(fix);
-        CardPlayer me = deAmputate(debugger);
-        if (me != null) me.hand.removeIf(c -> c.uid >= 2_000_000);
-        debugHand.clear();
+        invalidateDebugHand();
     }
 
     public boolean isDebugger(CardPlayer p) {
@@ -397,6 +467,7 @@ public class CardGame {
     }
 
     private void resetTurnWaits() {
+        resetTurnTimer();
         decisions.clear();
         extensionData("minopp:targeted_effects").removeTag("pending");
         decisionContinuation = DecisionTypes.Continuation.ADVANCE_TURN;
@@ -413,11 +484,15 @@ public class CardGame {
     }
 
     public ActionReport playCard(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
-        return debugged(playCardInner(cardPlayer, cardUid, choices));
+        ActionReport report = debugged(playCardInner(cardPlayer, cardUid, choices));
+        if (!report.isFail) resetTurnTimer();
+        return report;
     }
 
     public ActionReport playNoCard(CardPlayer cardPlayer) {
-        return debugged(playNoCardInner(cardPlayer));
+        ActionReport report = debugged(playNoCardInner(cardPlayer));
+        if (!report.isFail) resetTurnTimer();
+        return report;
     }
 
     public ActionReport answerDecision(CardPlayer player, int answer, UUID target) {
@@ -544,6 +619,7 @@ public class CardGame {
         currentColor = topFace().color;
         if (official) applyOpening(tobeTopCard.light);
         if (debug) dealDebugHand();
+        resetTurnTimer();
         ActionReport report = ActionReport.builder(this, cardPlayer);
         GameSounds.deal(report, initialCardCount + 3);
         report.sound(GameSounds.PLAY, report.soundTail() + 250);
@@ -920,6 +996,7 @@ public class CardGame {
         if (active.isEmpty()) return report.panic(Chat.translatable("game.minopp.play.deck_depleted"));
         if (players.get(currentPlayerIndex).eliminated) {
             currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+            resetTurnTimer();
         }
         return null;
     }
@@ -1244,6 +1321,7 @@ public class CardGame {
 
     public void advanceTurn(ActionReport report) {
         if (report.shouldDestroyGame || pauseForDecision(ResumePoint.ADVANCE)) return;
+        resetTurnTimer();
         turnSerial++;
         awaitingCutIn = false;
         cutInTicks = -1;
@@ -1406,6 +1484,7 @@ public class CardGame {
 
     private void finishPenaltyTurn(ActionReport report) {
         if (report.shouldDestroyGame || pauseForDecision(ResumePoint.PENALTY_NEXT)) return;
+        resetTurnTimer();
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         hurryTicks = -1;
@@ -1455,7 +1534,7 @@ public class CardGame {
             .count();
         int from = players.indexOf(player);
         CardPlayer next = players.get(nextActiveIndex(from < 0 ? currentPlayerIndex : from));
-        revealTurns = Math.max(revealTurns, 1);
+        shownUntil.put(player.uuid, System.currentTimeMillis() + HAND_REVEAL_MS);
         report.messageAll(Chat.translatable("game.minopp.play.final_attack", player.name, actions, next.name));
         if (next.equals(player)) return;
         if (actions >= 7) {
@@ -1546,9 +1625,12 @@ public class CardGame {
     public int hurryTurns;
     public final Set<UUID> hiddenCounts = new HashSet<>();
     private final Map<UUID, Long> peekUntil = new HashMap<>();
+    private final Map<UUID, Long> shownUntil = new HashMap<>();
+    private long revealUntil;
+    private static final long HAND_REVEAL_MS = 15_000;
 
     public boolean isPeeking(UUID viewer) {
-        if (revealTurns > 0) return true;
+        if (revealTurns > 0 || revealUntil > System.currentTimeMillis()) return true;
         Long until = peekUntil.get(viewer);
         return until != null && until > System.currentTimeMillis();
     }
@@ -1590,12 +1672,6 @@ public class CardGame {
         hiddenCounts.add(player.uuid);
         peekUntil.put(player.uuid, System.currentTimeMillis() + 8000);
         report.messageAll(Chat.translatable("game.minopp.play.smoke", player.name));
-        if (tableEntity != null) {
-            final CardGame self = this;
-            TaskScheduler.Holder.INSTANCE.schedule(
-                8 * 20 + 2,
-                () -> { if (tableEntity != null && tableEntity.game == self) tableEntity.sync(); });
-        }
     }
 
     public void echo(PlayContext ctx) {
@@ -2095,7 +2171,7 @@ public class CardGame {
     }
 
     public void revealHands(CardPlayer player, ActionReport report) {
-        revealTurns = activePlayers().size();
+        revealUntil = System.currentTimeMillis() + HAND_REVEAL_MS;
         report.messageAll(Chat.translatable("game.minopp.play.reveal_hands", player.name));
     }
 
@@ -2429,8 +2505,7 @@ public class CardGame {
 
     public void revealOne(CardPlayer player, CardPlayer target, ActionReport report) {
         if (target == null) return;
-        revealedOne = target.uuid;
-        revealOneTurns = activePlayers().size();
+        shownUntil.put(target.uuid, System.currentTimeMillis() + HAND_REVEAL_MS);
         report.messageAll(Chat.translatable("game.minopp.play.reveal_one", player.name, target.name));
     }
 
@@ -2501,6 +2576,14 @@ public class CardGame {
     }
 
     public void doDiscardCard(CardPlayer player, Card card, ActionReport report) {
+        if (debug && !separateDiscardPile) {
+            for (String required : TableConfig.rulesForCard(face(card).typeId)) {
+                if (GameRules.DISCARD_PILE.equals(required)) {
+                    setDebugRule(GameRules.get(required), true);
+                    break;
+                }
+            }
+        }
         signNumber = -1;
         playedCards().add(topCard);
         topCard = card;
@@ -2517,17 +2600,91 @@ public class CardGame {
         available.clear();
     }
 
+    private static AutoPlayer timeoutPlayer() {
+        AutoPlayer player = new AutoPlayer();
+        player.aiForgetChance = 0;
+        return player;
+    }
+
+    private int turnTimeLimitTicks() {
+        return GameRules.get(GameRules.TURN_TIME_LIMIT)
+            .clamp(config().getInt(GameRules.TURN_TIME_LIMIT)) * 20;
+    }
+
+    private void resetTurnTimer() {
+        int limit = turnTimeLimitTicks();
+        turnTimeTicks = limit == 0 ? -1 : limit;
+        turnTimeSnapshot = System.nanoTime();
+        automaticDrawPlayer = null;
+    }
+
     /**
-     * Advances persisted turn timers once per server tick. Decision time is excluded from turn timeouts.
+     * Returns the room play countdown, or -1 when disabled or paused; clients estimate between snapshots.
+     */
+    public int turnSecondsRemaining() {
+        int limit = turnTimeLimitTicks();
+        if (limit == 0 || awaitingCutIn || !decisions.isEmpty()) return -1;
+        int remaining = turnTimeTicks < 0 ? limit : Math.min(turnTimeTicks, limit);
+        if (tableEntity != null && tableEntity.getWorldObj() != null && tableEntity.getWorldObj().isRemote) {
+            long elapsed = Math.max(0, (System.nanoTime() - turnTimeSnapshot) / 50_000_000L);
+            remaining -= (int) Math.min(remaining, elapsed);
+        }
+        return (remaining + 19) / 20;
+    }
+
+    private ActionReport playAfterTimeout() {
+        CardPlayer player = currentPlayer();
+        int serial = turnSerial;
+        resetTurnTimer();
+        ActionReport report = TIMEOUT_PLAYER.playAtGame(this, player, null);
+        if (!report.isFail && !report.shouldDestroyGame
+            && currentPlayer().equals(player)
+            && serial == turnSerial
+            && (suspendedDraw != null || currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN)) {
+            automaticDrawPlayer = player.uuid;
+        }
+        return report;
+    }
+
+    /**
+     * Advances persisted turn timers once per server tick. Decisions and jump-in windows pause the room timer.
      */
     public ActionReport tickTurnTimers() {
+        long now = System.currentTimeMillis();
+        boolean expired = revealUntil > 0 && revealUntil <= now;
+        if (expired) revealUntil = 0;
+        expired |= peekUntil.values()
+            .removeIf(until -> until <= now);
+        expired |= shownUntil.values()
+            .removeIf(until -> until <= now);
+        ActionReport report = tickActionTimers();
+        return report != null || !expired ? report : ActionReport.builder(this, currentPlayer());
+    }
+
+    private ActionReport tickActionTimers() {
         if (!decisions.isEmpty()) return null;
-        if ((awaitingCutIn || hurryTicks >= 0) && tableEntity != null) tableEntity.markDirty();
+        int limit = turnTimeLimitTicks();
+        if ((awaitingCutIn || hurryTicks >= 0 || limit > 0) && tableEntity != null) tableEntity.markDirty();
         if (awaitingCutIn) {
             if (cutInTicks < 0) cutInTicks = config().getInt(GameRules.JUMP_IN_SECONDS) * 20;
             return --cutInTicks <= 0 ? resolveStuckPenalty() : null;
         }
-        if (hurryTicks < 0 || --hurryTicks > 0) return null;
+        if (automaticDrawPlayer != null) {
+            boolean finishDraw = automaticDrawPlayer.equals(currentPlayer().uuid)
+                && currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN;
+            automaticDrawPlayer = null;
+            if (finishDraw) return playAfterTimeout();
+        }
+        if (hurryTicks >= 0 && --hurryTicks <= 0) return hurryTimeout();
+        if (limit == 0) return null;
+        if (turnTimeTicks < 0 || turnTimeTicks > limit) turnTimeTicks = limit;
+        if (--turnTimeTicks > 0) return null;
+        ActionReport report = playAfterTimeout();
+        report.messageAll(Chat.translatable("game.minopp.play.turn_timeout"));
+        return report;
+    }
+
+    private ActionReport hurryTimeout() {
         hurryTicks = -1;
         CardPlayer late = currentPlayer();
         ActionReport report = ActionReport.builder(this, late);
@@ -2697,7 +2854,29 @@ public class CardGame {
         return list;
     }
 
+    private static void readDeadlines(NBTTagList list, Map<UUID, Long> deadlines) {
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound entry = list.getCompoundTagAt(i);
+            if (NbtUtil.hasUUID(entry, "player"))
+                deadlines.put(NbtUtil.getUUID(entry, "player"), entry.getLong("until"));
+        }
+    }
+
+    private static NBTTagList writeDeadlines(Map<UUID, Long> deadlines) {
+        NBTTagList list = new NBTTagList();
+        for (Map.Entry<UUID, Long> entry : deadlines.entrySet()) {
+            NBTTagCompound tag = new NBTTagCompound();
+            NbtUtil.putUUID(tag, "player", entry.getKey());
+            tag.setLong("until", entry.getValue());
+            list.appendTag(tag);
+        }
+        return list;
+    }
+
     public CardGame(NBTTagCompound tag) {
+        revealUntil = tag.getLong("revealUntil");
+        readDeadlines(tag.getTagList("peekUntil", 10), peekUntil);
+        readDeadlines(tag.getTagList("shownUntil", 10), shownUntil);
         if (tag.hasKey("resumePoint")) resumePoint = ResumePoint.valueOf(tag.getString("resumePoint"));
         if (tag.hasKey("suspendedDraw", 10)) {
             NBTTagCompound draw = tag.getCompoundTag("suspendedDraw");
@@ -2711,6 +2890,9 @@ public class CardGame {
         extraTurn = tag.getBoolean("extraTurn");
         cutInTicks = tag.hasKey("cutInTicks") ? tag.getInteger("cutInTicks") : -1;
         hurryTicks = tag.hasKey("hurryTicks") ? tag.getInteger("hurryTicks") : -1;
+        turnTimeTicks = tag.hasKey("turnTimeTicks") ? Math.max(-1, tag.getInteger("turnTimeTicks")) : -1;
+        if (NbtUtil.hasUUID(tag, "automaticDrawPlayer"))
+            automaticDrawPlayer = NbtUtil.getUUID(tag, "automaticDrawPlayer");
         decisionRepeatsTurn = tag.getBoolean("decisionRepeatsTurn");
         extensionData = (NBTTagCompound) tag.getCompoundTag("extensions")
             .copy();
@@ -2827,6 +3009,8 @@ public class CardGame {
         tag.setBoolean("extraTurn", extraTurn);
         tag.setInteger("cutInTicks", cutInTicks);
         tag.setInteger("hurryTicks", hurryTicks);
+        tag.setInteger("turnTimeTicks", turnTimeTicks);
+        if (automaticDrawPlayer != null) NbtUtil.putUUID(tag, "automaticDrawPlayer", automaticDrawPlayer);
         tag.setTag("extensions", extensionData.copy());
         if (!decisions.isEmpty()) {
             tag.setString("decisionContinuation", decisionContinuation.name());
@@ -2879,6 +3063,9 @@ public class CardGame {
         tag.setInteger("pendingSpeed", pendingSpeed);
         tag.setInteger("playedThisTurn", playedThisTurn);
         tag.setInteger("revealTurns", revealTurns);
+        tag.setLong("revealUntil", revealUntil);
+        tag.setTag("peekUntil", writeDeadlines(peekUntil));
+        tag.setTag("shownUntil", writeDeadlines(shownUntil));
         NBTTagList nemesisTag = new NBTTagList();
         for (Map.Entry<UUID, UUID> e : nemesis.entrySet()) {
             NBTTagCompound l = new NBTTagCompound();

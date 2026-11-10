@@ -64,13 +64,19 @@ public class HandCardsItemRenderer implements IItemRenderer {
         int total = realPlayer.hand.size(), n = Math.min(total, 24);
         float step = (float) Math.min(0.08, 1.2 / Math.max(1, n));
         boolean dark = tableEntity.game.darkSide;
+        UUID viewer = Minecraft.getMinecraft().thePlayer == null ? null
+            : Minecraft.getMinecraft().thePlayer.getGameProfile()
+                .getId();
+        boolean visible = bearerId.equals(viewer) || realPlayer.handVisibleUntil > System.currentTimeMillis();
         for (int k = 0; k < n; k++) {
             Card card = realPlayer.hand.get(total - n + k);
             BATCH.at(0, 0.02f * k, step * k, 0);
             BATCH.slab(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
-            BATCH.back(card, dark, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
             CardFace face = card.face(dark);
-            if (face.isHidden()) BATCH.back(card, dark, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
+            if (visible && !bearerId.equals(viewer) && !face.isHidden())
+                BATCH.face(face, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
+            else BATCH.back(card, dark, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
+            if (!visible || face.isHidden()) BATCH.back(card, dark, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
             else BATCH.face(face, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
         }
         BATCH.flush();

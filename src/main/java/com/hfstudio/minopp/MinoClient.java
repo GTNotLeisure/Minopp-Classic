@@ -25,11 +25,13 @@ import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.gui.CardDecisionScreen;
+import com.hfstudio.minopp.gui.CardTooltips;
 import com.hfstudio.minopp.gui.DebugCardScreen;
 import com.hfstudio.minopp.gui.DecisionScreens;
 import com.hfstudio.minopp.gui.GameSettingsScreen;
 import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayChoiceScreen;
+import com.hfstudio.minopp.gui.RevealedHandsScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.MinoNetwork;
@@ -91,6 +93,7 @@ public class MinoClient {
             themeListenerRegistered = true;
             if (mc.getResourceManager() instanceof IReloadableResourceManager rm) {
                 rm.registerReloadListener(ThemeManager.INSTANCE);
+                rm.registerReloadListener(manager -> CardTooltips.clearSearchCache());
             }
         }
         TableItemRenderer.keepRegistered();
@@ -184,7 +187,8 @@ public class MinoClient {
         }
         boolean same = lastOpenedDecision != null && lastOpenedDecision.id.equals(decision.id);
         if (!same && (mc.currentScreen == null || mc.currentScreen instanceof HandScreen
-            || mc.currentScreen instanceof DebugCardScreen)) {
+            || mc.currentScreen instanceof DebugCardScreen
+            || mc.currentScreen instanceof RevealedHandsScreen)) {
             lastOpenedDecision = decision;
             mc.displayGuiScreen(DecisionScreens.create(gamePos, self, decision));
         }

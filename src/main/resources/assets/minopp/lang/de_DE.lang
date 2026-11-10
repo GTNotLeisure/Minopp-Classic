@@ -273,7 +273,7 @@ game.minopp.card.type.trick_wild.desc=Wähle eine Farbe. Hat der Nächste keine 
 game.minopp.card.type.wild_color_challenge=Joker Farbprobe
 game.minopp.card.type.wild_color_challenge.desc=Wähle eine Farbe. Wer keine Karte dieser Farbe hat, zieht 2; haben alle eine, ziehst du 3.
 game.minopp.card.type.reveal_hands=Hände zeigen
-game.minopp.card.type.reveal_hands.desc=Alle Hände liegen offen, bis du wieder dran bist.
+game.minopp.card.type.reveal_hands.desc=Decke alle Hände für 15 Sekunden auf.
 
 # Cards: Show 'Em No Mercy Expansion
 game.minopp.card.type.play_again_10=10 Nochmal
@@ -283,7 +283,7 @@ game.minopp.card.type.wild_discard_all.desc=Wähle eine Farbe: Lege alle Karten 
 game.minopp.card.type.wild_reverse_draw8=Wild Richtungswechsel +8
 game.minopp.card.type.wild_reverse_draw8.desc=Kehrt die Richtung um; der nächste Spieler in der neuen Richtung zieht 8 und setzt aus. Du wählst die Farbe.
 game.minopp.card.type.wild_final_attack=Wild Finaler Angriff
-game.minopp.card.type.wild_final_attack.desc=Zeige deine Hand. Der Nächste setzt aus und zieht 1 Karte pro Aktions- und Wild-Karte darin. Bei 7 oder mehr zieht er 25 und alle anderen 5.
+game.minopp.card.type.wild_final_attack.desc=Zeige deine Hand für 15 Sekunden. Der Nächste setzt aus und zieht 1 Karte pro Aktions- und Wild-Karte darin. Bei 7 oder mehr zieht er 25 und alle anderen 5.
 game.minopp.card.type.wild_sudden_death=Wild Sudden Death
 game.minopp.card.type.wild_sudden_death.desc=Alle, auch du, ziehen, bis sie 24 Karten haben. Du wählst die Farbe.
 
@@ -329,7 +329,7 @@ game.minopp.card.type.wild_minus_one.desc=Wähle die Farbe und wirf 1 Karte dein
 game.minopp.card.type.wild_minus_two=Minus Zwei
 game.minopp.card.type.wild_minus_two.desc=Wähle die Farbe und wirf 2 Karten deiner Wahl ab.
 game.minopp.card.type.wild_reveal_one=Hand aufdecken
-game.minopp.card.type.wild_reveal_one.desc=Wähle die Farbe und einen Spieler: seine Hand liegt offen, bis du wieder dran bist.
+game.minopp.card.type.wild_reveal_one.desc=Wähle eine Farbe und einen Spieler: Decke seine Hand für 15 Sekunden auf.
 game.minopp.card.type.joker=Joker
 game.minopp.card.type.joker.desc=Zählt als jede Farbe zugleich: jede Karte darf folgen.
 game.minopp.card.type.wild_number_sign=Wildes Zahlzeichen
@@ -350,6 +350,8 @@ game.minopp.card.type.wild_infinity=Unendlich
 game.minopp.card.type.wild_infinity.desc=Wähle eine Farbe. Der nächste Spieler zieht bis zu dieser Farbe und setzt aus. Diese Karte ist unendlich viele Punkte wert.
 game.minopp.card.type.wild_infinity_no_u=Joker NO U (Infinity)
 game.minopp.card.type.wild_infinity_no_u.desc=Wirf eine Ziehstrafe oder einen gegen dich gerichteten Effekt zum Absender zurück und wähle eine Farbe. Danach geht es nach dem Angreifer weiter. Auch als normaler Joker spielbar.
+game.minopp.card.type.wild_combat=Kampf-Joker
+game.minopp.card.type.wild_combat.desc=Wähle eine Farbe und einen Mitspieler. Füge ihm magischen Schaden in Höhe deiner verbleibenden Handkarten zu.
 
 # Card packs
 gui.minopp.pack.all_wild=All Wild
@@ -362,6 +364,8 @@ gui.minopp.pack.blaster=Blaster-Pack
 gui.minopp.pack.blaster.desc=Inspiriert vom Kartenwerfer-Spiel: Blaster, Rundumschlag, Hände tauschen und Alle ablegen.
 gui.minopp.pack.classic=Klassisch
 gui.minopp.pack.classic.desc=Der klassische Stapel mit 108 Karten.
+gui.minopp.pack.combat=UNO Combat
+gui.minopp.pack.combat.desc=Ergänzt das klassische Deck um einen Kampf-Joker. Greife einen Mitspieler mit Magie an, deren Stärke deiner verbleibenden Hand entspricht.
 gui.minopp.pack.comeback=Comeback-Pack
 gui.minopp.pack.comeback.desc=Aufholen: Joker Hände tauschen, Joker Gleichziehen und Joker Geteiltes Leid.
 gui.minopp.pack.dance=Tanz-Pack
@@ -492,6 +496,10 @@ gui.minopp.rule.teamMode=Teammodus
 gui.minopp.rule.teamMode.desc=Spieler bilden in der Lobby Teams; ein Team gewinnt gemeinsam. Zum Start muss jedes Team gleich viele Spieler haben.
 gui.minopp.rule.teamRelay=Teamstaffel
 gui.minopp.rule.teamRelay.desc=Wer ausgeht, übernimmt die Hälfte der Karten eines Teammitglieds und spielt weiter; dein Team gewinnt, wenn kein Teammitglied mehr Karten abgeben kann.
+gui.minopp.rule.turnTimeLimit=Zeit pro Spielzug
+gui.minopp.rule.turnTimeLimit.desc=Unbegrenzt, 10, 15, 20, 30 oder 60 Sekunden oder ein eigener Wert von 5 bis 99999 Sekunden. Nach Ablauf wird automatisch gespielt; ohne passende Karte wird nach den Tischregeln gezogen und gespielt. Pausiert bei Entscheidungen und Einwurffenstern.
+gui.minopp.rule.turnTimeLimit.unlimited=Unbegrenzt
+gui.minopp.rule.turnTimeLimit.seconds=%s s
 
 # Compatibility warnings
 gui.minopp.conflict.active=Beides ist an diesem Tisch aktiv.
@@ -583,8 +591,18 @@ gui.minopp.hand.pass=Passen
 gui.minopp.hand.search=F: suchen...
 gui.minopp.hand.shout=MINO!
 
+# Revealed hands
+gui.minopp.reveal.open=Hände ansehen
+gui.minopp.reveal.title=Offene Hände
+gui.minopp.reveal.player=%1$s (%2$s Karten)
+gui.minopp.reveal.hint=Offene Hände: %s drücken, dann ein Porträt oder einen Spieler anklicken.
+gui.minopp.reveal.players_page=Spieler %1$s/%2$s
+gui.minopp.reveal.click=Klicken, um die Hand anzusehen
+
 # Card choices and decisions
 gui.minopp.choice.confirm=Bestätigen
+gui.minopp.choice.confirm_count=Bestätigen (%1$s/%2$s)
+gui.minopp.choice.random=Zufällig wählen
 gui.minopp.choice.number=Nenne eine Zahl (1-9)
 gui.minopp.choice.pick=Wähle %1$s Karte(n) zum Abwerfen (%2$s/%3$s)
 gui.minopp.choice.recipient=Empfänger: %s
@@ -637,6 +655,7 @@ gui.minopp.play.start_hint=Stell dich an den Tisch und klicke mit Rechtsklick, u
 gui.minopp.play.top_card=Oberste Karte: %s
 gui.minopp.play.top_card_wild_color=Farbe ist %s
 gui.minopp.play.turn_other=%s ist am Zug.
+gui.minopp.play.turn_time=Verbleibende Spielzeit: %s s
 gui.minopp.settle.loser=%1$s  %2$s Karte(n) übrig, %3$s Punkte
 gui.minopp.settle.match=%s gewinnt die Partie!
 gui.minopp.settle.title=Rundenergebnis
@@ -801,8 +820,8 @@ game.minopp.play.recycle=%1$s recycelt eine Karte in die Hand von %2$s.
 game.minopp.play.redirect=%1$s leitet die Strafe um: %2$s zieht %3$s.
 game.minopp.play.refresh_hand=%1$s hat die Hand erneuert (%2$s Karten).
 game.minopp.play.relay=%1$s ist ausgegangen und übernimmt %3$s Karten von %2$s!
-game.minopp.play.reveal_hands=%s deckt alle Hände auf, bis die Runde wieder bei ihm ist!
-game.minopp.play.reveal_one=%1$s deckt die Hand von %2$s auf.
+game.minopp.play.reveal_hands=%s deckt alle Hände für 15 Sekunden auf!
+game.minopp.play.reveal_one=%1$s deckt die Hand von %2$s für 15 Sekunden auf.
 game.minopp.play.roulette=%1$s hat %3$s Karte(n) gezogen, bis %2$s kam.
 game.minopp.play.rule_forbid=Diese Karte darfst du nur spielen, wenn du keine andere Karte spielen kannst.
 game.minopp.play.seats_reset=%1$s hat die Plätze zurückgesetzt. Bitte setzt euch neu hin.
@@ -836,6 +855,8 @@ game.minopp.play.text.3=%s hat eine Nachricht: Farbprobe!
 game.minopp.play.thief=%1$s hat %2$s eine Karte gestohlen.
 game.minopp.play.times_two=%1$s zieht %2$s Karten und verdoppelt die Hand!
 game.minopp.play.too_slow=%1$s war zu langsam: +1 Karte.
+game.minopp.play.turn_timeout=Die Spielzeit ist abgelaufen; eine Aktion wurde automatisch gewählt.
+death.attack.minopp.combat=%1$s wurde von %2$s mit einer Kampfkarte besiegt
 game.minopp.play.trap_armed=%1$s legt eine Sprengfalle: Wer als Nächstes zieht, nimmt 3 Karten extra.
 game.minopp.play.trap_sprung=BUMM! %1$s löst die Sprengfalle aus: +3 Karten.
 game.minopp.play.trial=%1$s ruft eine Prüfung in %2$s aus: eine ablegen oder eine ziehen!

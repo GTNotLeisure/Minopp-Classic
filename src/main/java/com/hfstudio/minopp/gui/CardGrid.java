@@ -21,6 +21,10 @@ public class CardGrid {
         page = 0;
     }
 
+    public List<Card> cards() {
+        return cards;
+    }
+
     public void layout(int width, int height, int minimumWidth) {
         layout(width, height, minimumWidth, 34, 34);
     }
@@ -43,6 +47,11 @@ public class CardGrid {
         rows = Math.min(rows, Math.max(1, (height - topInset - bottomInset) / (cardHeight + gap)));
         page = Math.min(page, pages() - 1);
         top = height - bottomInset - (rows * (cardHeight + gap) - gap);
+    }
+
+    public void layoutFromTop(int width, int height, int minimumWidth, int topInset, int bottomInset) {
+        layout(width, height, minimumWidth, topInset, bottomInset);
+        top = topInset;
     }
 
     public int top() {
@@ -72,13 +81,29 @@ public class CardGrid {
     }
 
     public Card hit(int mouseX, int mouseY, IntPredicate selected) {
+        int index = hitIndex(mouseX, mouseY, selected);
+        return index < 0 ? null : cards.get(index);
+    }
+
+    public int hitIndex(int mouseX, int mouseY, IntPredicate selected) {
         int start = page * capacity();
         for (int i = 0; i < capacity() && start + i < cards.size(); i++) {
             Card card = cards.get(start + i);
             int x = x(i), y = top + i / columns * (cardHeight + gap) - (selected.test(card.uid) ? 5 : 0);
-            if (mouseX >= x && mouseX < x + cardWidth && mouseY >= y && mouseY < y + cardHeight) return card;
+            if (mouseX >= x && mouseX < x + cardWidth && mouseY >= y && mouseY < y + cardHeight) return start + i;
         }
-        return null;
+        return -1;
+    }
+
+    public int nearestIndex(int mouseX, int mouseY) {
+        int start = page * capacity();
+        int count = Math.min(capacity(), cards.size() - start);
+        if (count <= 0 || columns <= 0) return -1;
+        int row = Math.max(0, Math.min((count - 1) / columns, Math.floorDiv(mouseY - top + gap / 2, cardHeight + gap)));
+        int rowStart = row * columns;
+        int inRow = Math.min(columns, count - rowStart);
+        int column = Math.max(0, Math.min(inRow - 1, Math.floorDiv(mouseX - x(rowStart) + gap / 2, cardWidth + gap)));
+        return start + rowStart + column;
     }
 
     public void draw(String theme, boolean darkSide, int mouseX, int mouseY, IntPredicate selected) {

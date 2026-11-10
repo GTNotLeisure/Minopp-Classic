@@ -501,8 +501,7 @@ public class GameSettingsScreen extends GuiScreen {
                         CardType type = CardTypes.get(entry.typeId());
                         t.title = type.numbered ? tr("gui.minopp.cards.numbers", numbers(entry.numbers()))
                             : tr("game.minopp.card.type." + entry.typeId());
-                        String descKey = "game.minopp.card.type." + entry.typeId() + ".desc";
-                        if (hasTr(descKey)) t.desc.add(tr(descKey));
+                        t.desc.add(CardTooltips.description(faces.get(0)));
                         int def = entry.count();
                         int c = effectiveCount(pack, entry);
                         if (entry.single()) {
@@ -672,8 +671,7 @@ public class GameSettingsScreen extends GuiScreen {
                     tr(
                         "gui.minopp.gallery.points",
                         type.numbered ? tr("gui.minopp.gallery.face_value") : CardGame.formatPoints(type.points)));
-                String descKey = "game.minopp.card.type." + type.id + ".desc";
-                if (hasTr(descKey)) t.desc.add(tr(descKey));
+                t.desc.add(CardTooltips.description(face));
                 List<String> packs = new ArrayList<>();
                 for (CardPack p : CardPack.all()) {
                     for (CardPack.Entry entry : p.entries) {
@@ -1009,9 +1007,7 @@ public class GameSettingsScreen extends GuiScreen {
                     StringBuilder sb = new StringBuilder();
                     for (int p : presets) {
                         if (sb.length() > 0) sb.append(" / ");
-                        sb.append(
-                            p == 0 && r.id()
-                                .equals(GameRules.SCORE_TARGET) ? tr("gui.minopp.rule.scoreTarget.single") : p);
+                        sb.append(ruleValue(r, p));
                     }
                     t.desc.add(tr("gui.minopp.rule.presets", sb.toString()));
                     t.controls.add(tr("gui.minopp.controls.rule_preset"));
@@ -1024,6 +1020,17 @@ public class GameSettingsScreen extends GuiScreen {
             list.add(t);
         }
         return list;
+    }
+
+    private String ruleValue(GameRules.Rule rule, int value) {
+        if (rule.id()
+            .equals(GameRules.TURN_TIME_LIMIT)) {
+            return value == 0 ? tr("gui.minopp.rule.turnTimeLimit.unlimited")
+                : tr("gui.minopp.rule.turnTimeLimit.seconds", value);
+        }
+        if (value == 0 && rule.id()
+            .equals(GameRules.SCORE_TARGET)) return tr("gui.minopp.rule.scoreTarget.single");
+        return String.valueOf(value);
     }
 
     private static String numbers(int[] numbers) {
@@ -1337,9 +1344,7 @@ public class GameSettingsScreen extends GuiScreen {
                 } else {
                     if (v == 0 && r.id()
                         .equals(GameRules.DECK_COPIES)) count = "A";
-                    else if (v == 0 && r.id()
-                        .equals(GameRules.SCORE_TARGET)) count = tr("gui.minopp.rule.scoreTarget.single");
-                    else count = String.valueOf(v);
+                    else count = ruleValue(r, v);
                 }
                 locked = !editable;
             }

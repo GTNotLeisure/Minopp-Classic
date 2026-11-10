@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MovingObjectPosition;
@@ -122,6 +123,13 @@ public class GameOverlayLayer {
             }
         }
         performZoomAnimation(partialTicks);
+        if (!mc.gameSettings.hideGUI && mc.currentScreen == null
+            && tableEntity.game != null
+            && handCardGamePos != null
+            && handCardGamePos.equals(tableEntity.getBlockPos())) {
+            ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+            RevealedHandTargets.drawHud(tableEntity, res.getScaledWidth(), res.getScaledHeight(), 8, -1, -1);
+        }
         MinoClient.handCardOverlayActive = handActive;
     }
 
@@ -237,11 +245,16 @@ public class GameOverlayLayer {
         GL11.glScalef(hs, hs, 1);
         int x = Math.round(ClientConfig.display.guiXPosition / hs),
             y = Math.round(ClientConfig.display.guiYPosition / hs);
+        int revealBottom = mc.currentScreen instanceof HandScreen screen ? screen.revealHudBottom()
+            : mc.currentScreen == null ? RevealedHandTargets.hudHeight(tableEntity, res.getScaledWidth()) : 0;
+        if (revealBottom > 0) y = Math.max(y, Math.round((revealBottom + 12) / hs));
         int wrapAt = Math.max(120, (int) (res.getScaledWidth() / hs) / 2 - x - 8);
-        if (infoGame != game || infoState != tableEntity.state || wrapAt != infoWrap) {
+        int seconds = game.turnSecondsRemaining();
+        if (infoGame != game || infoState != tableEntity.state || wrapAt != infoWrap || seconds != infoSeconds) {
             infoGame = game;
             infoState = tableEntity.state;
             infoWrap = wrapAt;
+            infoSeconds = seconds;
             infoLines.clear();
             infoColors.clear();
             buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
@@ -372,6 +385,7 @@ public class GameOverlayLayer {
     private final List<Integer> infoColors = new ArrayList<>();
 
     private int infoWrap;
+    private int infoSeconds = -1;
     private final List<String> wrappedLines = new ArrayList<>();
     private final List<Integer> wrappedColors = new ArrayList<>();
     private final Map<ActionMessage, List<String>> wrappedMessages = new WeakHashMap<>();
@@ -416,6 +430,12 @@ public class GameOverlayLayer {
                 Chat.translatable(game.debugHold ? "gui.minopp.debug.hold_on" : "gui.minopp.debug.hold_off")
                     .getFormattedText(),
                 0xFFFF60FF);
+        }
+        if (infoSeconds >= 0) {
+            line(
+                Chat.translatable("gui.minopp.play.turn_time", infoSeconds)
+                    .getFormattedText(),
+                infoSeconds <= 5 ? 0xFFFF7050 : 0xFFFFE070);
         }
         if (me != null && me.eliminated) {
             line(
@@ -478,6 +498,12 @@ public class GameOverlayLayer {
                     .getFormattedText(),
                 0xFFFFAA00);
         }
+        if (me != null && RevealedHandsScreen.available(game, me.uuid)) line(
+            Chat.translatable(
+                "gui.minopp.reveal.hint",
+                GameSettings.getKeyDisplayString(MinoClient.KEY_HAND.getKeyCode()))
+                .getFormattedText(),
+            0xFF88CCFF);
         spacer();
 
         CardFace top = game.topFace();

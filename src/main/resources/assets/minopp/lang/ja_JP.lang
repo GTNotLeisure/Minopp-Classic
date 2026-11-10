@@ -273,7 +273,7 @@ game.minopp.card.type.trick_wild.desc=色を選ぶ。次の人がその色を持
 game.minopp.card.type.wild_color_challenge=ワイルドカラーチャレンジ
 game.minopp.card.type.wild_color_challenge.desc=色を選ぶ。その色を持たない人は 2 枚引く。全員が持っていたら自分が 3 枚引く。
 game.minopp.card.type.reveal_hands=手札公開
-game.minopp.card.type.reveal_hands.desc=自分の番に戻るまで、全員の手札が公開される。
+game.minopp.card.type.reveal_hands.desc=全員の手札を15秒間公開する。
 
 # Cards: Show 'Em No Mercy Expansion
 game.minopp.card.type.play_again_10=10 もう一度
@@ -283,7 +283,7 @@ game.minopp.card.type.wild_discard_all.desc=色を選び、手札のその色の
 game.minopp.card.type.wild_reverse_draw8=ワイルドリバース+8
 game.minopp.card.type.wild_reverse_draw8.desc=順番を逆にし、新しい向きの次のプレイヤーが8枚引いて番を飛ばされます。色はあなたが選びます。
 game.minopp.card.type.wild_final_attack=ワイルドファイナルアタック
-game.minopp.card.type.wild_final_attack.desc=手札を公開します。次のプレイヤーは番を飛ばされ、その中のアクションとワイルドの枚数だけ引きます。7枚以上なら25枚、他の全員も5枚引きます。
+game.minopp.card.type.wild_final_attack.desc=手札を15秒間公開します。次のプレイヤーは番を飛ばされ、その中のアクションとワイルドの枚数だけ引きます。7枚以上なら25枚、他の全員も5枚引きます。
 game.minopp.card.type.wild_sudden_death=ワイルドサドンデス
 game.minopp.card.type.wild_sudden_death.desc=あなたも含めた全員が、手札が24枚になるまで引きます。色はあなたが選びます。
 
@@ -329,7 +329,7 @@ game.minopp.card.type.wild_minus_one.desc=色を選び、好きなカードを1�
 game.minopp.card.type.wild_minus_two=マイナス2
 game.minopp.card.type.wild_minus_two.desc=色を選び、好きなカードを2枚捨てる。
 game.minopp.card.type.wild_reveal_one=手札公開
-game.minopp.card.type.wild_reveal_one.desc=色とプレイヤーを選ぶ。その人の手札は自分の番が戻るまで全員に公開される。
+game.minopp.card.type.wild_reveal_one.desc=色とプレイヤーを選び、その人の手札を15秒間公開する。
 game.minopp.card.type.joker=ジョーカー
 game.minopp.card.type.joker.desc=すべての色として扱われる。どのカードでも続けて出せる。
 game.minopp.card.type.wild_number_sign=ワイルドナンバーサイン
@@ -350,6 +350,8 @@ game.minopp.card.type.wild_infinity=無限
 game.minopp.card.type.wild_infinity.desc=色を選びます。次の人はその色が出るまで引き、手番を飛ばします。このカードの得点は無限です。
 game.minopp.card.type.wild_infinity_no_u=ワイルド NO U (Infinity)
 game.minopp.card.type.wild_infinity_no_u.desc=ドロー罰則や自分を対象とした効果を使用者に跳ね返し、色を選びます。元の使用者の次から再開します。通常のワイルドとしても使えます。
+game.minopp.card.type.wild_combat=ワイルドコンバット
+game.minopp.card.type.wild_combat.desc=色と他のプレイヤーを選び、残りの手札枚数と同じ魔法ダメージを与えます。
 
 # Card packs
 gui.minopp.pack.all_wild=オールワイルド
@@ -362,6 +364,8 @@ gui.minopp.pack.blaster=ブラスターパック
 gui.minopp.pack.blaster.desc=カード発射機のゲームから着想：ブラスター、ワイルド 全体ブラスト、手札交換、ディスカードオール。
 gui.minopp.pack.classic=クラシック
 gui.minopp.pack.classic.desc=おなじみの 108 枚の山札。
+gui.minopp.pack.combat=UNO Combat
+gui.minopp.pack.combat.desc=クラシックデッキにワイルドコンバットを1枚追加。残りの手札枚数に応じた魔法で、指定したプレイヤーを攻撃する。
 gui.minopp.pack.comeback=カムバックパック
 gui.minopp.pack.comeback.desc=逆転を狙う：ワイルド手札交換、ワイルド最多に合わせる、ワイルド道連れ。
 gui.minopp.pack.dance=ダンスパック
@@ -492,6 +496,10 @@ gui.minopp.rule.teamMode=チーム戦
 gui.minopp.rule.teamMode.desc=ロビーでチームを組み、チームで勝利します。開始には各チームの人数が同じである必要があります。
 gui.minopp.rule.teamRelay=チームリレー
 gui.minopp.rule.teamRelay.desc=上がったらチームメイトの手札の半分を受け取って続けます。渡せるチームメイトがいなくなるとチームの勝ちです。
+gui.minopp.rule.turnTimeLimit=プレイ制限時間
+gui.minopp.rule.turnTimeLimit.desc=無制限、10・15・20・30・60秒、または5～99999秒の自由設定。時間切れで自動プレイし、出せるカードがなければ部屋のルールに従って引いて出す。選択待ちと割り込み待ちの間は停止。
+gui.minopp.rule.turnTimeLimit.unlimited=無制限
+gui.minopp.rule.turnTimeLimit.seconds=%s秒
 
 # Compatibility warnings
 gui.minopp.conflict.active=このテーブルでは両方とも有効です。
@@ -583,8 +591,18 @@ gui.minopp.hand.pass=パス
 gui.minopp.hand.search=F：検索…
 gui.minopp.hand.shout=MINO!
 
+# Revealed hands
+gui.minopp.reveal.open=公開手札を見る
+gui.minopp.reveal.title=公開された手札
+gui.minopp.reveal.player=%1$s（%2$s枚）
+gui.minopp.reveal.hint=手札公開中：%s を押し、顔アイコンかプレイヤーをクリックして確認。
+gui.minopp.reveal.players_page=プレイヤー %1$s/%2$s
+gui.minopp.reveal.click=クリックで手札を確認
+
 # Card choices and decisions
 gui.minopp.choice.confirm=決定
+gui.minopp.choice.confirm_count=決定（%1$s/%2$s）
+gui.minopp.choice.random=ランダム選択
 gui.minopp.choice.number=数字を宣言（1〜9）
 gui.minopp.choice.pick=捨てるカードを %1$s 枚選択（%2$s/%3$s）
 gui.minopp.choice.recipient=受取人：%s
@@ -637,6 +655,7 @@ gui.minopp.play.start_hint=テーブルのそばで右クリックして参加�
 gui.minopp.play.top_card=場のカード：%s
 gui.minopp.play.top_card_wild_color=色は %s
 gui.minopp.play.turn_other=%s の番です。
+gui.minopp.play.turn_time=プレイ残り時間：%s秒
 gui.minopp.settle.loser=%1$s  残り %2$s 枚、%3$s 点
 gui.minopp.settle.match=%s がマッチに勝利！
 gui.minopp.settle.title=ラウンド結果
@@ -801,8 +820,8 @@ game.minopp.play.recycle=%1$s が %2$s の手札にカードを戻しました�
 game.minopp.play.redirect=%1$s がペナルティを転送：%2$s が %3$s 枚引きます。
 game.minopp.play.refresh_hand=%1$s が手札をリフレッシュしました（%2$s 枚）。
 game.minopp.play.relay=%1$s が上がり、%2$s からカードを %3$s 枚受け取りました！
-game.minopp.play.reveal_hands=%s が一周するまで全員の手札を公開しました！
-game.minopp.play.reveal_one=%1$s が %2$s の手札を公開しました。
+game.minopp.play.reveal_hands=%s が全員の手札を15秒間公開しました！
+game.minopp.play.reveal_one=%1$s が %2$s の手札を15秒間公開しました。
 game.minopp.play.roulette=%1$s は %2$s が出るまでに %3$s 枚引きました。
 game.minopp.play.rule_forbid=ほかに出せるカードがないときだけ、このカードを出せます。
 game.minopp.play.seats_reset=%1$s が席をリセットしました。席を選び直してください。
@@ -836,6 +855,8 @@ game.minopp.play.text.3=%s にメッセージ：カラーチャレンジ！
 game.minopp.play.thief=%1$s が %2$s からカードを 1 枚奪いました。
 game.minopp.play.times_two=%1$s は %2$s 枚引いて手札が倍に！
 game.minopp.play.too_slow=%1$s は遅すぎた：1 枚引きます。
+game.minopp.play.turn_timeout=制限時間が切れたため、自動で行動しました。
+death.attack.minopp.combat=%1$sは%2$sのコンバットカードに倒された
 game.minopp.play.trap_armed=%1$s がブービートラップを仕掛けました：次に引く人はさらに 3 枚。
 game.minopp.play.trap_sprung=ドカン！%1$s がブービートラップにかかりました：+3 枚。
 game.minopp.play.trial=%1$s が %2$s の試練を宣言：1 枚捨てるか、1 枚引くか！

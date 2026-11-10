@@ -15,7 +15,6 @@ import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
-import com.hfstudio.minopp.gui.ui.SearchMatch;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -72,14 +71,9 @@ public class DebugCardScreen extends GuiScreen {
     private void filter() {
         grid.setCards(
             hand.stream()
-                .filter(
-                    card -> SearchMatch.matches(
-                        card.face(shownGame.darkSide)
-                            .getDisplayName()
-                            .getUnformattedText(),
-                        query))
+                .filter(card -> CardTooltips.matches(shownGame.face(card), query))
                 .toList());
-        grid.layout(width, height, 24);
+        grid.layoutFromTop(width, height, 24, 44, 34);
     }
 
     @Override
@@ -95,7 +89,7 @@ public class DebugCardScreen extends GuiScreen {
             hand = ItemHandCards.sortedHand(shownGame, player);
             filter();
         }
-        grid.layout(width, height, 24);
+        grid.layoutFromTop(width, height, 24, 44, 34);
         if (search != null) search.updateCursorCounter();
     }
 
@@ -125,11 +119,13 @@ public class DebugCardScreen extends GuiScreen {
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
         Card hover = grid.hit(mouseX, mouseY, uid -> false);
-        if (hover != null) drawHoveringText(
+        if (hover != null) UiDraw.tooltip(
+            fontRendererObj,
             CardTooltips.lines(fontRendererObj, shownGame, hover, width),
             mouseX,
             mouseY,
-            fontRendererObj);
+            width,
+            height);
     }
 
     @Override

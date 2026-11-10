@@ -22,6 +22,10 @@ public class CardPlayer {
 
     public int seat = -1;
     public boolean eliminated = false;
+    /**
+     * Client snapshot deadline for viewing this hand; zero hides it and Long.MAX_VALUE permits an untimed view.
+     */
+    public long handVisibleUntil;
     public boolean powerOn = true;
     public int team = -1;
     /**
@@ -51,6 +55,9 @@ public class CardPlayer {
         this.hasShoutedMino = tag.getBoolean("hasShoutedMino");
         this.seat = tag.hasKey("seat") ? tag.getInteger("seat") : -1;
         this.eliminated = tag.getBoolean("eliminated");
+        long visibleFor = tag.getLong("handVisibleFor");
+        this.handVisibleUntil = visibleFor == Long.MAX_VALUE ? Long.MAX_VALUE
+            : visibleFor > 0 ? System.currentTimeMillis() + visibleFor : 0;
         this.powerOn = !tag.hasKey("powerOn") || tag.getBoolean("powerOn");
         this.team = tag.hasKey("team") ? tag.getInteger("team") : -1;
         this.coinNoMercy = tag.getBoolean("coinNoMercy");

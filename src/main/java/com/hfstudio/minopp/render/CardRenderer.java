@@ -24,6 +24,7 @@ public class CardRenderer {
     private CardRenderer() {}
 
     public static List<String> layers(CardFace face) {
+        if (face.isHidden()) return List.of("back");
         List<String> custom = CardRenderRegistry.layers(face);
         if (custom != null) return custom;
         List<String> layers = new ArrayList<>(4);

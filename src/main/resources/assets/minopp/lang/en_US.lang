@@ -273,7 +273,7 @@ game.minopp.card.type.trick_wild.desc=Choose a color. If the next player has no 
 game.minopp.card.type.wild_color_challenge=Wild Color Challenge
 game.minopp.card.type.wild_color_challenge.desc=Choose a color. Everyone without a card of that color draws 2; if all of them have one, you draw 3.
 game.minopp.card.type.reveal_hands=Reveal Hands
-game.minopp.card.type.reveal_hands.desc=Every hand is shown face up until play comes back around to you.
+game.minopp.card.type.reveal_hands.desc=Reveal every hand for 15 seconds.
 
 # Cards: Show 'Em No Mercy Expansion
 game.minopp.card.type.play_again_10=10 Play Again
@@ -283,7 +283,7 @@ game.minopp.card.type.wild_discard_all.desc=Choose a color: discard every card o
 game.minopp.card.type.wild_reverse_draw8=Wild Reverse Draw 8
 game.minopp.card.type.wild_reverse_draw8.desc=Reverse the direction; the next player in the new direction draws 8 and loses the turn. You choose the color.
 game.minopp.card.type.wild_final_attack=Wild Final Attack
-game.minopp.card.type.wild_final_attack.desc=Reveal your hand. The next player loses the turn and draws 1 card for each Action and Wild card in it. With 7 or more they draw 25 instead and everyone else draws 5.
+game.minopp.card.type.wild_final_attack.desc=Reveal your hand for 15 seconds. The next player loses the turn and draws 1 card for each Action and Wild card in it. With 7 or more they draw 25 instead and everyone else draws 5.
 game.minopp.card.type.wild_sudden_death=Wild Sudden Death
 game.minopp.card.type.wild_sudden_death.desc=Everyone, you included, draws until they hold 24 cards. You choose the color.
 
@@ -329,7 +329,7 @@ game.minopp.card.type.wild_minus_one.desc=Choose the color and discard 1 card of
 game.minopp.card.type.wild_minus_two=Minus Two
 game.minopp.card.type.wild_minus_two.desc=Choose the color and discard 2 cards of your choice.
 game.minopp.card.type.wild_reveal_one=Hand Reveal
-game.minopp.card.type.wild_reveal_one.desc=Choose the color and a player: their hand is shown to everyone until play comes back to you.
+game.minopp.card.type.wild_reveal_one.desc=Choose a color and a player: reveal their hand for 15 seconds.
 game.minopp.card.type.joker=Joker
 game.minopp.card.type.joker.desc=Counts as every color at once: any card may follow it.
 game.minopp.card.type.wild_number_sign=Wild Number Sign
@@ -350,6 +350,8 @@ game.minopp.card.type.wild_infinity=Infinity
 game.minopp.card.type.wild_infinity.desc=Choose a color. The next player draws until that color appears and skips their turn. Worth infinite points.
 game.minopp.card.type.wild_infinity_no_u=Wild NO U (Infinity)
 game.minopp.card.type.wild_infinity_no_u.desc=Return a draw penalty or targeted effect to its source, then choose a color. Play continues after the original attacker. Also playable as a normal wild.
+game.minopp.card.type.wild_combat=Wild Combat
+game.minopp.card.type.wild_combat.desc=Choose a color and another player. Deal magic damage equal to your remaining hand size.
 
 # Card packs
 gui.minopp.pack.all_wild=All Wild
@@ -362,6 +364,8 @@ gui.minopp.pack.blaster=Blaster Pack
 gui.minopp.pack.blaster.desc=Inspired by the card launcher game: Blaster, Wild Blast All, Trade Hands and Discard All.
 gui.minopp.pack.classic=Classic
 gui.minopp.pack.classic.desc=The original 108 card deck.
+gui.minopp.pack.combat=UNO Combat
+gui.minopp.pack.combat.desc=Adds one Wild Combat card to the classic deck. Attack another player with magic powered by your remaining hand.
 gui.minopp.pack.comeback=Comeback Pack
 gui.minopp.pack.comeback.desc=Catch up from behind: Wild Swap Hands, Wild Match the Max and Wild Misery Loves Company.
 gui.minopp.pack.dance=Dance Pack
@@ -492,6 +496,10 @@ gui.minopp.rule.teamMode=Team Mode
 gui.minopp.rule.teamMode.desc=Players form teams in the lobby; a team wins together. Every team needs the same number of players to start.
 gui.minopp.rule.teamRelay=Team Relay
 gui.minopp.rule.teamRelay.desc=When you go out, take half of a teammate's cards and keep playing; your team wins when no teammate has cards to pass on.
+gui.minopp.rule.turnTimeLimit=Play Time Limit
+gui.minopp.rule.turnTimeLimit.desc=Time for each play: unlimited, 10, 15, 20, 30 or 60 seconds, or a custom value from 5 to 99999 seconds. On timeout, play automatically; if no card is playable, draw and play according to the room rules. Paused during decisions and jump-in windows.
+gui.minopp.rule.turnTimeLimit.unlimited=Unlimited
+gui.minopp.rule.turnTimeLimit.seconds=%s s
 
 # Compatibility warnings
 gui.minopp.conflict.active=Both are on at this table.
@@ -583,8 +591,18 @@ gui.minopp.hand.pass=Pass
 gui.minopp.hand.search=F: search...
 gui.minopp.hand.shout=MINO!
 
+# Revealed hands
+gui.minopp.reveal.open=View hands
+gui.minopp.reveal.title=Revealed hands
+gui.minopp.reveal.player=%1$s (%2$s cards)
+gui.minopp.reveal.hint=Hands revealed: press %s, then click a portrait or player to view.
+gui.minopp.reveal.players_page=Players %1$s/%2$s
+gui.minopp.reveal.click=Click to view hand
+
 # Card choices and decisions
 gui.minopp.choice.confirm=Confirm
+gui.minopp.choice.confirm_count=Confirm (%1$s/%2$s)
+gui.minopp.choice.random=Select Randomly
 gui.minopp.choice.number=Name a number (1-9)
 gui.minopp.choice.pick=Choose %1$s card(s) to discard (%2$s/%3$s)
 gui.minopp.choice.recipient=Recipient: %s
@@ -637,6 +655,7 @@ gui.minopp.play.start_hint=Stand beside the table and right-click to join.
 gui.minopp.play.top_card=Top Card: %s
 gui.minopp.play.top_card_wild_color=Color is %s
 gui.minopp.play.turn_other=It's %s's turn.
+gui.minopp.play.turn_time=Time to play: %s s
 gui.minopp.settle.loser=%1$s  %2$s card(s) left, %3$s points
 gui.minopp.settle.match=%s wins the match!
 gui.minopp.settle.title=Round result
@@ -801,8 +820,8 @@ game.minopp.play.recycle=%1$s recycles a card into the hand of %2$s.
 game.minopp.play.redirect=%1$s redirected the penalty: %2$s draws %3$s.
 game.minopp.play.refresh_hand=%1$s refreshed their hand (%2$s cards).
 game.minopp.play.relay=%1$s went out and took %3$s cards from %2$s!
-game.minopp.play.reveal_hands=%s revealed every hand until play comes back around!
-game.minopp.play.reveal_one=%1$s reveals the hand of %2$s.
+game.minopp.play.reveal_hands=%s revealed every hand for 15 seconds!
+game.minopp.play.reveal_one=%1$s revealed %2$s's hand for 15 seconds.
 game.minopp.play.roulette=%1$s drew %3$s card(s) until %2$s came up.
 game.minopp.play.rule_forbid=You can only play this card when you have no other cards to play.
 game.minopp.play.seats_reset=%1$s reset the seats. Please reallocate seats.
@@ -836,6 +855,8 @@ game.minopp.play.text.3=%s got a text: color challenge!
 game.minopp.play.thief=%1$s stole a card from %2$s.
 game.minopp.play.times_two=%1$s draws %2$s cards to double their hand!
 game.minopp.play.too_slow=%1$s was too slow: +1 card.
+game.minopp.play.turn_timeout=Play time expired; an action was chosen automatically.
+death.attack.minopp.combat=%1$s was defeated by %2$s with a Combat card
 game.minopp.play.trap_armed=%1$s set a booby trap: the next one to draw takes 3 extra cards.
 game.minopp.play.trap_sprung=BOOM! %1$s set off the booby trap: +3 cards.
 game.minopp.play.trial=%1$s calls a trial of %2$s: discard one or draw one!

@@ -3,6 +3,7 @@ package com.hfstudio.minopp.gui;
 import java.util.List;
 import java.util.UUID;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 
@@ -35,6 +36,7 @@ public class CardDecisionScreen extends GuiScreen {
     private final UUID playerId, decisionId;
     private final CardGrid grid = new CardGrid();
     private final IntSet selected = new IntLinkedOpenHashSet();
+    private final CardGridSelection selection = new CardGridSelection(grid, selected);
     private CardGame shownGame;
     private PendingDecision decision;
     private List<CardPlayer> targets = List.of();
@@ -56,6 +58,7 @@ public class CardDecisionScreen extends GuiScreen {
 
     @Override
     public void initGui() {
+        selection.release();
         buttonList.clear();
         buttonList.add(
             new UiButton(
@@ -70,6 +73,12 @@ public class CardDecisionScreen extends GuiScreen {
         buttonList.add(new UiButton(2, 42, height - 26, 30, 20, ">"));
         if (CardDecisions.RECYCLE.equals(decision.typeId))
             buttonList.add(new UiButton(3, width / 2 - 100, 20, 200, 18, ""));
+        if (CardDecisions.DISCARD.equals(decision.typeId)) {
+            String randomLabel = Chat.translatable("gui.minopp.choice.random")
+                .getFormattedText();
+            int randomWidth = Math.max(80, fontRendererObj.getStringWidth(randomLabel) + 12);
+            buttonList.add(new UiButton(4, (width - randomWidth) / 2, height - 50, randomWidth, 20, randomLabel));
+        }
         updateScreen();
     }
 
@@ -83,6 +92,7 @@ public class CardDecisionScreen extends GuiScreen {
             return;
         }
         if (game != shownGame) {
+            selection.release();
             boolean first = shownGame == null;
             waiting = false;
             boolean nextStep = current.data.hasKey("offered");
@@ -107,20 +117,40 @@ public class CardDecisionScreen extends GuiScreen {
             }
             targetIndex = Math.min(targetIndex, Math.max(0, targets.size() - 1));
         }
-        grid.layout(width, height, 24, 46, 46);
+        grid.layout(width, height, 24, 46, gridBottomInset());
         for (GuiButton button : buttonList) {
-            if (button.id == 0) button.enabled = !waiting && needed > 0 && selected.size() == needed;
+            if (button.id == 0) {
+                button.enabled = !waiting && needed > 0 && selected.size() == needed;
+                button.displayString = Chat.translatable("gui.minopp.choice.confirm_count", selected.size(), needed)
+                    .getFormattedText();
+                button.width = Math.max(
+                    80,
+                    fontRendererObj.getStringWidth(
+                        Chat.translatable("gui.minopp.choice.confirm_count", needed, needed)
+                            .getFormattedText())
+                        + 12);
+                button.xPosition = (width - button.width) / 2;
+            }
             if (button.id == 1) button.enabled = grid.page() > 0;
             if (button.id == 2) button.enabled = grid.page() + 1 < grid.pages();
+            if (button.id == 4) button.enabled = !waiting && needed > 0
+                && needed <= grid.cards()
+                    .size();
             if (button.id == 3 && !targets.isEmpty())
                 button.displayString = Chat.translatable("gui.minopp.choice.recipient", targets.get(targetIndex).name)
                     .getFormattedText();
         }
     }
 
+    private int gridBottomInset() {
+        return CardDecisions.DISCARD.equals(decision.typeId) ? 70 : 46;
+    }
+
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         if (shownGame == null) return;
+        if (waiting || !Mouse.isButtonDown(0)) selection.release();
+        else if (selection.drag(mouseX, mouseY, Minecraft.getSystemTime())) updateScreen();
         UiDraw.gradient(0, 0, width, height, 0xB0200404, 0xE0200404);
         String key = CardDecisions.SWAP.equals(decision.typeId)
             ? offered ? "gui.minopp.decision.swap_take" : "gui.minopp.decision.swap_give"
@@ -138,7 +168,7 @@ public class CardDecisionScreen extends GuiScreen {
             Chat.translatable("gui.minopp.hand.page", grid.page() + 1, grid.pages())
                 .getFormattedText(),
             width / 2,
-            height - 39,
+            height - gridBottomInset() + 7,
             0xFFE8E8E8);
         fontRendererObj.drawStringWithShadow(
             selected.size() + "/"
@@ -151,34 +181,49 @@ public class CardDecisionScreen extends GuiScreen {
             0xFFE8E8E8);
         super.drawScreen(mouseX, mouseY, partialTicks);
         Card hover = grid.hit(mouseX, mouseY, selected::contains);
-        if (hover != null) drawHoveringText(
+        if (hover != null && !selection.isDragging()) UiDraw.tooltip(
+            fontRendererObj,
             CardTooltips.lines(fontRendererObj, shownGame, hover, width),
             mouseX,
             mouseY,
-            fontRendererObj);
+            width,
+            height);
     }
 
     @Override
     protected void mouseClicked(int x, int y, int button) {
-        if (!waiting && button == 0) {
-            Card card = grid.hit(x, y, selected::contains);
-            if (card != null) {
-                if (!selected.remove(card.uid) && selected.size() < needed) selected.add(card.uid);
-                updateScreen();
-                return;
-            }
+        if (!waiting && button == 0 && selection.press(x, y, needed, Minecraft.getSystemTime())) {
+            updateScreen();
+            return;
         }
         super.mouseClicked(x, y, button);
     }
 
     @Override
+    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+        if (state == 0) {
+            if (!waiting && selection.drag(mouseX, mouseY, Minecraft.getSystemTime())) updateScreen();
+            selection.release();
+        }
+        super.mouseMovedOrUp(mouseX, mouseY, state);
+    }
+
+    @Override
+    public void onGuiClosed() {
+        selection.release();
+    }
+
+    @Override
     protected void actionPerformed(GuiButton button) {
         if (button.id == 0 && selected.size() == needed && !waiting) {
+            selection.release();
             waiting = true;
             UUID target = CardDecisions.RECYCLE.equals(decision.typeId) && !targets.isEmpty()
                 ? targets.get(targetIndex).uuid
                 : null;
             for (int uid : selected) C2SPlayCardPacket.Client.sendDecisionC2S(tablePos, decision, uid, target);
+        } else if (button.id == 4 && !waiting && CardDecisions.DISCARD.equals(decision.typeId)) {
+            selection.selectRandom(needed);
         } else if (button.id == 3 && !targets.isEmpty()) targetIndex = (targetIndex + 1) % targets.size();
         else if (button.id == 1 || button.id == 2) grid.scroll(button.id == 1 ? -1 : 1);
         updateScreen();

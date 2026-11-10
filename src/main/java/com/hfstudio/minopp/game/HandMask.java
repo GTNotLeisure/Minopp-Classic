@@ -1,7 +1,7 @@
 package com.hfstudio.minopp.game;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import net.minecraft.nbt.NBTTagCompound;
@@ -34,40 +34,89 @@ public class HandMask {
      */
     public static NBTTagCompound clientTableTag(NBTTagCompound tableTag, UUID viewer, boolean showBacks,
         boolean revealHands) {
-        if (!tableTag.hasKey("game", 10)) return tableTag;
         NBTTagCompound copy = (NBTTagCompound) tableTag.copy();
+        copy.removeTag("handAccess");
+        NBTTagCompound seats = copy.getCompoundTag("seats");
+        for (String key : seats.func_150296_c()) seats.getCompoundTag(key)
+            .removeTag("hand");
+        if (!copy.hasKey("game", 10)) return copy;
         NBTTagCompound game = copy.getCompoundTag("game");
         game.removeTag("challengeableHadColor");
-        if (revealHands) return copy;
+        long now = System.currentTimeMillis();
         boolean darkSide = game.getBoolean("darkSide");
+        NBTTagList players = game.getTagList("players", 10);
+        boolean participant = false;
+        for (int i = 0; i < players.tagCount(); i++) {
+            NBTTagCompound player = players.getCompoundTagAt(i);
+            if (viewer != null && NbtUtil.hasUUID(player, "uuid")
+                && viewer.equals(NbtUtil.getUUID(player, "uuid"))
+                && !player.getBoolean("eliminated")) {
+                participant = true;
+                break;
+            }
+        }
+        long allUntil = revealHands || game.getInteger("revealTurns") > 0 ? Long.MAX_VALUE
+            : Math.max(game.getLong("revealUntil"), deadline(game.getTagList("peekUntil", 10), viewer));
         UUID revealed = game.getInteger("revealOneTurns") > 0 && NbtUtil.hasUUID(game, "revealedOne")
             ? NbtUtil.getUUID(game, "revealedOne")
             : null;
-        Set<UUID> shown = new HashSet<>();
+        Map<UUID, Long> shown = new HashMap<>();
+        NBTTagList timed = game.getTagList("shownUntil", 10);
+        for (int i = 0; i < timed.tagCount(); i++) {
+            NBTTagCompound entry = timed.getCompoundTagAt(i);
+            if (NbtUtil.hasUUID(entry, "player")) shown.put(NbtUtil.getUUID(entry, "player"), entry.getLong("until"));
+        }
+        if (revealed != null) shown.put(revealed, Long.MAX_VALUE);
         NBTTagList decisions = game.getTagList("decisions", 10);
         for (int i = 0; i < decisions.tagCount(); i++) {
             NBTTagCompound decision = decisions.getCompoundTagAt(i);
-            if (CardDecisions.SWAP.equals(decision.getString("typeId")))
-                shown.add(NbtUtil.getUUID(decision.getCompoundTag("data"), "target"));
+            NBTTagCompound data = decision.getCompoundTag("data");
+            if (CardDecisions.SWAP.equals(decision.getString("typeId")) && viewer != null
+                && NbtUtil.hasUUID(decision, "player")
+                && viewer.equals(NbtUtil.getUUID(decision, "player"))
+                && data.hasKey("offered")
+                && NbtUtil.hasUUID(data, "target"))
+                shown.merge(NbtUtil.getUUID(data, "target"), decision.getLong("deadline"), Math::max);
         }
-        NBTTagList players = game.getTagList("players", 10);
         for (int i = 0; i < players.tagCount(); i++) {
             NBTTagCompound player = players.getCompoundTagAt(i);
             UUID holder = NbtUtil.hasUUID(player, "uuid") ? NbtUtil.getUUID(player, "uuid") : null;
-            if (holder != null && (holder.equals(viewer) || holder.equals(revealed) || shown.contains(holder)))
-                continue;
-            maskCards(player.getTagList("hand", 10), darkSide, showBacks);
+            boolean own = holder != null && holder.equals(viewer);
+            long until = own ? Long.MAX_VALUE
+                : participant && holder != null && !player.getBoolean("eliminated")
+                    ? Math.max(allUntil, shown.getOrDefault(holder, 0L))
+                    : 0;
+            player.setLong("handVisibleFor", until == Long.MAX_VALUE ? Long.MAX_VALUE : Math.max(0, until - now));
+            if (own) continue;
+            NBTTagList hand = player.getTagList("hand", 10);
+            for (int j = 0; j < hand.tagCount(); j++)
+                maskCard(hand.getCompoundTagAt(j), darkSide, showBacks, until <= now);
         }
-        maskCards(game.getTagList("deck", 10), darkSide, showBacks);
+        NBTTagList deck = game.getTagList("deck", 10);
+        for (int i = 0; i < deck.tagCount(); i++)
+            maskCard(deck.getCompoundTagAt(i), darkSide, showBacks && i == deck.tagCount() - 1, true);
+        game.removeTag("peekUntil");
+        game.removeTag("shownUntil");
+        if (viewer == null || !NbtUtil.hasUUID(game, "debugger") || !viewer.equals(NbtUtil.getUUID(game, "debugger"))) {
+            game.removeTag("debugHand");
+            game.removeTag("debugDrawn");
+        }
         return copy;
     }
 
-    private static void maskCards(NBTTagList cards, boolean darkSide, boolean showBacks) {
-        for (int i = 0; i < cards.tagCount(); i++) {
-            NBTTagCompound card = cards.getCompoundTagAt(i);
-            String active = darkSide && card.hasKey("d") ? "d" : "l";
-            card.setTag(active, HIDDEN_FACE.copy());
-            if (!showBacks && card.hasKey("d")) card.setTag(active.equals("d") ? "l" : "d", HIDDEN_FACE.copy());
+    private static long deadline(NBTTagList list, UUID viewer) {
+        if (viewer == null) return 0;
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound entry = list.getCompoundTagAt(i);
+            if (NbtUtil.hasUUID(entry, "player") && viewer.equals(NbtUtil.getUUID(entry, "player")))
+                return entry.getLong("until");
         }
+        return 0;
+    }
+
+    private static void maskCard(NBTTagCompound card, boolean darkSide, boolean showBacks, boolean hideActive) {
+        String active = darkSide && card.hasKey("d") ? "d" : "l";
+        if (hideActive) card.setTag(active, HIDDEN_FACE.copy());
+        if (!showBacks && card.hasKey("d")) card.setTag(active.equals("d") ? "l" : "d", HIDDEN_FACE.copy());
     }
 }

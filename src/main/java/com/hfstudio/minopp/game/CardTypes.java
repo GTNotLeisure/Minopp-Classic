@@ -9,6 +9,7 @@ import java.util.Objects;
 
 import net.minecraft.nbt.NBTTagCompound;
 
+import com.hfstudio.minopp.effect.CombatDamageEffectEvent;
 import com.hfstudio.minopp.game.CardType.Choice;
 
 public class CardTypes {
@@ -1153,6 +1154,22 @@ public class CardTypes {
             .sort(158)
             .answersDraw()
             .effect(ctx -> ctx.game.reflectDraw(ctx.player, ctx.report))
+            .build());
+
+    public static final CardType WILD_COMBAT = register(
+        CardType.builder("wild_combat", CardPack.COMBAT)
+            .wild()
+            .points(50)
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("✦")
+            .sort(159)
+            .effect(ctx -> {
+                CardPlayer target = ctx.target(0);
+                if (target != null) {
+                    ctx.report
+                        .effect(new CombatDamageEffectEvent(ctx.player.uuid, target.uuid, ctx.player.hand.size()));
+                }
+            })
             .build());
 
     private static CardType dice(int sides, int sort) {

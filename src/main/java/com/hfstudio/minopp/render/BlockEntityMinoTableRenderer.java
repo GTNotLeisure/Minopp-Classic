@@ -24,6 +24,7 @@ import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.gui.RevealedHandTargets;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
@@ -81,11 +82,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
             if (isTop) {
                 BATCH.at(0, 0, visualIndex * (1f / 56f) + 0.01f, 0);
             } else {
-                BATCH.at(
-                    jitter(ci, 0) * 0.3f - 0.15f,
-                    jitter(ci, 1) * 0.3f - 0.15f,
-                    visualIndex * (1f / 56f),
-                    (float) Math.toDegrees(jitter(ci, 2) * 0.8f - 0.4f));
+                positionPileCard(ci, visualIndex);
             }
             Card card = isTop ? game.topCard
                 : game.playedCards()
@@ -104,13 +101,13 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
         if (game.hasSeparateDiscardPile() && !game.discardDeck.isEmpty()) {
             GL11.glPushMatrix();
-            GL11.glTranslated(2.5, 0.94, 0.5);
+            GL11.glTranslated(2.25, 0.94, 0.75);
             GL11.glScalef(0.3f, 0.3f, 0.3f);
             GL11.glRotatef(-90, 1, 0, 0);
             int first = Math.max(0, game.discardDeck.size() - 20);
             for (int i = first; i < game.discardDeck.size(); i++) {
                 Card discarded = game.discardDeck.get(i);
-                BATCH.at(0, 0, (i - first) / 56f, 0);
+                positionPileCard(i, i - first);
                 BATCH.face(discarded.face(game.darkSide), viewerTheme, 0.52f, 0.8f, 0, 0xFFFFFF, false);
             }
             BATCH.flush();
@@ -139,6 +136,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
                 blockEntity.choosingSeenAt);
         }
 
+        RevealedHandTargets.renderWorld(blockEntity, partialTick);
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
         TableFx.render(blockEntity, game, partialTick);
 
@@ -208,6 +206,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
      */
     public static void beginFrame() {
         deckBounds = null;
+        RevealedHandTargets.beginFrame();
     }
 
     public static float[] deckOnScreen() {
@@ -282,6 +281,14 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
     private static float jitter(int index, int axis) {
         return JITTER[(index & 511) * 3 + axis];
+    }
+
+    private static void positionPileCard(int index, int layer) {
+        BATCH.at(
+            jitter(index, 0) * 0.3f - 0.15f,
+            jitter(index, 1) * 0.3f - 0.15f,
+            layer * (1f / 56f),
+            (float) Math.toDegrees(jitter(index, 2) * 0.8f - 0.4f));
     }
 
     private static final Map<BlockEntityMinoTable, Object[]> LABELS = new WeakHashMap<>();

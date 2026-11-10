@@ -14,6 +14,7 @@ import java.util.Set;
 public class CardPack {
 
     public static final String CLASSIC = "classic";
+    public static final String COMBAT = "combat";
     public static final String NO_MERCY = "no_mercy";
     public static final String FLIP = "flip";
     public static final String FLIP_DARK = "flip_dark";
@@ -581,6 +582,10 @@ public class CardPack {
         .entry("wild_lucky_seven", 1)
         .rule(GameRules.STACKING, 1)
         .rule(GameRules.MERCY, 1)
+        .players(2, 10)
+        .register();
+
+    public static final CardPack PACK_COMBAT = new Builder(COMBAT).entry("wild_combat", 1)
         .players(2, 10)
         .register();
 

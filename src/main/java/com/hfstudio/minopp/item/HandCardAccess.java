@@ -52,11 +52,10 @@ public class HandCardAccess {
             || binding.dimension() != table.getWorldObj().provider.dimensionId
             || !binding.table()
                 .equals(table.getBlockPos())
-            || binding.gameId() != table.game.id
-            || gameId != table.game.id
-            || !binding.token()
-                .equals(tokens.get(binding.bearer())))
-            return false;
+            || binding.gameId() != table.game.id) return false;
+        // Clients check the binding; only the server holds and verifies access tokens.
+        if (!table.getWorldObj().isRemote && (gameId != table.game.id || !binding.token()
+            .equals(tokens.get(binding.bearer())))) return false;
         CardPlayer player = table.game.deAmputate(binding.bearer());
         return player != null && !player.eliminated;
     }

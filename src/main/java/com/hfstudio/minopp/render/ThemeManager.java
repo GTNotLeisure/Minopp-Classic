@@ -39,7 +39,7 @@ public class ThemeManager implements IResourceManagerReloadListener {
     public static final String DEFAULT = "classic";
 
     /**
-     * {@code tint}: the theme's number and symbol layers are white and take the card's color.
+     * {@code tint}: number layers take the card's color; illustrated layers retain their printed colors.
      */
     public record ThemeInfo(String id, String name, String fallback, boolean tint) {
 
@@ -195,23 +195,27 @@ public class ThemeManager implements IResourceManagerReloadListener {
     }
 
     /**
-     * The color a card layer is drawn in: white, or the card's color for a tinting theme's glyph layers.
+     * Resolves the layer texture before applying the theme's number tint.
      */
     public int layerTint(String theme, CardFace face, int layer) {
-        if (layer == 0 || face == null || face.color.isWild()) return 0xFFFFFF;
+        if (face == null || face.color.isWild()) return 0xFFFFFF;
         ThemeInfo info = themes.get(theme);
-        return info != null && info.tint() ? face.color.rgb & 0xFFFFFF : 0xFFFFFF;
+        if (info == null || !info.tint()) return 0xFFFFFF;
+        ResourceLocation[] textures = CardBatch.textures(face, theme);
+        return layer < 0 || layer >= textures.length ? 0xFFFFFF : layerTint(theme, face, layer, textures[layer]);
     }
 
     /**
-     * Preserves the printed partner color of flex textures, including custom layer orders and theme fallbacks.
+     * Tints only num_ and corner_num_ textures, preserving illustrations regardless of layer order or resource domain.
      */
     public int layerTint(String theme, CardFace face, int layer, ResourceLocation texture) {
-        if (texture != null) {
-            String path = texture.getResourcePath();
-            if (path.startsWith("flex_", path.lastIndexOf('/') + 1)) return 0xFFFFFF;
-        }
-        return layerTint(theme, face, layer);
+        if (texture == null || face == null || face.color.isWild()) return 0xFFFFFF;
+        ThemeInfo info = themes.get(theme);
+        if (info == null || !info.tint()) return 0xFFFFFF;
+        String path = texture.getResourcePath();
+        int nameStart = path.lastIndexOf('/') + 1;
+        if (!path.startsWith("num_", nameStart) && !path.startsWith("corner_num_", nameStart)) return 0xFFFFFF;
+        return face.color.rgb & 0xFFFFFF;
     }
 
     public ResourceLocation texture(String theme, String layer) {
