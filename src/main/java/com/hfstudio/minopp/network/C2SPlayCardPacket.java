@@ -86,7 +86,8 @@ public class C2SPlayCardPacket {
         tableEntity.choosingUuid = who;
         tableEntity.choosingRing = ring;
         tableEntity.choosingHover = hover;
-        tableEntity.sync();
+        tableEntity.markDirty();
+        S2CChoosingPacket.send(tableEntity);
     }
 
     public static class Client {

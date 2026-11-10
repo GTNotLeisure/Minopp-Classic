@@ -33,7 +33,7 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * player, seats bots around it, starts a game and auto-plays the player's turns, then loops through the game modes.
  * Used to check dealing, playing and rendering with many players. Never active in normal play.
  */
-public final class DevPreview {
+public class DevPreview {
 
     public static boolean enabled() {
         return System.getProperty("minopp.worldPreview") != null;

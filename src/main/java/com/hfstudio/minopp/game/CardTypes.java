@@ -7,7 +7,7 @@ import java.util.Map;
 
 import com.hfstudio.minopp.game.CardType.Choice;
 
-public final class CardTypes {
+public class CardTypes {
 
     private CardTypes() {}
 

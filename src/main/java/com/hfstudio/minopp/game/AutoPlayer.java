@@ -1,7 +1,6 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -36,12 +35,21 @@ public class AutoPlayer {
         List<CardPlayer> others = game.activePlayers();
         others.remove(player);
         others.removeIf(p -> player.team >= 0 && p.team == player.team && others.size() > 1);
-        others.sort(Comparator.comparingInt(p -> p.hand.size()));
-        for (int i = 0; i < Math.min(2, others.size()); i++) choices.targets.add(others.get(i).uuid);
+        CardPlayer first = null, second = null;
+        for (CardPlayer candidate : others) {
+            if (first == null || candidate.hand.size() < first.hand.size()) {
+                second = first;
+                first = candidate;
+            } else if (second == null || candidate.hand.size() < second.hand.size()) {
+                second = candidate;
+            }
+        }
+        if (first != null) choices.targets.add(first.uuid);
+        if (second != null) choices.targets.add(second.uuid);
         return choices;
     }
 
-    private int score(CardGame game, CardPlayer player, Card card, boolean useFlex) {
+    private int score(CardGame game, CardPlayer player, Card card, boolean useFlex, int[] colorCounts) {
         CardFace face = game.face(card);
         CardType type = face.type();
         CardFace top = game.topFace();
@@ -56,9 +64,7 @@ public class AutoPlayer {
         if (!face.isWild() && face.color == game.currentColor) score += 20;
         if (type.isDraw()) score += 5 + type.drawValue;
         if (type == CardTypes.DISCARD_ALL || type == CardTypes.DOUBLE_DISCARD_ALL) {
-            score += 10 * (int) player.hand.stream()
-                .filter(c -> game.face(c).color == face.color)
-                .count();
+            score += 10 * colorCounts[face.color.ordinal()];
         }
         if (useFlex) score += 8;
         return score;
@@ -80,6 +86,7 @@ public class AutoPlayer {
         Card best = null;
         boolean bestFlex = false;
         int bestScore = Integer.MIN_VALUE;
+        int[] colorCounts = null;
         for (Card card : new ArrayList<>(realPlayer.hand)) {
             CardType type = game.face(card)
                 .type();
@@ -87,7 +94,11 @@ public class AutoPlayer {
             for (int f = 0; f < (flexAvailable ? 2 : 1); f++) {
                 boolean useFlex = f == 1;
                 if (game.checkPlayable(realPlayer, card, useFlex) != null) continue;
-                int s = score(game, realPlayer, card, useFlex) + RANDOM.nextInt(6);
+                if (colorCounts == null && (type == CardTypes.DISCARD_ALL || type == CardTypes.DOUBLE_DISCARD_ALL)) {
+                    colorCounts = new int[CardColor.values().length];
+                    for (Card held : realPlayer.hand) colorCounts[game.face(held).color.ordinal()]++;
+                }
+                int s = score(game, realPlayer, card, useFlex, colorCounts) + RANDOM.nextInt(6);
                 if (s > bestScore) {
                     bestScore = s;
                     best = card;

@@ -34,7 +34,7 @@ import cpw.mods.fml.relauncher.SideOnly;
  * </pre>
  */
 @SideOnly(Side.CLIENT)
-public final class CardFxRegistry {
+public class CardFxRegistry {
 
     private CardFxRegistry() {}
 
@@ -44,7 +44,9 @@ public final class CardFxRegistry {
         void play(Context ctx);
     }
 
-    /** Draws one frame of a custom effect in table space, already translated to its anchor; t runs 0..1. */
+    /**
+     * Draws one frame of a custom effect in table space, already translated to its anchor; t runs 0..1.
+     */
     @FunctionalInterface
     public interface Renderer {
 
@@ -74,8 +76,10 @@ public final class CardFxRegistry {
         if (list != null) for (CardFx fx : list) fx.play(ctx);
     }
 
-    /** What an effect can see and start. Positions are in table space: the table's corner block is the origin. */
-    public static final class Context {
+    /**
+     * What an effect can see and start. Positions are in table space: the table's corner block is the origin.
+     */
+    public static class Context {
 
         final BlockEntityMinoTable table;
         final CardGame game;
@@ -108,27 +112,37 @@ public final class CardFxRegistry {
             return now;
         }
 
-        /** Skip the generic animations for this card's kind. */
+        /**
+         * Skip the generic animations for this card's kind.
+         */
         public void cancelDefaults() {
             defaultsCancelled = true;
         }
 
-        /** The color now in play as RGB (white while it is still wild). */
+        /**
+         * The color now in play as RGB (white while it is still wild).
+         */
         public int color() {
             return game.currentColor.isWild() ? 0xFFFFFF : game.currentColor.rgb & 0xFFFFFF;
         }
 
-        /** The center of the discard pile, on the table top. */
+        /**
+         * The center of the discard pile, on the table top.
+         */
         public Vec3d pile() {
             return new Vec3d(1.5, TableFx.PILE_Y, 1.5);
         }
 
-        /** Over the head of whoever sits in a seat. */
+        /**
+         * Over the head of whoever sits in a seat.
+         */
         public Vec3d head(int seat, double lift) {
             return TableFx.head(table, seat, lift);
         }
 
-        /** The seat of whoever has to answer this card (the next player), or -1. */
+        /**
+         * The seat of whoever has to answer this card (the next player), or -1.
+         */
         public int victimSeat() {
             int i = game.debugHold && game.debugNext >= 0 ? game.debugNext : game.currentPlayerIndex;
             return i >= 0 && i < game.players.size() ? game.players.get(i).seat : -1;
@@ -146,12 +160,16 @@ public final class CardFxRegistry {
             sink.reverse(color());
         }
 
-        /** The four-color pillar that settles on the chosen color: blocks for draw wilds, a ring otherwise. */
+        /**
+         * The four-color pillar that settles on the chosen color: blocks for draw wilds, a ring otherwise.
+         */
         public void colorPillar(boolean blocks) {
             sink.pillar(blocks);
         }
 
-        /** Thick cards of the current color that fly to whoever has to draw them. */
+        /**
+         * Thick cards of the current color that fly to whoever has to draw them.
+         */
         public void drawCards(int count) {
             sink.slabs(count, color());
         }
@@ -160,7 +178,9 @@ public final class CardFxRegistry {
             sink.text(text, rgb, at, delayMs, durationMs);
         }
 
-        /** The card's own symbol popping up on a disc of its color. */
+        /**
+         * The card's own symbol popping up on a disc of its color.
+         */
         public void symbolPop(Vec3d at, long delayMs) {
             sink.symbol(face, at, delayMs);
         }

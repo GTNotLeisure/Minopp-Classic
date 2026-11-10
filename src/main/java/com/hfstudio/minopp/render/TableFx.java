@@ -37,7 +37,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class TableFx {
+public class TableFx {
 
     private enum Kind {
         SKIP,
@@ -66,7 +66,7 @@ public final class TableFx {
         }
     }
 
-    private static final class State {
+    private static class State {
 
         int topUid = Integer.MIN_VALUE;
         CardColor color;
@@ -101,7 +101,7 @@ public final class TableFx {
     private static final Map<UUID, WeakReference<Entity>> HOLDERS = new HashMap<>();
     private static long holderScan;
 
-    // the player or bot behind a card player, looked up from the client world at most every couple of seconds
+    // Rate-limit uncached player and bot lookups to one world scan every two seconds.
     private static Entity holderEntity(UUID uuid) {
         WeakReference<Entity> ref = HOLDERS.get(uuid);
         Entity e = ref == null ? null : ref.get();
@@ -346,7 +346,7 @@ public final class TableFx {
                 }
             }
         }
-        // a wild whose color is settled later (a roulette, a decision) gets its color pillar when that happens
+        // Start the color pillar when a deferred wild color is resolved.
         if (!first && top == s.topUid
             && game.topCard != null
             && s.color == CardColor.WILD
@@ -516,8 +516,10 @@ public final class TableFx {
                 1400));
     }
 
-    /** Starts the built-in animations on behalf of {@link CardFxRegistry.Context}. */
-    static final class Sink {
+    /**
+     * Starts the built-in animations on behalf of {@link CardFxRegistry.Context}.
+     */
+    public static class Sink {
 
         private final BlockEntityMinoTable table;
         private final CardGame game;
@@ -1406,7 +1408,7 @@ public final class TableFx {
         return (long) (x + 64) << 16 | (long) (y + 64) << 8 | (z + 64);
     }
 
-    // kept above and behind the holder; it turns see-through while another effect plays or the camera is right at it
+    // Fade the balloon near the camera or while another effect is active.
     private static void balloon(BlockEntityMinoTable table, Vec3d at, int fuse, long now, boolean busy) {
         double x = at.x, z = at.z;
         double bob = Math.sin((now % 100000L) / 400.0) * 0.04;

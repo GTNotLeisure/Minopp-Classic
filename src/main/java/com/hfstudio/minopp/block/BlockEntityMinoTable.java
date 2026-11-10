@@ -71,7 +71,9 @@ public class BlockEntityMinoTable extends TileEntity {
     public UUID choosingUuid;
     public boolean choosingRing;
     public int choosingHover = -1;
-    /** Client side: when the current choice was first seen, for its pop-in. */
+    /**
+     * Client side: when the current choice was first seen, for its pop-in.
+     */
     public long choosingSeenAt;
     public UUID ownerUuid;
     public String ownerName = "";
@@ -105,7 +107,9 @@ public class BlockEntityMinoTable extends TileEntity {
         return null;
     }
 
-    /** Operators and the single player world's owner can do anything; otherwise only the room's host can. */
+    /**
+     * Operators and the single player world's owner can do anything; otherwise only the room's host can.
+     */
     public boolean canManage(EntityPlayer player) {
         if (player.canCommandSenderUseCommand(2, "minopp")) return true;
         MinecraftServer server = MinecraftServer.getServer();
@@ -119,7 +123,9 @@ public class BlockEntityMinoTable extends TileEntity {
                 .getId());
     }
 
-    /** Everyone sees every hand only when the server allows it and the room turned it on. */
+    /**
+     * Everyone sees every hand only when the server allows it and the room turned it on.
+     */
     public boolean peekAll() {
         return ServerConfig.gameplay.allowPeeking && config.getBool(GameRules.PEEK_HANDS);
     }
@@ -155,7 +161,9 @@ public class BlockEntityMinoTable extends TileEntity {
         public final Vec3d fromPos;
         public final Vec3d toPos;
         public final int cardCount;
-        /** The cards in flight, whose backs show (their other side in Flip); empty for plain backs. */
+        /**
+         * The cards in flight, whose backs show (their other side in Flip); empty for plain backs.
+         */
         public final List<Card> cards;
         public final long startTime;
         public static final long DURATION_MS = 1200;
@@ -184,10 +192,14 @@ public class BlockEntityMinoTable extends TileEntity {
         }
     }
 
-    /** Client side: hand swaps flying across this table, in table space. */
+    /**
+     * Client side: hand swaps flying across this table, in table space.
+     */
     public final List<HandSwapAnimation> activeAnimations = new ArrayList<>();
 
-    /** Angle of a seat in radians, 0 = north, clockwise seen from above. */
+    /**
+     * Angle of a seat in radians, 0 = north, clockwise seen from above.
+     */
     public static double seatAngle(int seat, int seatCount) {
         return seat * Math.PI * 2 / Math.max(1, seatCount);
     }
@@ -305,7 +317,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (compoundTag.hasKey("config")) {
             config.fromTag(compoundTag.getCompoundTag("config"));
         } else if (compoundTag.hasKey("rules")) {
-            // Table saved by the 1:1 port: plain rules map
+            // Legacy saves store rules directly in the table tag.
             NBTTagCompound legacy = new NBTTagCompound();
             legacy.setTag("rules", compoundTag.getCompoundTag("rules"));
             config.fromTag(legacy);
@@ -810,7 +822,7 @@ public class BlockEntityMinoTable extends TileEntity {
             || WorldUtil.getEntityByUUID(worldObj, uuid) instanceof EntityAutoPlayer;
     }
 
-    // a disconnected player's turns are played by a stand-in so the table never stalls; they take over again on return
+    // Play disconnected seats automatically until their players return.
     private void tickAbsent(MinecraftServer server) {
         if (game.awaitingCutIn) return;
         CardPlayer current = game.currentPlayer();
@@ -911,7 +923,7 @@ public class BlockEntityMinoTable extends TileEntity {
     public Packet getDescriptionPacket() {
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
-        // Sent to whoever loads the chunk: hide every hand; ChunkWatchEvent then sends the viewer their own hand
+        // ChunkWatchEvent sends each viewer their hand after this masked chunk update.
         if (!peekAll()) tag = HandMask.maskTableTag(tag, null, config.getBool(GameRules.FLIP_BACKS));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag);
     }

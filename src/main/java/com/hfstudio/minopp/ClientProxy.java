@@ -21,6 +21,7 @@ import com.hfstudio.minopp.gui.TurnDeadMan;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
+import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.render.EntityAutoPlayerRenderer;
 import com.hfstudio.minopp.render.HandCardsItemRenderer;
 import com.hfstudio.minopp.render.TableItemRenderer;
@@ -63,6 +64,14 @@ public class ClientProxy extends CommonProxy {
     public static class ClientEvents {
 
         @SubscribeEvent
+        public void onRenderTick(TickEvent.RenderTickEvent event) {
+            if (event.phase != TickEvent.Phase.START) return;
+            HandScreen.beginFrame();
+            ColorPicker3D.beginFrame();
+            BlockEntityMinoTableRenderer.beginFrame();
+        }
+
+        @SubscribeEvent
         public void onRenderOverlayPre(RenderGameOverlayEvent.Pre event) {
             if (event.type == RenderGameOverlayEvent.ElementType.HOTBAR && HandScreen.isOpen()
                 && !ClientConfig.display.classicInteraction) event.setCanceled(true);
@@ -81,7 +90,10 @@ public class ClientProxy extends CommonProxy {
 
         @SubscribeEvent
         public void onClientTick(TickEvent.ClientTickEvent event) {
-            if (event.phase == TickEvent.Phase.START) MinoClient.tick();
+            if (event.phase == TickEvent.Phase.START) {
+                HandScreen.beginFrame();
+                MinoClient.tick();
+            }
         }
 
         @SubscribeEvent(priority = EventPriority.HIGH)

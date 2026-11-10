@@ -25,7 +25,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class UiDraw {
+public class UiDraw {
 
     private UiDraw() {}
 
@@ -243,7 +243,9 @@ public final class UiDraw {
         GuiDraw.blitBound(x, y, w, h, 0, 0, 1, 1, 1, 1);
     }
 
-    /** Draws any texture, such as an icon another mod registered. */
+    /**
+     * Draws any texture, such as an icon another mod registered.
+     */
     public static void texture(ResourceLocation tex, float x, float y, float w, float h) {
         GL11.glColor4f(1, 1, 1, 1);
         Minecraft.getMinecraft()

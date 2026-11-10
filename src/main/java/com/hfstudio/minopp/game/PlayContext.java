@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public final class PlayContext {
+public class PlayContext {
 
     public final CardGame game;
     public final CardPlayer player;
@@ -29,15 +29,19 @@ public final class PlayContext {
         return p != null && !p.equals(player) && !p.eliminated ? p : null;
     }
 
-    public static final class PlayChoices {
+    public static class PlayChoices {
 
         public CardColor color;
         public final List<UUID> targets = new ArrayList<>();
         public boolean useFlex;
         public boolean shout;
-        /** Number Sign cards: the number named, 1 to 9, or -1. */
+        /**
+         * Number Sign cards: the number named, 1 to 9, or -1.
+         */
         public int number = -1;
-        /** Cards picked from the hand to discard, by uid. */
+        /**
+         * Cards picked from the hand to discard, by uid.
+         */
         public final List<Integer> picks = new ArrayList<>();
 
         public static PlayChoices of(CardColor color) {

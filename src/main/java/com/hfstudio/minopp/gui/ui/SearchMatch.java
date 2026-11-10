@@ -7,7 +7,7 @@ import net.minecraft.util.EnumChatFormatting;
 
 import cpw.mods.fml.common.Loader;
 
-public final class SearchMatch {
+public class SearchMatch {
 
     private static Object necApi;
     private static Method necContains;

@@ -6,14 +6,20 @@ import net.minecraft.nbt.NBTTagCompound;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-public final class PendingDecision {
+public class PendingDecision {
 
     public enum Type {
-        /** Answer: 1 = challenge, 0 = accept. */
+        /**
+         * Answer: 1 = challenge, 0 = accept.
+         */
         CHALLENGE,
-        /** Answer: color ordinal. */
+        /**
+         * Answer: color ordinal.
+         */
         ROULETTE_COLOR,
-        /** Answer: target uuid. */
+        /**
+         * Answer: target uuid.
+         */
         POINT_TAKEN
     }
 

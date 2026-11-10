@@ -30,13 +30,15 @@ import com.hfstudio.minopp.config.Prefs;
  * sounds with {@link #registerSlot}, so players can swap or silence them too. A pack is named by the lang key
  * {@code gui.<modid>.sound.pack.<name>} (and {@code .desc}), a slot by {@code gui.<modid>.sound.<name>}.
  */
-public final class SoundBank {
+public class SoundBank {
 
     private SoundBank() {}
 
     public record Sound(String name, float volume, float pitch) {}
 
-    /** A sound the player can change; {@code sample} is what it plays when previewed. */
+    /**
+     * A sound the player can change; {@code sample} is what it plays when previewed.
+     */
     public record Slot(String id, String group, String sample) {
 
         public String langKey() {
@@ -51,7 +53,7 @@ public final class SoundBank {
         }
     }
 
-    public static final class PackBuilder {
+    public static class PackBuilder {
 
         private final String id;
         private final ResourceLocation icon;
@@ -62,7 +64,9 @@ public final class SoundBank {
             this.icon = icon;
         }
 
-        /** What the pack plays for a slot, at a pitch relative to the game's own. */
+        /**
+         * What the pack plays for a slot, at a pitch relative to the game's own.
+         */
         public PackBuilder sound(String slot, String name, float pitch) {
             return sound(slot, name, 1f, pitch);
         }
@@ -167,7 +171,9 @@ public final class SoundBank {
         return new PackBuilder(id, icon);
     }
 
-    /** Adds a pack; it shows before the silent pack. */
+    /**
+     * Adds a pack; it shows before the silent pack.
+     */
     public static Pack registerPack(Pack pack) {
         if (PACK_BY_ID.containsKey(pack.id()))
             throw new IllegalArgumentException("Sound pack already registered: " + pack.id());
@@ -212,7 +218,9 @@ public final class SoundBank {
                 .containsKey(slot);
     }
 
-    /** The packs a slot can play from: the default, the packs that replace it, and silence. */
+    /**
+     * The packs a slot can play from: the default, the packs that replace it, and silence.
+     */
     public static List<String> options(String slot) {
         List<String> out = new ArrayList<>();
         for (Pack p : PACKS) if (covers(p, slot)) out.add(p.id());
@@ -250,7 +258,9 @@ public final class SoundBank {
         store(c);
     }
 
-    /** Uses a pack for every sound it has; the others go back to the default. */
+    /**
+     * Uses a pack for every sound it has; the others go back to the default.
+     */
     public static void setAll(String pack) {
         Map<String, String> c = choices();
         Pack p = PACK_BY_ID.get(pack);
@@ -261,7 +271,9 @@ public final class SoundBank {
         store(c);
     }
 
-    /** True when every slot uses the pack where it can, and the default elsewhere. */
+    /**
+     * True when every slot uses the pack where it can, and the default elsewhere.
+     */
     public static boolean allUse(String pack) {
         Pack p = PACK_BY_ID.get(pack);
         if (p == null) return false;
@@ -288,7 +300,9 @@ public final class SoundBank {
         return SOUND_SLOT.getOrDefault(bare(sound), "misc");
     }
 
-    /** What a sound sent by the game actually plays for this player, or null for silence. */
+    /**
+     * What a sound sent by the game actually plays for this player, or null for silence.
+     */
     public static Sound resolve(String sound, float volume, float pitch) {
         String slot = slotOf(sound);
         String pack = choice(slot);

@@ -4,7 +4,7 @@ import java.util.UUID;
 
 import net.minecraft.nbt.NBTTagCompound;
 
-public final class NbtUtil {
+public class NbtUtil {
 
     private NbtUtil() {}
 

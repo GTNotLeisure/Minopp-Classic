@@ -30,12 +30,14 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class ThemeManager implements IResourceManagerReloadListener {
+public class ThemeManager implements IResourceManagerReloadListener {
 
     public static final ThemeManager INSTANCE = new ThemeManager();
     public static final String DEFAULT = "classic";
 
-    /** {@code tint}: the theme's number and symbol layers are white and take the card's color. */
+    /**
+     * {@code tint}: the theme's number and symbol layers are white and take the card's color.
+     */
     public record ThemeInfo(String id, String name, String fallback, boolean tint) {}
 
     private final Map<String, ThemeInfo> themes = new LinkedHashMap<>();
@@ -148,7 +150,9 @@ public final class ThemeManager implements IResourceManagerReloadListener {
         playerThemes.clear();
     }
 
-    /** The color a card layer is drawn in: white, or the card's color for a tinting theme's glyph layers. */
+    /**
+     * The color a card layer is drawn in: white, or the card's color for a tinting theme's glyph layers.
+     */
     public int layerTint(String theme, CardFace face, int layer) {
         if (layer == 0 || face == null || face.color.isWild()) return 0xFFFFFF;
         ThemeInfo info = themes.get(theme);

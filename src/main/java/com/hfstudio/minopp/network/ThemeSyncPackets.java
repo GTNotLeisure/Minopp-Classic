@@ -14,7 +14,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
 import io.netty.buffer.ByteBuf;
 
-public final class ThemeSyncPackets {
+public class ThemeSyncPackets {
 
     private ThemeSyncPackets() {}
 

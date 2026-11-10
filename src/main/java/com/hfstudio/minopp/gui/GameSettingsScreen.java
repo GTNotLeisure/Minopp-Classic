@@ -91,7 +91,7 @@ public class GameSettingsScreen extends GuiScreen {
         SOUND
     }
 
-    private static final class Tile {
+    private static class Tile {
 
         final String id;
         final Kind kind;
@@ -101,7 +101,9 @@ public class GameSettingsScreen extends GuiScreen {
         String searchExtra = "";
         final List<String> desc = new ArrayList<>();
         final List<String> controls = new ArrayList<>();
-        /** "Not recommended with" lines; set together with conflictKey. */
+        /**
+         * "Not recommended with" lines; set together with conflictKey.
+         */
         final List<String> warn = new ArrayList<>();
         String conflictKey;
         boolean clash;
@@ -258,7 +260,7 @@ public class GameSettingsScreen extends GuiScreen {
         BlockEntityMinoTable te = table();
         if (te == null) return;
         TableConfig cfg = te.config;
-        // top padding so check badges and the hover glow (which reach ~5px above a tile) are never clipped
+        // Reserve 5px above tiles for badges and hover glow.
         int y = 8;
         switch (tab) {
             case DESIGNS -> {
@@ -461,7 +463,7 @@ public class GameSettingsScreen extends GuiScreen {
                 }
             }
             case GALLERY -> {
-                // the tiles never change, so they are built once and only filtered and laid out per frame
+                // Reuse tiles across filtering and layout passes.
                 if (galleryCache == null) galleryCache = buildGallery();
                 for (Map.Entry<String, List<Tile>> e : galleryCache.entrySet()) {
                     List<Tile> list = filter(e.getValue(), e.getKey());
@@ -520,7 +522,9 @@ public class GameSettingsScreen extends GuiScreen {
         return out;
     }
 
-    /** Prefs shown as a text box instead of a slider; switched by the button next to them. */
+    /**
+     * Prefs shown as a text box instead of a slider; switched by the button next to them.
+     */
     private static final Set<String> typingPrefs = new HashSet<>();
     private final Map<String, GuiTextField> prefFields = new HashMap<>();
     private Prefs.Pref dragPref;
@@ -538,7 +542,9 @@ public class GameSettingsScreen extends GuiScreen {
         return Prefs.get(id);
     }
 
-    /** Where a row's parts start: control, control end, slider/text switch, reset button. */
+    /**
+     * Where a row's parts start: control, control end, slider/text switch, reset button.
+     */
     private int[] prefLayout(Tile t, Prefs.Pref p) {
         int resetW = Math.max(32, fontRendererObj.getStringWidth(tr("controls.reset")) + 12);
         int reset = t.x + t.w - resetW;
@@ -998,7 +1004,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private int tabWidth() {
-        // the tab row may run over the info panel's column, which leaves room for longer names
+        // Allow long tab names to extend over the info column.
         return Math.min(64, (width - 8 - contentX - 32) / Tab.values().length - 2);
     }
 
@@ -1248,7 +1254,7 @@ public class GameSettingsScreen extends GuiScreen {
         if (t.conflictKey != null) UiDraw.image(t.clash ? "badge_warn_on" : "badge_warn", x1 + 2, y2 - 12, 10, 10);
     }
 
-    // lists what a rule or card is not recommended with, four names to a line; the ones switched on are red
+    // Wrap conflicts at four names per line and highlight active conflicts in red.
     private void conflicts(Tile t, String key, TableConfig cfg) {
         List<String> others = Conflicts.of(key);
         if (others.isEmpty()) return;
@@ -1896,7 +1902,9 @@ public class GameSettingsScreen extends GuiScreen {
             .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.2f));
     }
 
-    /** Plays a slot the way it now sounds; false when it is silent. */
+    /**
+     * Plays a slot the way it now sounds; false when it is silent.
+     */
     private boolean playPreview(String slot) {
         SoundBank.Sound s = slot == null ? null : SoundBank.preview(slot);
         if (s == null) return false;

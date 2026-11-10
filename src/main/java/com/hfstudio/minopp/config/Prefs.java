@@ -19,7 +19,7 @@ import com.hfstudio.minopp.Mino;
  * {@code gui.<modid>.pref.<name>} for an id written as {@code modid:name}, plus {@code .desc} for the description and
  * {@code .<choice>} for each choice.
  */
-public final class Prefs {
+public class Prefs {
 
     private Prefs() {}
 
@@ -39,7 +39,9 @@ public final class Prefs {
             return get.getAsInt();
         }
 
-        /** Sets the value without saving, for slider drags and typing. */
+        /**
+         * Sets the value without saving, for slider drags and typing.
+         */
         public void apply(int v) {
             set.accept(type == Type.CHOICE ? Math.floorMod(v, choices.size()) : Math.max(min, Math.min(max, v)));
         }
@@ -62,7 +64,9 @@ public final class Prefs {
 
     private static final List<Pref> REGISTRY = new ArrayList<>();
 
-    /** Every registered setting, in the order they show. */
+    /**
+     * Every registered setting, in the order they show.
+     */
     public static List<Pref> all() {
         return Collections.unmodifiableList(REGISTRY);
     }
@@ -120,7 +124,9 @@ public final class Prefs {
         bool("showOthersThemes", true, () -> d().showOthersThemes, v -> d().showOthersThemes = v, Prefs::save);
     }
 
-    /** Saves Mino++'s own client settings. */
+    /**
+     * Saves Mino++'s own client settings.
+     */
     public static void save() {
         try {
             ConfigurationManager.save(ClientConfig.class);

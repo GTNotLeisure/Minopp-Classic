@@ -2,7 +2,7 @@ package com.hfstudio.minopp.util;
 
 import net.minecraft.tileentity.TileEntity;
 
-public final class BlockPos {
+public class BlockPos {
 
     public final int x, y, z;
 

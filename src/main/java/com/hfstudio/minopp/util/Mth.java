@@ -1,6 +1,6 @@
 package com.hfstudio.minopp.util;
 
-public final class Mth {
+public class Mth {
 
     private Mth() {}
 

@@ -58,7 +58,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
     dependencies = "required-after:gtnhlib",
     guiFactory = "com.hfstudio.minopp.config.MinoGuiFactory",
     acceptedMinecraftVersions = "[1.7.10]")
-public final class Mino {
+public class Mino {
 
     public static final String MOD_ID = "minopp";
     public static final String MOD_NAME = "Mino++: Classic";

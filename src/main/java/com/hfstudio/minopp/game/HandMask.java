@@ -7,7 +7,7 @@ import net.minecraft.nbt.NBTTagList;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-public final class HandMask {
+public class HandMask {
 
     private HandMask() {}
 

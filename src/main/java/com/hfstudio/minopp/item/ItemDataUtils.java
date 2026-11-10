@@ -8,7 +8,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.NbtUtil;
 
-public final class ItemDataUtils {
+public class ItemDataUtils {
 
     public static final String MINO_DATA = "minopp_data";
 

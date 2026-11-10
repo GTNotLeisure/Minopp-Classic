@@ -17,7 +17,9 @@ public enum CardColor {
     PURPLE(0xFF6A2BB0, EnumChatFormatting.DARK_PURPLE, Side.DARK),
 
     WILD(0xFF1E1A19, EnumChatFormatting.WHITE, Side.ANY),
-    /** Infinity's rare grey numbers: they only match each other or the same number, and no effect can name them. */
+    /**
+     * Infinity's rare grey numbers: they only match each other or the same number, and no effect can name them.
+     */
     COLORLESS(0xFF8E8E96, EnumChatFormatting.GRAY, Side.ANY);
 
     public enum Side {

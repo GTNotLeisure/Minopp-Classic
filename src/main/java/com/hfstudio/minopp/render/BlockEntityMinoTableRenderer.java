@@ -163,7 +163,9 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
     private static final CardBatch BATCH = new CardBatch();
 
-    /** From the table's center toward a player's seat, or null when they are not seated in this game. */
+    /**
+     * From the table's center toward a player's seat, or null when they are not seated in this game.
+     */
     static double[] seatDir(BlockEntityMinoTable table, CardGame game, UUID uuid) {
         if (uuid == null) return null;
         for (CardPlayer p : game.players) {
@@ -175,35 +177,41 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         return null;
     }
 
-    /** The viewer's own table's draw pile on screen last frame {minX, minY, maxX, maxY, cx, cy}, or null. */
+    /**
+     * The viewer's own table's draw pile on screen last frame {minX, minY, maxX, maxY, cx, cy}, or null.
+     */
     private static float[] deckBounds;
-    private static long deckBoundsAt;
-    /** Set by the hand screen while the mouse is over the draw pile. */
+    /**
+     * Set by the hand screen while the mouse is over the draw pile.
+     */
     public static boolean deckHot;
 
+    /**
+     * Clears the draw pile hit region before world rendering.
+     */
+    public static void beginFrame() {
+        deckBounds = null;
+    }
+
     public static float[] deckOnScreen() {
-        return System.currentTimeMillis() - deckBoundsAt < 500 && deckBounds != null
-            ? new float[] { deckBounds[4], deckBounds[5] }
-            : null;
+        return deckBounds == null ? null : new float[] { deckBounds[4], deckBounds[5] };
     }
 
     public static boolean isOverDeck(int mouseX, int mouseY) {
-        float[] b = System.currentTimeMillis() - deckBoundsAt < 500 ? deckBounds : null;
+        float[] b = deckBounds;
         return b != null && mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
     }
 
     private static void deckHighlight(BlockEntityMinoTable table, CardGame game, int layers, float layerH) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) return;
+        if (!table.getBlockPos()
+            .equals(ItemHandCards.getHandCardGamePos(mc.thePlayer))) return;
         CardPlayer me = game.deAmputate(ItemHandCards.getCardPlayer(mc.thePlayer));
         if (me == null) return;
         double deckH = layers * layerH * 0.4, x0 = 0.24, x1 = 0.76, z0 = 0.24, z1 = 0.76, y0 = 0.94,
             y1 = 0.94 + deckH + 0.03;
-        float[] b = ColorPicker3D.projectBoxNow(x0, y0, z0, x1, y1, z1);
-        if (b != null) {
-            deckBounds = b;
-            deckBoundsAt = System.currentTimeMillis();
-        }
+        deckBounds = ColorPicker3D.projectBoxNow(x0, y0, z0, x1, y1, z1);
         boolean myTurn = game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn;
         BlockPos aimed = BlockMinoTable.Client.getCursorPickedGame();
         boolean pointed = deckHot || mc.currentScreen == null && aimed != null

@@ -20,7 +20,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class CardBatch {
+public class CardBatch {
 
     private static final int LEVELS = 5;
     private static final Map<String, Map<CardFace, ResourceLocation[]>> FACE_TEXTURES = new HashMap<>();
@@ -41,7 +41,7 @@ public final class CardBatch {
         return tex;
     }
 
-    private static final class Quads {
+    private static class Quads {
 
         float[] data = new float[16 * 9];
         int size;
@@ -174,7 +174,9 @@ public final class CardBatch {
         t.draw();
     }
 
-    /** Draws everything collected: slab edges first, then card layers level by level (frames before symbols). */
+    /**
+     * Draws everything collected: slab edges first, then card layers level by level (frames before symbols).
+     */
     public void flush() {
         if (plain.size > 0) {
             GL11.glDisable(GL11.GL_TEXTURE_2D);

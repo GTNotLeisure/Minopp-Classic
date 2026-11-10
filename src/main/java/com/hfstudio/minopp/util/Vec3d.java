@@ -1,6 +1,6 @@
 package com.hfstudio.minopp.util;
 
-public final class Vec3d {
+public class Vec3d {
 
     public final double x, y, z;
 

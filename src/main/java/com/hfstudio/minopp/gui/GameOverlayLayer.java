@@ -60,7 +60,7 @@ public class GameOverlayLayer {
     private final Map<Integer, Float> handCardCurrentXOff = new HashMap<>();
     private final Set<Integer> uidScratch = new HashSet<>();
 
-    // the client gets a new game object with every sync, so what can be played holds until the next one
+    // Each sync replaces the game object and invalidates cached playability.
     private CardGame playableFor;
     private final Map<Integer, Boolean> playableCache = new HashMap<>();
 
@@ -101,7 +101,7 @@ public class GameOverlayLayer {
             return;
         }
 
-        // the hand goes first so the game info text stays readable on top of it
+        // Draw game information above the hand.
         boolean handActive = renderHandCards(partialTicks);
         if (tableEntity.game == null) {
             renderGameInactive(tableEntity);
@@ -374,7 +374,9 @@ public class GameOverlayLayer {
         });
     }
 
-    /** Width of a hand card on screen, scaled by the personal hand size. */
+    /**
+     * Width of a hand card on screen, scaled by the personal hand size.
+     */
     public static int cardWidth(int screenWidth) {
         return Math.round(Mth.clamp(screenWidth / 9, 40, 60) * Math.max(0.7f, ClientConfig.display.handScale / 100f));
     }
@@ -650,7 +652,9 @@ public class GameOverlayLayer {
         return true;
     }
 
-    /** Card hit areas of the last frame, topmost first: {index, centerX, centerY, angle (rad), w, h}. */
+    /**
+     * Card hit areas of the last frame, topmost first: {index, centerX, centerY, angle (rad), w, h}.
+     */
     private static final List<float[]> cardRects = new ArrayList<>();
     private float rowRaise = 0;
     private final Map<Integer, Float> rowLift = new HashMap<>();
@@ -679,7 +683,9 @@ public class GameOverlayLayer {
     private static int lastPage = 15;
     private static float[] rowExtent;
 
-    /** {left, right, top} of the fanned hand last frame, or null when the hand is not laid out as a fan. */
+    /**
+     * {left, right, top} of the fanned hand last frame, or null when the hand is not laid out as a fan.
+     */
     public static float[] rowExtent() {
         return rowExtent;
     }
@@ -689,14 +695,18 @@ public class GameOverlayLayer {
     private Object ghostGame;
     private int ghostSeq;
 
-    /** How many cards the hand shows at once; paging keys jump by this much. */
+    /**
+     * How many cards the hand shows at once; paging keys jump by this much.
+     */
     public static int pageSize() {
         return Math.max(1, lastPage);
     }
 
     private int rowStart, stackStart;
 
-    /** Turns the carousel itself by one card, so the wheel spins the hand instead of walking the selection. */
+    /**
+     * Turns the carousel itself by one card, so the wheel spins the hand instead of walking the selection.
+     */
     public static void turnCarousel(int dir) {
         INSTANCE.rowStart += dir;
         INSTANCE.stackStart += dir;
@@ -735,7 +745,9 @@ public class GameOverlayLayer {
     private boolean coinSide, coinSpent;
     private long coinFlipAt, coinUseAt;
 
-    /** {x, y, size} of the coin last frame, or null when there is none. */
+    /**
+     * {x, y, size} of the coin last frame, or null when there is none.
+     */
     public static int[] coinRect() {
         return coinRect;
     }
@@ -1006,7 +1018,7 @@ public class GameOverlayLayer {
             }
             List<Card> fresh = new ArrayList<>();
             for (Card c : fullHand) if (!rowKnown.contains(c.uid)) fresh.add(c);
-            // a few new cards are draws and fly in one after another; a whole new hand (a swap) just appears
+            // Animate small draws individually; show swapped hands immediately.
             if (fresh.size() <= 8 && !game.isDebugger(me)) {
                 for (int k = 0; k < fresh.size(); k++) rowEnter.put(fresh.get(k).uid, nowMs + 140L * k);
             }

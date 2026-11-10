@@ -12,7 +12,7 @@ import java.util.Set;
  * Rules and cards that are not recommended together: they still work, but one makes the other pointless or drags
  * games out. Keys are {@code rule:<id>} and {@code card:<typeId>}; every link goes both ways.
  */
-public final class Conflicts {
+public class Conflicts {
 
     private Conflicts() {}
 
@@ -32,7 +32,9 @@ public final class Conflicts {
         return out;
     }
 
-    /** Marks every key in {@code a} as not recommended with every key in {@code b}. */
+    /**
+     * Marks every key in {@code a} as not recommended with every key in {@code b}.
+     */
     public static void link(String[] a, String... b) {
         for (String x : a) for (String y : b) {
             if (x.equals(y)) continue;
@@ -89,7 +91,9 @@ public final class Conflicts {
         link(rule(GameRules.CHALLENGE), rule(GameRules.NO_BLUFFING));
     }
 
-    /** What a rule or card is not recommended with, in a stable order. */
+    /**
+     * What a rule or card is not recommended with, in a stable order.
+     */
     public static List<String> of(String key) {
         Set<String> s = LINKS.get(key);
         return s == null ? Collections.emptyList() : new ArrayList<>(s);
@@ -99,7 +103,9 @@ public final class Conflicts {
         return Collections.unmodifiableSet(LINKS.keySet());
     }
 
-    /** Whether a rule is on or a card is in the deck of this table. */
+    /**
+     * Whether a rule is on or a card is in the deck of this table.
+     */
     public static boolean isActive(String key, TableConfig cfg) {
         if (key.startsWith("rule:")) return cfg.getBool(key.substring(5));
         if (key.startsWith("card:")) {
@@ -114,7 +120,9 @@ public final class Conflicts {
         return false;
     }
 
-    /** The keys {@code key} clashes with that are active right now, when {@code key} itself is active too. */
+    /**
+     * The keys {@code key} clashes with that are active right now, when {@code key} itself is active too.
+     */
     public static List<String> clashes(String key, TableConfig cfg) {
         List<String> out = new ArrayList<>();
         if (!isActive(key, cfg)) return out;

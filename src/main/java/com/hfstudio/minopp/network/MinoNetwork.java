@@ -23,7 +23,7 @@ import cpw.mods.fml.relauncher.Side;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-public final class MinoNetwork {
+public class MinoNetwork {
 
     private MinoNetwork() {}
 
@@ -61,7 +61,9 @@ public final class MinoNetwork {
         }
     }
 
-    /** Handles the client's queued messages; called from the client tick. */
+    /**
+     * Handles the client's queued messages; called from the client tick.
+     */
     public static void runClientQueue() {
         drain(CLIENT_QUEUE, CLIENT_PENDING);
     }

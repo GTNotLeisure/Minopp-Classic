@@ -36,6 +36,9 @@ public class TableItemRenderer implements IItemRenderer {
     }
 
     private static final CardBatch BATCH = new CardBatch();
+    private static final CardFace BLUE_SEVEN = new CardFace("number", CardColor.BLUE, 7);
+    private static final CardFace RED_FIVE = new CardFace("number", CardColor.RED, 5);
+    private static final CardFace WILD_DRAW_FOUR = new CardFace("wild_draw4", CardColor.WILD, -1);
 
     @Override
     public boolean handleRenderType(ItemStack item, ItemRenderType type) {
@@ -78,11 +81,11 @@ public class TableItemRenderer implements IItemRenderer {
         GL11.glRotatef(-90, 1, 0, 0);
         String theme = ThemeManager.INSTANCE.selected();
         BATCH.at(-0.12f, 0.02f, 0.002f, -14);
-        BATCH.face(new CardFace("number", CardColor.BLUE, 7), theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
+        BATCH.face(BLUE_SEVEN, theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
         BATCH.at(0.1f, -0.04f, 0.006f, 12);
-        BATCH.face(new CardFace("number", CardColor.RED, 5), theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
+        BATCH.face(RED_FIVE, theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
         BATCH.at(0.02f, 0.12f, 0.01f, 3);
-        BATCH.face(new CardFace("wild_draw4", CardColor.WILD, -1), theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
+        BATCH.face(WILD_DRAW_FOUR, theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
         BATCH.flush();
         GL11.glPopMatrix();
 
@@ -91,7 +94,7 @@ public class TableItemRenderer implements IItemRenderer {
         GL11.glPopMatrix();
     }
 
-    // each face takes the texture at its real size (16 pixels a block), like a block, so nothing stretches
+    // Map textures at 16 pixels per block to preserve their aspect ratio.
     private static final int UP = 0, DOWN = 1, NORTH = 2, SOUTH = 3, WEST = 4, EAST = 5;
 
     private static void v(Tessellator t, IIcon icon, int face, double x, double y, double z) {

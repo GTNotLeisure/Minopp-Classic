@@ -1,7 +1,6 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -11,12 +10,12 @@ public interface TaskScheduler {
 
     void schedule(int ticks, Runnable task);
 
-    class Holder {
+    public class Holder {
 
         public static final ServerTickScheduler INSTANCE = new ServerTickScheduler();
     }
 
-    class ServerTickScheduler implements TaskScheduler {
+    public class ServerTickScheduler implements TaskScheduler {
 
         private final List<ScheduledTask> tasks = new ArrayList<>();
 
@@ -41,19 +40,22 @@ public interface TaskScheduler {
         @SubscribeEvent
         public void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase != TickEvent.Phase.END) return;
-            List<Runnable> toRun = new ArrayList<>();
+            List<Runnable> toRun = null;
             synchronized (tasks) {
                 if (tasks.isEmpty()) return;
-                Iterator<ScheduledTask> it = tasks.iterator();
-                while (it.hasNext()) {
-                    ScheduledTask t = it.next();
+                int remaining = 0;
+                for (ScheduledTask t : tasks) {
                     if (--t.ticksRemaining <= 0) {
+                        if (toRun == null) toRun = new ArrayList<>();
                         toRun.add(t.task);
-                        it.remove();
+                    } else {
+                        tasks.set(remaining++, t);
                     }
                 }
+                if (remaining < tasks.size()) tasks.subList(remaining, tasks.size())
+                    .clear();
             }
-            for (Runnable r : toRun) r.run();
+            if (toRun != null) for (Runnable r : toRun) r.run();
         }
     }
 }

@@ -8,7 +8,9 @@ public enum Direction {
     WEST(-1, 0, 1);
 
     public final int stepX, stepZ;
-    /** 2D data value as in 1.20: SOUTH=0, WEST=1, NORTH=2, EAST=3 */
+    /**
+     * 2D data value as in 1.20: SOUTH=0, WEST=1, NORTH=2, EAST=3
+     */
     public final int data2d;
 
     Direction(int stepX, int stepZ, int data2d) {

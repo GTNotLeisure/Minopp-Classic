@@ -16,7 +16,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -76,7 +75,9 @@ public class CardGame {
     public BlockEntityMinoTable tableEntity;
     private final Random random = new Random();
 
-    /** Stays the same for the whole game, also on clients that rebuild the game object on every update. */
+    /**
+     * Stays the same for the whole game, also on clients that rebuild the game object on every update.
+     */
     public long id = new Random().nextLong();
 
     public CardGame(List<CardPlayer> players) {
@@ -131,7 +132,9 @@ public class CardGame {
     public UUID debugShoutBy;
     private int debugShoutCursor;
 
-    /** Mechanics the debug toolbar can switch during a game. */
+    /**
+     * Mechanics the debug toolbar can switch during a game.
+     */
     public static final List<String> DEBUG_RULES = Arrays.asList(
         GameRules.COINS,
         GameRules.FLIP_MODE,
@@ -253,7 +256,7 @@ public class CardGame {
             .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
     }
 
-    // every card already in the game gains (or loses) its other side, so the table and every hand follow the switch
+    // Apply the Flip setting to cards already in play.
     private void applyFlipMode(boolean on) {
         if (!on && darkSide) {
             darkSide = false;
@@ -315,8 +318,7 @@ public class CardGame {
         currentPlayerIndex = players.indexOf(me);
     }
 
-    // the debugger's cards never run out: whatever left the hand comes back as a fresh copy, and whatever came in
-    // goes back to the deck
+    // Restore discarded debug cards and return incoming cards to the deck.
     private void restoreDebugHand() {
         if (!debug) return;
         CardPlayer me = deAmputate(debugger);
@@ -345,7 +347,7 @@ public class CardGame {
         me.hand.clear();
         me.hand.addAll(debugHand);
         me.eliminated = false;
-        // debug cards handed to others (hand swaps) are taken back; they get a normal hand of at most 7 instead
+        // Replace transferred debug cards with a normal hand of at most seven cards.
         for (CardPlayer p : players) {
             if (p == me) continue;
             int taken = 0;
@@ -400,7 +402,9 @@ public class CardGame {
         return topCard.face(darkSide);
     }
 
-    /** What the top card matches by symbol: the number a Number Sign named, else its own symbol. */
+    /**
+     * What the top card matches by symbol: the number a Number Sign named, else its own symbol.
+     */
     public String topSymbolKey() {
         return signNumber >= 0 ? "n" + signNumber : topFace().symbolKey();
     }
@@ -414,9 +418,9 @@ public class CardGame {
     }
 
     public List<CardPlayer> activePlayers() {
-        return players.stream()
-            .filter(p -> !p.eliminated)
-            .collect(Collectors.toList());
+        List<CardPlayer> active = new ArrayList<>(players.size());
+        for (CardPlayer player : players) if (!player.eliminated) active.add(player);
+        return active;
     }
 
     private int step() {
@@ -1287,7 +1291,7 @@ public class CardGame {
     }
 
     private void mercySwap(CardPlayer player, ActionReport report) {
-        // the debugger's cards never leave: the new hand is only shown, like every debug draw
+        // Display the replacement hand without changing the debug hand.
         if (isDebugger(player)) {
             drawCards(player, 7, report);
             report.sound(new ResourceLocation("minecraft", "random.levelup"), 0, 0.6f, 1.2f);
@@ -1482,7 +1486,9 @@ public class CardGame {
     public void surge(CardPlayer player, ActionReport report) {
         player.hand.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
         int n = Math.min(2, player.hand.size());
-        for (int i = 0; i < n; i++) discardDeck.add(player.hand.remove(0));
+        List<Card> discarded = player.hand.subList(0, n);
+        discardDeck.addAll(discarded);
+        discarded.clear();
         if (player.hand.size() == 1) player.hasShoutedMino = true;
         report.messageAll(Chat.translatable("game.minopp.play.surge", player.name, n));
     }
@@ -1590,8 +1596,6 @@ public class CardGame {
         target.hasShoutedMino = false;
         report.messageAll(Chat.translatable("game.minopp.play.thief", player.name, target.name));
     }
-
-    // ---- Add-On packs
 
     public int speedLevel = 1, pendingSpeed, playedThisTurn;
     public int revealTurns;
@@ -2060,7 +2064,9 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.trial", player.name, Chat.translatable(color.langKey())));
     }
 
-    /** The last 50/50 toss, for the table animation: who took heads and tails, which face came up, and a counter. */
+    /**
+     * The last 50/50 toss, for the table animation: who took heads and tails, which face came up, and a counter.
+     */
     public UUID tossHeads, tossTails;
     public boolean tossHeadsUp;
     public int tossSeq;
@@ -2079,18 +2085,24 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.fifty_fifty", loser.name, amount));
     }
 
-    // ---- UNO Infinity
-
-    /** The number a Number Sign stands for until the next card is played, or -1. */
+    /**
+     * The number a Number Sign stands for until the next card is played, or -1.
+     */
     public int signNumber = -1;
-    /** The last die rolled, for the table animation and the HUD. */
+    /**
+     * The last die rolled, for the table animation and the HUD.
+     */
     public int diceSides, diceResult, diceSeq;
     public UUID diceRoller;
-    /** The last Lucky Seven: whose it was and how the coin landed (or the three sevens shown). */
+    /**
+     * The last Lucky Seven: whose it was and how the coin landed (or the three sevens shown).
+     */
     public UUID luckyPlayer;
     public int luckyResult, luckySeq;
     public static final int LUCKY_TAILS = 0, LUCKY_HEADS = 1, LUCKY_SEVENS = 2;
-    /** A hand shown to everyone until play comes back around to whoever revealed it. */
+    /**
+     * A hand shown to everyone until play comes back around to whoever revealed it.
+     */
     public UUID revealedOne;
     public int revealOneTurns;
 
@@ -2105,7 +2117,9 @@ public class CardGame {
         return best;
     }
 
-    /** Discards the cards the player picked; missing or invalid picks are made up with their highest-scoring cards. */
+    /**
+     * Discards the cards the player picked; missing or invalid picks are made up with their highest-scoring cards.
+     */
     public void discardPicked(CardPlayer player, CardType type, PlayContext.PlayChoices choices, ActionReport report) {
         int need = type.pickCount(player.hand.size());
         if (need == 0) return;
@@ -2172,7 +2186,9 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.reveal_one", player.name, target.name));
     }
 
-    /** The highest-scoring card of the discard pile goes to a player of the player's choice. */
+    /**
+     * The highest-scoring card of the discard pile goes to a player of the player's choice.
+     */
     public void recycle(CardPlayer player, CardPlayer target, ActionReport report) {
         if (target == null) target = player;
         Card best = null;
@@ -2201,7 +2217,9 @@ public class CardGame {
             luckyResult = sevens >= 3 ? LUCKY_SEVENS : LUCKY_HEADS;
             player.hand.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
             int n = Math.min(7, player.hand.size());
-            for (int i = 0; i < n; i++) discardDeck.add(player.hand.remove(0));
+            List<Card> discarded = player.hand.subList(0, n);
+            discardDeck.addAll(discarded);
+            discarded.clear();
             if (player.hand.size() == 1) player.hasShoutedMino = true;
             report.messageAll(Chat.translatable("game.minopp.play.lucky_win", player.name, n));
         } else {
@@ -2317,7 +2335,7 @@ public class CardGame {
             c.owner = cardPlayer.uuid;
             drawn.add(c);
             if (isDebugger(cardPlayer)) {
-                // shown as a draw but never kept
+                // Preview draws without changing the debug hand.
                 deck.add(0, c);
                 debugDrawn.add(c);
                 debugDrawSeq++;
@@ -2374,18 +2392,14 @@ public class CardGame {
     }
 
     public CardPlayer deAmputate(CardPlayer playerWithoutHand) {
-        return players.stream()
-            .filter(p -> p.equals(playerWithoutHand))
-            .findFirst()
-            .orElse(null);
+        for (CardPlayer player : players) if (player.equals(playerWithoutHand)) return player;
+        return null;
     }
 
     public CardPlayer deAmputate(UUID uuid) {
         if (uuid == null) return null;
-        return players.stream()
-            .filter(p -> p.uuid.equals(uuid))
-            .findFirst()
-            .orElse(null);
+        for (CardPlayer player : players) if (player.uuid.equals(uuid)) return player;
+        return null;
     }
 
     public enum PlayerActionPhase {

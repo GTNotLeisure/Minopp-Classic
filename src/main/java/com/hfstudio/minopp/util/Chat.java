@@ -4,7 +4,7 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IChatComponent;
 
-public final class Chat {
+public class Chat {
 
     private Chat() {}
 

@@ -5,7 +5,7 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.Chat;
 
-public final class ActionMessage {
+public class ActionMessage {
 
     private final Type type;
     private final IChatComponent message;

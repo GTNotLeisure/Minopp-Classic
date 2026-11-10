@@ -155,6 +155,14 @@ public class TableConfig {
     }
 
     public List<CardFace> buildFaces(boolean backSide) {
+        List<CardFace> faces = new ArrayList<>();
+        for (Map.Entry<CardFace, Integer> e : faceCounts(backSide).entrySet()) {
+            for (int i = 0; i < e.getValue(); i++) faces.add(e.getKey());
+        }
+        return faces;
+    }
+
+    public Map<CardFace, Integer> faceCounts(boolean backSide) {
         Map<CardFace, Integer> defaults = new LinkedHashMap<>();
         Map<CardFace, Integer> overridden = new LinkedHashMap<>();
         for (CardPack pack : CardPack.all()) {
@@ -169,11 +177,7 @@ public class TableConfig {
         }
         Map<CardFace, Integer> merged = new LinkedHashMap<>(defaults);
         merged.putAll(overridden);
-        List<CardFace> faces = new ArrayList<>();
-        for (Map.Entry<CardFace, Integer> e : merged.entrySet()) {
-            for (int i = 0; i < e.getValue(); i++) faces.add(e.getKey());
-        }
-        return faces;
+        return merged;
     }
 
     public static List<CardFace> entryFaces(CardPack.Entry entry) {
@@ -195,7 +199,9 @@ public class TableConfig {
     }
 
     public int countDeckSize() {
-        return buildFaces(false).size();
+        int total = 0;
+        for (int count : faceCounts(false).values()) total += Math.max(0, count);
+        return total;
     }
 
     public int effectiveCopies(int playerCount, int deckSize) {
@@ -247,7 +253,9 @@ public class TableConfig {
         return deck;
     }
 
-    /** The faces the cards' other sides come from in a Flip game, never empty. */
+    /**
+     * The faces the cards' other sides come from in a Flip game, never empty.
+     */
     public List<CardFace> darkFaces() {
         List<CardFace> base = buildFaces(true);
         return base.isEmpty() ? buildDefaultDarkFaces() : base;

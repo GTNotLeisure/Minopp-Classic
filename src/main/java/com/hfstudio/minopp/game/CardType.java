@@ -1,6 +1,6 @@
 package com.hfstudio.minopp.game;
 
-public final class CardType {
+public class CardType {
 
     public enum Choice {
 
@@ -58,11 +58,17 @@ public final class CardType {
     public final Condition condition;
     public final boolean answersDraw;
     public final int points;
-    /** Cards the player picks from their hand to discard: a count, {@link #PICK_HALF}, or 0 for none. */
+    /**
+     * Cards the player picks from their hand to discard: a count, {@link #PICK_HALF}, or 0 for none.
+     */
     public final int pick;
-    /** Fast cards: the player may play another card right after. */
+    /**
+     * Fast cards: the player may play another card right after.
+     */
     public final boolean fast;
-    /** Cards printed in one color only, such as the colorless numbers; null for the usual four. */
+    /**
+     * Cards printed in one color only, such as the colorless numbers; null for the usual four.
+     */
     public final CardColor fixedColor;
 
     public static final int PICK_HALF = -1;
@@ -90,7 +96,9 @@ public final class CardType {
         this.fixedColor = b.fixedColor;
     }
 
-    /** How many cards a player holding {@code handAfter} cards picks to discard. */
+    /**
+     * How many cards a player holding {@code handAfter} cards picks to discard.
+     */
     public int pickCount(int handAfter) {
         int n = pick == PICK_HALF ? handAfter / 2 : pick;
         return Math.max(0, Math.min(n, handAfter));
@@ -112,7 +120,7 @@ public final class CardType {
         return new Builder(id, packId);
     }
 
-    public static final class Builder {
+    public static class Builder {
 
         private final String id;
         private final String packId;

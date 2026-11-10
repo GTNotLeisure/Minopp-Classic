@@ -27,7 +27,7 @@ public interface EffectEvent {
 
     void encode(EffectEvent event, ByteBuf buffer);
 
-    final class Type<T extends EffectEvent> {
+    public class Type<T extends EffectEvent> {
 
         private final String id;
         private final Function<ByteBuf, EffectEvent> function;

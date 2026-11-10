@@ -40,7 +40,9 @@ public class SeatControlScreen extends GuiScreen {
         boolean big) {}
 
     private final List<Action> actions = new ArrayList<>();
-    /** Seat hit areas of the last frame for team picking: {seat, x1, y1, x2, y2}. */
+    /**
+     * Seat hit areas of the last frame for team picking: {seat, x1, y1, x2, y2}.
+     */
     private final List<int[]> seatRects = new ArrayList<>();
     private long openTime = System.currentTimeMillis();
 

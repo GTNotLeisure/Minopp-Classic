@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class GameRules {
+public class GameRules {
 
     private GameRules() {}
 

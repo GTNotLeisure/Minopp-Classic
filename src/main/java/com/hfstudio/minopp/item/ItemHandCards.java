@@ -67,7 +67,9 @@ public class ItemHandCards extends Item {
         return BlockMinoTable.getCore(world, tablePos.x, tablePos.y, tablePos.z);
     }
 
-    /** True when the chunk holding pos is loaded; nothing in the mod may load one just to look at a table. */
+    /**
+     * True when the chunk holding pos is loaded; nothing in the mod may load one just to look at a table.
+     */
     public static boolean isLoaded(World world, BlockPos pos) {
         return pos != null && world.blockExists(pos.x, pos.y, pos.z);
     }

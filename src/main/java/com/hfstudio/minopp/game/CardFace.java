@@ -8,7 +8,7 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.Chat;
 
-public final class CardFace implements Comparable<CardFace> {
+public class CardFace implements Comparable<CardFace> {
 
     public final String typeId;
     public final CardColor color;

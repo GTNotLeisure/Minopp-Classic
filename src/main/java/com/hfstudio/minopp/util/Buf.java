@@ -8,7 +8,7 @@ import net.minecraft.util.ResourceLocation;
 import cpw.mods.fml.common.network.ByteBufUtils;
 import io.netty.buffer.ByteBuf;
 
-public final class Buf {
+public class Buf {
 
     private Buf() {}
 

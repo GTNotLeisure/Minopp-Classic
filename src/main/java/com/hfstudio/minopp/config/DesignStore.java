@@ -28,11 +28,11 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class DesignStore {
+public class DesignStore {
 
     public static final int SLOTS = 8;
 
-    public static final class Design {
+    public static class Design {
 
         public String name;
         public final TableConfig config;

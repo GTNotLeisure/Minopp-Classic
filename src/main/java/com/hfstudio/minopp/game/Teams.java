@@ -11,7 +11,7 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.Chat;
 
-public final class Teams {
+public class Teams {
 
     private Teams() {}
 

@@ -120,7 +120,9 @@ public class BlockMinoTable extends Block {
 
     public static final float DECK_LAYER_H = 1f / 36f;
 
-    /** How many cards thick the draw pile looks: always the same, drawing does not wear it down. */
+    /**
+     * How many cards thick the draw pile looks: always the same, drawing does not wear it down.
+     */
     public static int deckLayers(int deckSize) {
         return 20;
     }
@@ -216,15 +218,17 @@ public class BlockMinoTable extends Block {
                 .getTileEntity(gamePos.x, gamePos.y, gamePos.z) instanceof BlockEntityMinoTable tableEntity) {
                 if (tableEntity.game == null) return false;
                 AxisAlignedBB pileAabb = getPileAabb(tableEntity).getOffsetBoundingBox(gamePos.x, gamePos.y, gamePos.z);
-                EntityLivingBase cameraEntity = mc.renderViewEntity;
+                // World interactions use the player even when a detached camera renders the scene.
+                EntityPlayer player = mc.thePlayer;
+                if (player == null) return false;
                 float hitDistance = 20;
-                Vec3 rayBegin = cameraEntity.getPosition(1.0f);
-                Vec3 rayDir = cameraEntity.getLook(1.0f);
+                Vec3 rayBegin = player.getPosition(1.0f);
+                Vec3 rayDir = player.getLook(1.0f);
                 Vec3 rayEnd = rayBegin
                     .addVector(rayDir.xCoord * hitDistance, rayDir.yCoord * hitDistance, rayDir.zCoord * hitDistance);
                 return pileAabb.calculateIntercept(rayBegin, rayEnd) != null || pileAabb.isVecInside(rayBegin);
             }
-            return true;
+            return false;
         }
 
         public static AxisAlignedBB getPileAabb(BlockEntityMinoTable tableEntity) {

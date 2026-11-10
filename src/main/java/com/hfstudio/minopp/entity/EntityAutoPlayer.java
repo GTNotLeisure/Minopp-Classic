@@ -148,7 +148,7 @@ public class EntityAutoPlayer extends EntityLiving {
             }
         }
 
-        // the table's chunk is not loaded: wait for it rather than forgetting the seat
+        // Retain the seat while the table chunk is unloaded.
         if (!ItemHandCards.isLoaded(worldObj, tablePos)) return;
         lookAt(tablePos.x + 1.5, tablePos.y + 1, tablePos.z + 1.5);
         BlockEntityMinoTable tableEntity = ItemHandCards.getTable(worldObj, tablePos);
@@ -257,8 +257,7 @@ public class EntityAutoPlayer extends EntityLiving {
         return new ItemStack[5];
     }
 
-    // a seated bot at a table with nothing under its spot (a table in the sky) stands on thin air instead of falling
-    // and being pulled back over and over
+    // Suspend seated bots over empty space to prevent repeated falls and teleports.
     @Override
     public void onLivingUpdate() {
         if (!worldObj.isRemote && tablePos != null && getActive()) {

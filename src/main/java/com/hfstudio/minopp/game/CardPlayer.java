@@ -24,7 +24,9 @@ public class CardPlayer {
     public boolean eliminated = false;
     public boolean powerOn = true;
     public int team = -1;
-    /** Show 'Em No Mercy coin: which side was declared, whether it is spent, locked in, or armed to double a draw. */
+    /**
+     * Show 'Em No Mercy coin: which side was declared, whether it is spent, locked in, or armed to double a draw.
+     */
     public boolean coinNoMercy, coinUsed, coinLocked, coinArmed;
 
     public CardPlayer(EntityPlayer mcPlayer) {

@@ -55,19 +55,40 @@ public class HandScreen extends GuiScreen {
     private int edgeDir;
     private long edgeSince, edgeLast;
 
-    /** The hand as the screen shows it: narrowed to the search while the screen is open. */
+    private static CardGame viewGame;
+    private static CardPlayer viewPlayer;
+    private static String viewQuery;
+    private static boolean viewDark, viewOpen;
+    private static List<Card> viewHand;
+
+    public static void beginFrame() {
+        viewGame = null;
+        viewPlayer = null;
+        viewHand = null;
+    }
+
+    /**
+     * The hand as the screen shows it: narrowed to the search while the screen is open.
+     */
     public static List<Card> visibleHand(CardGame game, CardPlayer me) {
+        boolean open = isOpen();
+        if (viewGame == game && viewPlayer == me && viewDark == game.darkSide && viewOpen == open
+            && query.equals(viewQuery)) return viewHand;
         List<Card> hand = ItemHandCards.sortedHand(game, me);
-        if (query.isEmpty() || !isOpen()) return hand;
-        List<Card> out = new ArrayList<>();
-        for (Card c : hand) {
-            if (SearchMatch.matches(
-                game.face(c)
-                    .getDisplayName()
-                    .getUnformattedText(),
-                query)) out.add(c);
+        if (!query.isEmpty() && open) {
+            List<Card> out = new ArrayList<>();
+            for (Card c : hand) {
+                if (SearchMatch.matches(game.face(c).getDisplayName().getUnformattedText(), query)) out.add(c);
+            }
+            if (!out.isEmpty()) hand = out;
         }
-        return out.isEmpty() ? hand : out;
+        viewGame = game;
+        viewPlayer = me;
+        viewQuery = query;
+        viewDark = game.darkSide;
+        viewOpen = open;
+        viewHand = hand;
+        return hand;
     }
 
     private int lastMouseX = Integer.MIN_VALUE, lastMouseY = Integer.MIN_VALUE;
@@ -121,7 +142,9 @@ public class HandScreen extends GuiScreen {
     private static final int DEBUG_ROWS = 8;
     private static int debugScroll;
     private boolean draggingDebugBar;
-    /** {x, y, w, h, rows shown, rows in all} of the debug list, or null when there is none. */
+    /**
+     * {x, y, w, h, rows shown, rows in all} of the debug list, or null when there is none.
+     */
     private int[] debugPanel;
 
     // the toggle sits at the right edge; under it one column of actions and mechanics that the wheel scrolls
@@ -203,7 +226,7 @@ public class HandScreen extends GuiScreen {
         return Math.max(10, p[3] * p[4] / p[5]);
     }
 
-    // the thumb follows the pointer: its middle sits where the mouse is, so a click on the track jumps there too
+    // Center the scroll thumb on the pointer for both track clicks and dragging.
     private void dragDebugBar(int my) {
         int[] p = debugPanel;
         int thumb = debugThumb(), range = p[3] - thumb, maxScroll = p[5] - p[4];
@@ -252,7 +275,10 @@ public class HandScreen extends GuiScreen {
     }
 
     private void updateButtons() {
-        Context ctx = Context.resolve(mc);
+        updateButtons(Context.resolve(mc));
+    }
+
+    private void updateButtons(Context ctx) {
         boolean myTurn = ctx != null && ctx.isMyTurn();
         boolean drawn = ctx != null && ctx.game.currentPlayerPhase != CardGame.PlayerActionPhase.DISCARD_HAND;
         drawButton.displayString = Chat.translatable(drawn ? "gui.minopp.hand.pass" : "gui.minopp.hand.draw")
@@ -293,7 +319,7 @@ public class HandScreen extends GuiScreen {
         edgeTurn(ctx, mouseX, mouseY);
         BlockEntityMinoTableRenderer.deckHot = ctx.isMyTurn()
             && BlockEntityMinoTableRenderer.isOverDeck(mouseX, mouseY);
-        updateButtons();
+        updateButtons(ctx);
         super.drawScreen(mouseX, mouseY, partialTicks);
         drawDebugScrollbar(mouseX, mouseY);
 
@@ -607,7 +633,7 @@ public class HandScreen extends GuiScreen {
         C2SPlayCardPacket.Client.sendPlayNoCardC2S(ctx.pos, ItemHandCards.getCardPlayer(mc.thePlayer));
     }
 
-    public static final class Context {
+    public static class Context {
 
         public final BlockPos pos;
         public final BlockEntityMinoTable table;
@@ -632,7 +658,7 @@ public class HandScreen extends GuiScreen {
             BlockPos pos = ItemHandCards.getHandCardGamePos(mc.thePlayer);
             BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, pos);
             if (table == null || table.game == null) return null;
-            CardPlayer me = table.game.deAmputate(ItemHandCards.getCardPlayer(mc.thePlayer));
+            CardPlayer me = table.game.deAmputate(mc.thePlayer.getGameProfile().getId());
             if (me == null || me.hand.isEmpty()) return null;
             return new Context(pos, table, me);
         }

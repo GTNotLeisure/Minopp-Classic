@@ -46,13 +46,17 @@ public class PlayChoiceScreen extends GuiScreen {
 
     private boolean colorStep;
     private PlayerPicker picker;
-    /** The steps after the color: a number, the targets, the cards to discard. */
+    /**
+     * The steps after the color: a number, the targets, the cards to discard.
+     */
     private final boolean needsNumber;
     private final int pickCount;
     private boolean numberStep, targetsDone, pickStep;
     private final List<Card> pickable = new ArrayList<>();
     private final List<Integer> picked = new ArrayList<>();
-    /** Card rects of the pick grid last frame: {index, x, y, w, h}. */
+    /**
+     * Card rects of the pick grid last frame: {index, x, y, w, h}.
+     */
     private final List<int[]> pickRects = new ArrayList<>();
 
     public PlayChoiceScreen(BlockPos gamePos, CardPlayer player, Card card, PlayContext.PlayChoices choices,
@@ -73,7 +77,9 @@ public class PlayChoiceScreen extends GuiScreen {
         if (!needsColor) advance(false);
     }
 
-    /** Moves to the first step still open; sends the play once every step is done. */
+    /**
+     * Moves to the first step still open; sends the play once every step is done.
+     */
     private void advance(boolean init) {
         numberStep = pickStep = false;
         if (needsNumber && choices.number < 1) numberStep = true;
@@ -510,14 +516,14 @@ public class PlayChoiceScreen extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    // the hand laid out in rows over the lowered hand; picked cards lift and get a gold rim
+    // Raise selected cards above the grid and outline them in gold.
     private void drawPickGrid(String theme, int mouseX, int mouseY) {
         pickRects.clear();
         int n = pickable.size();
         int avail = width - 40;
         int cw = 30, gap = 4;
         int rows = 1;
-        // shrinks until the grid and its title fit between the top of the screen and the buttons
+        // Fit the grid and title above the buttons.
         while (true) {
             int perRow = Math.max(1, (avail + gap) / (cw + gap));
             rows = (n + perRow - 1) / perRow;

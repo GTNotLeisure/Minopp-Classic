@@ -7,7 +7,7 @@ import net.minecraft.util.IChatComponent;
 
 import com.hfstudio.minopp.util.NbtUtil;
 
-public final class Card implements Comparable<Card> {
+public class Card implements Comparable<Card> {
 
     public final int uid;
     public final CardFace light;

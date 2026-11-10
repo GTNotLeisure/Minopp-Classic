@@ -2,6 +2,7 @@ package com.hfstudio.minopp.render;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.client.Minecraft;
@@ -20,7 +21,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
-public final class ColorPicker3D {
+public class ColorPicker3D {
 
     private ColorPicker3D() {}
 
@@ -36,14 +37,25 @@ public final class ColorPicker3D {
     private static boolean ring;
     private static final float[] height = new float[4];
     private static long lastNanos = System.nanoTime();
-    /** Screen-space (GUI scale) bounds of each pillar of the last frame: {minX, minY, maxX, maxY, centerX, centerY}. */
+    /**
+     * Screen-space (GUI scale) bounds of each pillar of the last frame: {minX, minY, maxX, maxY, centerX, centerY}.
+     */
     private static final float[][] screenBounds = new float[4][];
+
+    /**
+     * Clears hit regions before world rendering so culled pickers cannot retain clickable bounds.
+     */
+    public static void beginFrame() {
+        Arrays.fill(screenBounds, null);
+    }
 
     public static void open(BlockPos pos, List<CardColor> choices) {
         open(pos, choices, false);
     }
 
-    /** {@code asRing}: a plain wild picks from a see-through ring cut in four; draw wilds pick from four blocks. */
+    /**
+     * {@code asRing}: a plain wild picks from a see-through ring cut in four; draw wilds pick from four blocks.
+     */
     public static void open(BlockPos pos, List<CardColor> choices, boolean asRing) {
         ring = asRing;
         tablePos = pos;
@@ -60,6 +72,7 @@ public final class ColorPicker3D {
         tablePos = null;
         colors = null;
         hovered = -1;
+        beginFrame();
     }
 
     public static boolean isActiveFor(BlockPos pos) {
@@ -86,7 +99,9 @@ public final class ColorPicker3D {
         return b == null ? null : new float[] { b[4], b[5] };
     }
 
-    /** Screen bounds (GUI scale) of a box in the current model space, or null when it is off screen. */
+    /**
+     * Screen bounds (GUI scale) of a box in the current model space, or null when it is off screen.
+     */
     public static float[] projectBoxNow(double x0, double y0, double z0, double x1, double y1, double z1) {
         MODELVIEW.clear();
         PROJECTION.clear();
@@ -112,7 +127,9 @@ public final class ColorPicker3D {
     private static final float[] REMOTE_HEIGHT = new float[4];
     private static long remoteNanos = System.nanoTime();
 
-    /** Another player choosing: the same picker, laid out toward their seat, with no hit testing. */
+    /**
+     * Another player choosing: the same picker, laid out toward their seat, with no hit testing.
+     */
     public static void renderRemote(double dirX, double dirZ, List<CardColor> choices, boolean asRing, int hover,
         long since) {
         draw(dirX, dirZ, choices, asRing, hover, since, REMOTE_HEIGHT, false);
@@ -150,15 +167,19 @@ public final class ColorPicker3D {
 
         FloatBuffer modelview = MODELVIEW, projection = PROJECTION;
         IntBuffer viewport = VIEWPORT;
-        modelview.clear();
-        projection.clear();
-        viewport.clear();
-        GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
-        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projection);
-        GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
-        Minecraft mc = Minecraft.getMinecraft();
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        int scale = res.getScaleFactor();
+        int scale = 1, displayHeight = 0;
+        if (local) {
+            modelview.clear();
+            projection.clear();
+            viewport.clear();
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
+            GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projection);
+            GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
+            Minecraft mc = Minecraft.getMinecraft();
+            ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+            scale = res.getScaleFactor();
+            displayHeight = mc.displayHeight;
+        }
 
         int count = Math.min(4, colors.size());
         for (int i = 0; i < count; i++) {
@@ -175,16 +196,17 @@ public final class ColorPicker3D {
                 double ox = 1.5 + Math.cos(mid) * 0.05, oz = 1.5 + Math.sin(mid) * 0.05;
                 drawQuarter(ox, oz, a0, a1, 0, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
                 arrow(ox, oz, mid, 0.18, 0.36, 0.085, y1 + 0.004, hot ? 0.95f : 0.8f);
-                double[][] pts = new double[14][];
-                for (int k = 0; k < 6; k++) {
-                    double a = a0 + (a1 - a0) * k / 5;
-                    pts[k] = new double[] { 1.5 + Math.cos(a) * 0.56, y0, 1.5 + Math.sin(a) * 0.56 };
-                    pts[k + 6] = new double[] { 1.5 + Math.cos(a) * 0.56, y1, 1.5 + Math.sin(a) * 0.56 };
+                if (local) {
+                    double[][] pts = new double[14][];
+                    for (int k = 0; k < 6; k++) {
+                        double a = a0 + (a1 - a0) * k / 5;
+                        pts[k] = new double[] { 1.5 + Math.cos(a) * 0.56, y0, 1.5 + Math.sin(a) * 0.56 };
+                        pts[k + 6] = new double[] { 1.5 + Math.cos(a) * 0.56, y1, 1.5 + Math.sin(a) * 0.56 };
+                    }
+                    pts[12] = new double[] { 1.5, y0, 1.5 };
+                    pts[13] = new double[] { 1.5, y1, 1.5 };
+                    screenBounds[i] = projectPoints(pts, modelview, projection, viewport, scale, displayHeight);
                 }
-                pts[12] = new double[] { 1.5, y0, 1.5 };
-                pts[13] = new double[] { 1.5, y1, 1.5 };
-                if (local)
-                    screenBounds[i] = projectPoints(pts, modelview, projection, viewport, scale, mc.displayHeight);
                 continue;
             }
             float alpha = hot ? 0.95f : 0.78f;
@@ -201,7 +223,7 @@ public final class ColorPicker3D {
                 projection,
                 viewport,
                 scale,
-                mc.displayHeight);
+                displayHeight);
         }
 
         GL11.glEnable(GL11.GL_CULL_FACE);

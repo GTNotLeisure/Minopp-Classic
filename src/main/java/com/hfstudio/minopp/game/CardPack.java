@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class CardPack {
+public class CardPack {
 
     public static final String CLASSIC = "classic";
     public static final String NO_MERCY = "no_mercy";
@@ -58,7 +58,9 @@ public final class CardPack {
             return CardTypes.get(typeId).wild;
         }
 
-        /** Printed once per number instead of once per color: wild cards and one-color cards. */
+        /**
+         * Printed once per number instead of once per color: wild cards and one-color cards.
+         */
         public boolean single() {
             return isWild() || CardTypes.get(typeId).fixedColor != null;
         }
@@ -140,7 +142,7 @@ public final class CardPack {
     private static final int[] ZERO_TO_NINE = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     private static final int[] NONE = {};
 
-    private static final class Builder {
+    private static class Builder {
 
         private final String id;
         private boolean backSideOnly;

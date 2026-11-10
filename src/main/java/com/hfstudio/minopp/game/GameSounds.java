@@ -4,7 +4,7 @@ import net.minecraft.util.ResourceLocation;
 
 import com.hfstudio.minopp.Mino;
 
-public final class GameSounds {
+public class GameSounds {
 
     private GameSounds() {}
 

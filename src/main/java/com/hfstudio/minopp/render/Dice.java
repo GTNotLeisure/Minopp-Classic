@@ -25,7 +25,7 @@ import cpw.mods.fml.relauncher.SideOnly;
  * back. Where it comes to rest decides nothing: the art is turned onto the solid so the rolled number ends on top.
  */
 @SideOnly(Side.CLIENT)
-public final class Dice {
+public class Dice {
 
     private Dice() {}
 
@@ -34,17 +34,23 @@ public final class Dice {
     private static final double GRAVITY = -14, RESTITUTION = 0.38, FRICTION = 0.5;
     private static final double TABLE_CENTER = 1.5, TABLE_REACH = 1.2;
 
-    /** A convex die of unit circumradius: faces as vertex index loops, counter-clockwise seen from outside. */
-    static final class Poly {
+    /**
+     * A convex die of unit circumradius: faces as vertex index loops, counter-clockwise seen from outside.
+     */
+    public static class Poly {
 
         final double[][] v;
         final int[][] faces;
         final double[][] normals;
-        /** Number printed on each face, or on each vertex for the D4. */
+        /**
+         * Number printed on each face, or on each vertex for the D4.
+         */
         final int[] values;
         final boolean vertexValues;
         final double inradius;
-        /** Atlas coordinates {u, v} of every corner of every face. */
+        /**
+         * Atlas coordinates {u, v} of every corner of every face.
+         */
         double[][][] uv;
 
         Poly(double[][] v, int[][] faces, double[][] normals, int[] values, boolean vertexValues, double inradius) {
@@ -56,7 +62,9 @@ public final class Dice {
             this.inradius = inradius;
         }
 
-        /** Local direction that points up when {@code result} is rolled. */
+        /**
+         * Local direction that points up when {@code result} is rolled.
+         */
         double[] upFor(int result) {
             for (int i = 0; i < values.length; i++) {
                 if (values[i] == result) return vertexValues ? v[i] : normals[i];
@@ -94,7 +102,9 @@ public final class Dice {
         return (tiles(sides) + cols(sides) - 1) / cols(sides);
     }
 
-    /** The D4 faces of the art: the numbers at its top, bottom left and bottom right corners. */
+    /**
+     * The D4 faces of the art: the numbers at its top, bottom left and bottom right corners.
+     */
     private static final int[][] D4_TILES = { { 2, 1, 3 }, { 3, 1, 4 }, { 2, 3, 4 }, { 2, 4, 1 } };
 
     private static int d4Tile(Poly p, int[] face) {
@@ -297,8 +307,10 @@ public final class Dice {
         return new Poly(v, faces, n, values, vertexValues, inradius);
     }
 
-    /** A throw played back frame by frame: positions, orientations and the frames where it hits the table. */
-    static final class Roll {
+    /**
+     * A throw played back frame by frame: positions, orientations and the frames where it hits the table.
+     */
+    public static class Roll {
 
         final int sides, result;
         final List<double[]> pos = new ArrayList<>();
@@ -316,7 +328,9 @@ public final class Dice {
         }
     }
 
-    /** A die thrown from {@code start} towards {@code target}, ending with {@code result} on top. */
+    /**
+     * A die thrown from {@code start} towards {@code target}, ending with {@code result} on top.
+     */
     static Roll simulate(int sides, int result, long seed, double[] start, double[] target, double floor, double r) {
         Poly poly = poly(sides);
         Roll roll = new Roll(sides, result);
@@ -326,7 +340,7 @@ public final class Dice {
             if (rotate(q, poly.normals[f])[1] < rotate(q, poly.normals[down])[1]) down = f;
         }
         q = settle(roll, q, rotate(q, poly.normals[down]), floor + r * poly.inradius);
-        // the die lies the same either way: its art is turned with a turn of the solid onto itself instead of the die
+        // Rotate the face labels by a solid symmetry to preserve the simulated pose.
         double[] localUp = rotate(conj(q), new double[] { 0, 1, 0 });
         double[][] features = poly.vertexValues ? poly.v : poly.normals;
         double[] top = features[0];
@@ -335,7 +349,9 @@ public final class Dice {
         return roll;
     }
 
-    /** A coin of radius {@code r} thrown onto the table, ending with its top side up when {@code topUp}. */
+    /**
+     * A coin of radius {@code r} thrown onto the table, ending with its top side up when {@code topUp}.
+     */
     static Roll simulateCoin(boolean topUp, long seed, double[] start, double[] target, double floor, double r,
         double thickness) {
         Roll roll = new Roll(2, topUp ? 1 : 2);
@@ -461,7 +477,7 @@ public final class Dice {
         }
     }
 
-    // nothing rolls off the table: its rim pushes back
+    // Constrain the roll to the table rim.
     private static void keepOnTable(double[] x, double[] v) {
         double dx = x[0] - TABLE_CENTER, dz = x[2] - TABLE_CENTER, d = Math.sqrt(dx * dx + dz * dz);
         if (d < TABLE_REACH) return;
@@ -487,7 +503,9 @@ public final class Dice {
         return q1;
     }
 
-    /** A turn of the solid onto itself that takes the local direction {@code from} to {@code to}. */
+    /**
+     * A turn of the solid onto itself that takes the local direction {@code from} to {@code to}.
+     */
     private static double[] symmetry(Poly p, double[] from, double[] to) {
         double[] a = p.v[0];
         int k = 1;
@@ -552,22 +570,46 @@ public final class Dice {
         return norm4(new double[] { (m[1][0] - m[0][1]) / s, (m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, s / 4 });
     }
 
-    // ------------------------------------------------------------------ drawing
-
-    // created on first draw, so the geometry and the simulation also run without a GL context
-    private static final class Gl {
+    // Defer GL buffer initialization until the first draw.
+    private static class Gl {
 
         static final FloatBuffer MATRIX = BufferUtils.createFloatBuffer(16);
     }
 
     private static final Map<Integer, ResourceLocation> ART = new HashMap<>(), BADGE = new HashMap<>();
+    private static final int COIN_SEGMENTS = 24;
+    private static final double[][] COIN_RIM = coinRim();
+    private static final double[][] COIN_NORMALS = coinNormals();
+
+    private static double[][] coinRim() {
+        double[][] rim = new double[COIN_SEGMENTS + 1][2];
+        for (int i = 0; i <= COIN_SEGMENTS; i++) {
+            double angle = Math.PI * 2 * i / COIN_SEGMENTS;
+            rim[i][0] = Math.cos(angle);
+            rim[i][1] = Math.sin(angle);
+        }
+        return rim;
+    }
+
+    private static double[][] coinNormals() {
+        double[][] normals = new double[COIN_SEGMENTS][3];
+        for (int i = 0; i < COIN_SEGMENTS; i++) {
+            double a0 = Math.PI * 2 * i / COIN_SEGMENTS, a1 = Math.PI * 2 * (i + 1) / COIN_SEGMENTS;
+            double angle = (a0 + a1) / 2;
+            normals[i][0] = Math.cos(angle);
+            normals[i][2] = Math.sin(angle);
+        }
+        return normals;
+    }
 
     private static ResourceLocation art(int sides, boolean badge) {
         return (badge ? BADGE : ART)
             .computeIfAbsent(sides, s -> Mino.id("textures/fx/dice_d" + s + (badge ? "_hud" : "") + ".png"));
     }
 
-    /** Position and orientation at {@code seconds}: {x, y, z} and {w, x, y, z}. */
+    /**
+     * Position and orientation at {@code seconds}: {x, y, z} and {w, x, y, z}.
+     */
     private static double[][] pose(Roll roll, double seconds) {
         double fi = Math.min(roll.frames() - 1, Math.max(0, seconds * FPS));
         int i0 = (int) fi, i1 = Math.min(roll.frames() - 1, i0 + 1);
@@ -577,7 +619,9 @@ public final class Dice {
             slerp(roll.rot.get(i0), roll.rot.get(i1), f) };
     }
 
-    /** Draws the die at frame time {@code seconds}, in table space; returns its center. */
+    /**
+     * Draws the die at frame time {@code seconds}, in table space; returns its center.
+     */
     static double[] draw(Roll roll, double seconds, double r, float alpha) {
         Poly poly = poly(roll.sides);
         double[][] pose = pose(roll, seconds);
@@ -619,7 +663,6 @@ public final class Dice {
         double[][] pose = pose(roll, seconds);
         double[] p = pose[0], q = pose[1];
         double h = thickness / 2 / r;
-        int seg = 24;
         GL11.glPushMatrix();
         GL11.glTranslated(p[0], p[1], p[2]);
         multiply(q);
@@ -628,15 +671,15 @@ public final class Dice {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         Tessellator t = Tessellator.instance;
         t.startDrawingQuads();
-        for (int i = 0; i < seg; i++) {
-            double a0 = Math.PI * 2 * i / seg, a1 = Math.PI * 2 * (i + 1) / seg, am = (a0 + a1) / 2;
-            double[] n = rotate(q, new double[] { Math.cos(am), 0, Math.sin(am) });
+        for (int i = 0; i < COIN_SEGMENTS; i++) {
+            double[] start = COIN_RIM[i], end = COIN_RIM[i + 1];
+            double[] n = rotate(q, COIN_NORMALS[i]);
             int c = shade(rimRgb, 0.55 + 0.45 * Math.max(0, dot(n, LIGHT)));
             t.setColorRGBA((c >> 16) & 255, (c >> 8) & 255, c & 255, (int) (alpha * 255));
-            t.addVertex(Math.cos(a0), -h, Math.sin(a0));
-            t.addVertex(Math.cos(a1), -h, Math.sin(a1));
-            t.addVertex(Math.cos(a1), h, Math.sin(a1));
-            t.addVertex(Math.cos(a0), h, Math.sin(a0));
+            t.addVertex(start[0], -h, start[1]);
+            t.addVertex(end[0], -h, end[1]);
+            t.addVertex(end[0], h, end[1]);
+            t.addVertex(start[0], h, start[1]);
         }
         t.draw();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -650,11 +693,11 @@ public final class Dice {
             t.startDrawing(GL11.GL_TRIANGLE_FAN);
             t.setColorRGBA(g, g, g, (int) (alpha * 255));
             t.addVertexWithUV(0, y, 0, 0.5, 0.5);
-            for (int i = 0; i <= seg; i++) {
-                double a = Math.PI * 2 * i / seg;
-                // the underside is mirrored so its art reads the right way round from below
-                double u = 0.5 + 0.5 * Math.cos(a) * (side == 0 ? 1 : -1), v = 0.5 + 0.5 * Math.sin(a);
-                t.addVertexWithUV(Math.cos(a), y, Math.sin(a), u, v);
+            for (int i = 0; i <= COIN_SEGMENTS; i++) {
+                double[] point = COIN_RIM[i];
+                // Mirror the underside texture for viewing from below.
+                double u = 0.5 + 0.5 * point[0] * (side == 0 ? 1 : -1), v = 0.5 + 0.5 * point[1];
+                t.addVertexWithUV(point[0], y, point[1], u, v);
             }
             t.draw();
         }
@@ -663,7 +706,9 @@ public final class Dice {
         return p;
     }
 
-    /** The corner badge: the face with the rolled number, its art straight from the texture. */
+    /**
+     * The corner badge: the face with the rolled number, its art straight from the texture.
+     */
     public static void drawBadge(int sides, int result, float cx, float cy, float size, float alpha) {
         int cols = cols(sides), rows = rows(sides);
         int tile = result - 1;
@@ -718,17 +763,26 @@ public final class Dice {
 
     private static void multiply(double[] q) {
         double w = q[0], x = q[1], y = q[2], z = q[3];
-        float[] m = { (float) (1 - 2 * (y * y + z * z)), (float) (2 * (x * y + w * z)), (float) (2 * (x * z - w * y)),
-            0, (float) (2 * (x * y - w * z)), (float) (1 - 2 * (x * x + z * z)), (float) (2 * (y * z + w * x)), 0,
-            (float) (2 * (x * z + w * y)), (float) (2 * (y * z - w * x)), (float) (1 - 2 * (x * x + y * y)), 0, 0, 0, 0,
-            1 };
         Gl.MATRIX.clear();
-        Gl.MATRIX.put(m);
+        Gl.MATRIX.put((float) (1 - 2 * (y * y + z * z)));
+        Gl.MATRIX.put((float) (2 * (x * y + w * z)));
+        Gl.MATRIX.put((float) (2 * (x * z - w * y)));
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put((float) (2 * (x * y - w * z)));
+        Gl.MATRIX.put((float) (1 - 2 * (x * x + z * z)));
+        Gl.MATRIX.put((float) (2 * (y * z + w * x)));
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put((float) (2 * (x * z + w * y)));
+        Gl.MATRIX.put((float) (2 * (y * z - w * x)));
+        Gl.MATRIX.put((float) (1 - 2 * (x * x + y * y)));
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put(0);
+        Gl.MATRIX.put(1);
         Gl.MATRIX.flip();
         GL11.glMultMatrix(Gl.MATRIX);
     }
-
-    // ------------------------------------------------------------------ vector and quaternion math ({w, x, y, z})
 
     static double dot(double[] a, double[] b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -773,8 +827,13 @@ public final class Dice {
     }
 
     static double[] rotate(double[] q, double[] v) {
-        double[] r = mul(mul(q, new double[] { 0, v[0], v[1], v[2] }), new double[] { q[0], -q[1], -q[2], -q[3] });
-        return new double[] { r[1], r[2], r[3] };
+        double rw = q[0] * 0 - q[1] * v[0] - q[2] * v[1] - q[3] * v[2];
+        double rx = q[0] * v[0] + q[1] * 0 + q[2] * v[2] - q[3] * v[1];
+        double ry = q[0] * v[1] - q[1] * v[2] + q[2] * 0 + q[3] * v[0];
+        double rz = q[0] * v[2] + q[1] * v[1] - q[2] * v[0] + q[3] * 0;
+        double w = q[0], x = -q[1], y = -q[2], z = -q[3];
+        return new double[] { rw * x + rx * w + ry * z - rz * y, rw * y - rx * z + ry * w + rz * x,
+            rw * z + rx * y - ry * x + rz * w };
     }
 
     private static double[] fromTo(double[] a, double[] b) {
