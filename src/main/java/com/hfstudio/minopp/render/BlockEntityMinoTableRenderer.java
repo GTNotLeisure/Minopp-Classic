@@ -21,7 +21,6 @@ import org.lwjgl.opengl.GL12;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.game.Card;
-import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
@@ -134,7 +133,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
             if (dir != null) ColorPicker3D.renderRemote(
                 dir[0],
                 dir[1],
-                CardColor.forSide(game.darkSide),
+                game.colors(),
                 blockEntity.choosingRing,
                 blockEntity.choosingHover,
                 blockEntity.choosingSeenAt);

@@ -131,7 +131,7 @@ public class CardGame {
     // the color in the same position: red and pink, yellow and teal, ...)
     private List<Card> debugCards(boolean dark) {
         Set<CardFace> light = new LinkedHashSet<>(), darkFaces = new LinkedHashSet<>();
-        for (CardFace[] pair : debugCatalog()) {
+        for (CardFace[] pair : debugCatalog(rule(GameRules.EIGHT_COLORS))) {
             light.add(pair[0]);
             if (pair[1] != null) darkFaces.add(pair[1]);
         }
@@ -146,13 +146,8 @@ public class CardGame {
     }
 
     private static CardFace counterpart(CardFace f, Set<CardFace> other, boolean toDark) {
-        CardColor color = f.color.isWild() ? CardColor.WILD
-            : CardColor.forSide(toDark)
-                .get(
-                    Math.max(
-                        0,
-                        CardColor.forSide(!toDark)
-                            .indexOf(f.color)));
+        CardColor color = f.color.side == (toDark ? CardColor.Side.DARK : CardColor.Side.LIGHT) ? f.color
+            : f.color.flipPartner();
         CardFace same = new CardFace(f.type().id, color, f.number);
         if (other.contains(same)) return same;
         for (CardFace o : other) if (o.color == color && o.isNumber() && o.number == Math.max(0, f.number)) return o;
@@ -217,13 +212,11 @@ public class CardGame {
             case "flip" -> {
                 darkSide = !darkSide;
                 CardFace top = topCard == null ? null : topFace();
-                currentColor = top != null && !top.isWild() ? top.color
-                    : CardColor.forSide(darkSide)
-                        .get(0);
+                currentColor = top != null && !top.isWild() ? top.color : colors().get(0);
             }
             case "reverse" -> isAntiClockwise = !isAntiClockwise;
             case "color" -> {
-                List<CardColor> colors = CardColor.forSide(darkSide);
+                List<CardColor> colors = colors();
                 currentColor = colors.get((colors.indexOf(currentColor) + 1) % colors.size());
             }
             case "penalty" -> {
@@ -290,7 +283,7 @@ public class CardGame {
             darkSide = false;
             CardFace top = topCard == null ? null : topFace();
             currentColor = top != null && !top.isWild() ? top.color
-                : CardColor.forSide(false)
+                : config().colors(false)
                     .get(0);
         }
         List<CardFace> pool = on ? new ArrayList<>(config().darkFaces()) : null;
@@ -315,10 +308,14 @@ public class CardGame {
     }
 
     public static List<CardFace[]> debugCatalog() {
+        return debugCatalog(false);
+    }
+
+    public static List<CardFace[]> debugCatalog(boolean expandedColors) {
         Set<CardFace> light = new LinkedHashSet<>(), dark = new LinkedHashSet<>();
         for (CardPack pack : CardPack.all()) {
             for (CardPack.Entry entry : pack.entries) {
-                (entry.dark() || pack.backSideOnly ? dark : light).addAll(pack.faces(entry.key()));
+                (entry.dark() || pack.backSideOnly ? dark : light).addAll(pack.faces(entry.key(), expandedColors));
             }
         }
         List<CardFace> l = new ArrayList<>(light), d = new ArrayList<>(dark);
@@ -749,8 +746,7 @@ public class CardGame {
         boolean useFlex = choices.useFlex && !isCut;
         CardType.Choice choice = type.choiceFor(useFlex);
         if (choice.needsColor()) {
-            CardColor.Side side = darkSide ? CardColor.Side.DARK : CardColor.Side.LIGHT;
-            if (choices.color == null || choices.color.side != side) {
+            if (choices.color == null || !colors().contains(choices.color)) {
                 choices.color = mostCommonColor(cardPlayer);
             }
         }
@@ -1105,9 +1101,7 @@ public class CardGame {
             }
             d.answerTarget = target;
         } else if (d.type == PendingDecision.Type.ROULETTE_COLOR) {
-            if (answer < 0 || answer >= CardColor.values().length
-                || !CardColor.forSide(darkSide)
-                    .contains(CardColor.values()[answer])) {
+            if (answer < 0 || answer >= CardColor.values().length || !colors().contains(CardColor.values()[answer])) {
                 return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
             }
             d.answer = answer;
@@ -1143,9 +1137,7 @@ public class CardGame {
                     throw new IllegalStateException("Automatic answer did not complete decision: " + d.typeId);
             }
             case CHALLENGE -> d.answer = p != null && p.hand.size() > 6 && random.nextFloat() < 0.35f ? 1 : 0;
-            case ROULETTE_COLOR -> d.answer = (p != null ? mostCommonColor(p)
-                : CardColor.forSide(darkSide)
-                    .get(0)).ordinal();
+            case ROULETTE_COLOR -> d.answer = (p != null ? mostCommonColor(p) : colors().get(0)).ordinal();
             case POINT_TAKEN -> {
                 List<CardPlayer> others = activePlayers();
                 others.removeIf(o -> o.uuid.equals(d.player));
@@ -1186,8 +1178,7 @@ public class CardGame {
             case ROULETTE_COLOR -> {
                 CardPlayer victim = deAmputate(first.player);
                 CardColor color = CardColor.values()[Math.min(first.answer, CardColor.values().length - 1)];
-                if (!CardColor.forSide(darkSide)
-                    .contains(color)) color = mostCommonColor(victim);
+                if (!colors().contains(color)) color = mostCommonColor(victim);
                 int count = drawUntilColor(victim, color, report);
                 currentColor = color;
                 report.messageAll(
@@ -2623,8 +2614,12 @@ public class CardGame {
         }
     }
 
+    public List<CardColor> colors() {
+        return config().colors(darkSide);
+    }
+
     public CardColor mostCommonColor(CardPlayer player) {
-        List<CardColor> colors = CardColor.forSide(darkSide);
+        List<CardColor> colors = colors();
         int[] counts = new int[CardColor.values().length];
         for (Card c : player.hand) counts[face(c).color.ordinal()]++;
         CardColor best = colors.get(random.nextInt(colors.size()));

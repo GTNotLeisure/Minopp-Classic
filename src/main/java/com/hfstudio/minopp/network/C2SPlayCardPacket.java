@@ -82,7 +82,12 @@ public class C2SPlayCardPacket {
         boolean holdsAccess) {
         boolean active = packet.readBoolean(), ring = packet.readBoolean();
         if (active && !holdsAccess) return;
-        int hover = Math.max(-1, Math.min(3, packet.readByte()));
+        int hover = Math.max(
+            -1,
+            Math.min(
+                tableEntity.game.colors()
+                    .size() - 1,
+                packet.readByte()));
         // only whoever is choosing right now may show a picker, and only changes go out to the table
         boolean mayChoose = tableEntity.game.currentPlayer()
             .equals(cardPlayer)

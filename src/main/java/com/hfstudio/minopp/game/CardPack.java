@@ -83,7 +83,13 @@ public class CardPack {
         }
 
         public int totalCards(int count) {
-            int perVariant = single() ? count : count * 4;
+            return totalCards(count, false);
+        }
+
+        public int totalCards(int count, boolean expandedColors) {
+            int perVariant = single() ? count
+                : count * CardColor.forSide(dark, expandedColors)
+                    .size();
             return perVariant * Math.max(1, numbers.length);
         }
     }
@@ -102,19 +108,21 @@ public class CardPack {
         private final Entry entry;
         private final String countKey;
         private volatile List<CardFace> faces;
+        private volatile List<CardFace> expandedFaces;
 
         private EntryData(Entry entry, String countKey) {
             this.entry = entry;
             this.countKey = countKey;
         }
 
-        private List<CardFace> faces() {
-            List<CardFace> cached = faces;
+        private List<CardFace> faces(boolean expandedColors) {
+            List<CardFace> cached = expandedColors ? expandedFaces : faces;
             if (cached != null) return cached;
             if (!CardTypes.exists(entry.typeId))
                 throw new IllegalArgumentException("Unknown card type: " + entry.typeId);
-            cached = List.copyOf(TableConfig.entryFaces(entry));
-            faces = cached;
+            cached = List.copyOf(TableConfig.entryFaces(entry, expandedColors));
+            if (expandedColors) expandedFaces = cached;
+            else faces = cached;
             return cached;
         }
     }
@@ -164,9 +172,13 @@ public class CardPack {
      * Returns immutable face templates in entry order, shared safely by the client and game threads.
      */
     public List<CardFace> faces(String entryKey) {
+        return faces(entryKey, false);
+    }
+
+    public List<CardFace> faces(String entryKey, boolean expandedColors) {
         EntryData data = entryIndex.get(entryKey);
         if (data == null) throw new IllegalArgumentException("Unknown entry: " + countKey(entryKey));
-        return data.faces();
+        return data.faces(expandedColors);
     }
 
     private static final Map<String, CardPack> REGISTRY = new LinkedHashMap<>();
@@ -528,6 +540,7 @@ public class CardPack {
         .register();
 
     public static final CardPack PACK_INFINITY = new Builder(INFINITY).entry("replay", 1)
+        .rule(GameRules.EIGHT_COLORS, 1)
         .entry("draw4", 1)
         .entry("wild_draw2", 1)
         .entry("wild_draw4", 1)

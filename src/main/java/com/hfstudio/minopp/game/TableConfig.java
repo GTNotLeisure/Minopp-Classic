@@ -299,6 +299,7 @@ public class TableConfig {
     }
 
     private Object2IntLinkedOpenHashMap<CardFace> mergedCounts(boolean backSide) {
+        boolean expandedColors = getBool(GameRules.EIGHT_COLORS);
         Object2IntLinkedOpenHashMap<CardFace> defaults = new Object2IntLinkedOpenHashMap<>();
         Object2IntLinkedOpenHashMap<CardFace> overridden = new Object2IntLinkedOpenHashMap<>();
         for (CardPack pack : CardPack.all()) {
@@ -308,7 +309,7 @@ public class TableConfig {
                 int count = getCount(pack, entry);
                 if (count <= 0 && !override) continue;
                 Object2IntMap<CardFace> target = override ? overridden : defaults;
-                for (CardFace face : pack.faces(entry.key())) target.mergeInt(face, count, Math::max);
+                for (CardFace face : pack.faces(entry.key(), expandedColors)) target.mergeInt(face, count, Math::max);
             }
         }
         defaults.putAll(overridden);
@@ -316,6 +317,10 @@ public class TableConfig {
     }
 
     public static List<CardFace> entryFaces(CardPack.Entry entry) {
+        return entryFaces(entry, false);
+    }
+
+    public static List<CardFace> entryFaces(CardPack.Entry entry, boolean expandedColors) {
         List<CardFace> faces = new ArrayList<>();
         CardType type = CardTypes.get(entry.typeId());
         int[] numbers = entry.numbers();
@@ -326,12 +331,16 @@ public class TableConfig {
             } else if (type.fixedColor != null) {
                 faces.add(new CardFace(type.id, type.fixedColor, number));
             } else {
-                for (CardColor color : CardColor.forSide(entry.dark())) {
+                for (CardColor color : CardColor.forSide(entry.dark(), expandedColors)) {
                     faces.add(new CardFace(type.id, color, number, entry.flexColor() ? color.flexPartner() : null));
                 }
             }
         }
         return faces;
+    }
+
+    public List<CardColor> colors(boolean darkSide) {
+        return CardColor.forSide(darkSide, getBool(GameRules.EIGHT_COLORS));
     }
 
     public int countDeckSize() {
@@ -397,9 +406,10 @@ public class TableConfig {
         return base.isEmpty() ? buildDefaultDarkFaces() : base;
     }
 
-    private static List<CardFace> buildDefaultDarkFaces() {
+    private List<CardFace> buildDefaultDarkFaces() {
         TableConfig def = new TableConfig();
         def.set(GameRules.FLIP_MODE, 1);
+        def.set(GameRules.EIGHT_COLORS, getInt(GameRules.EIGHT_COLORS));
         return def.buildFaces(true);
     }
 

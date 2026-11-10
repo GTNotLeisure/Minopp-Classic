@@ -212,6 +212,8 @@ public class GameSettingsScreen extends GuiScreen {
         return configViews.computeIfAbsent(config, ConfigView::new);
     }
 
+    private boolean expandedPalette;
+
     private void refreshTiles(BlockEntityMinoTable table) {
         long nextResources = ThemeManager.INSTANCE.resourceRevision();
         long nextTypes = CardTypes.revision(), nextPacks = CardPack.revision(), nextConflicts = Conflicts.revision();
@@ -219,8 +221,13 @@ public class GameSettingsScreen extends GuiScreen {
         boolean catalogChanged = cardTypes != nextTypes || cardPacks != nextPacks
             || ruleRevision != nextRules
             || dependencyRevision != nextDependencies;
-        boolean contentChanged = catalogChanged || resources != nextResources || conflictRevision != nextConflicts;
-        if (catalogChanged) {
+        boolean nextPalette = table.config.getBool(GameRules.EIGHT_COLORS);
+        boolean paletteChanged = expandedPalette != nextPalette;
+        expandedPalette = nextPalette;
+        boolean contentChanged = catalogChanged || paletteChanged
+            || resources != nextResources
+            || conflictRevision != nextConflicts;
+        if (catalogChanged || paletteChanged) {
             configViews.clear();
             packSamples.clear();
             entrySamples.clear();
@@ -482,7 +489,7 @@ public class GameSettingsScreen extends GuiScreen {
                     String packName = tr(pack.langKey());
                     List<Tile> list = new ArrayList<>();
                     for (CardPack.Entry entry : pack.entries) {
-                        List<CardFace> faces = pack.faces(entry.key());
+                        List<CardFace> faces = pack.faces(entry.key(), expandedPalette);
                         if (shown.containsAll(faces)) continue;
                         shown.addAll(faces);
                         Tile t = new Tile(
@@ -498,9 +505,14 @@ public class GameSettingsScreen extends GuiScreen {
                         int def = entry.count();
                         int c = effectiveCount(pack, entry);
                         if (entry.single()) {
-                            t.desc.add(tr("gui.minopp.cards.count_wild", entry.totalCards(c), entry.totalCards(def)));
+                            t.desc.add(
+                                tr(
+                                    "gui.minopp.cards.count_wild",
+                                    entry.totalCards(c, expandedPalette),
+                                    entry.totalCards(def, expandedPalette)));
                         } else {
-                            t.desc.add(tr("gui.minopp.cards.count_color", c, entry.totalCards(c), def));
+                            t.desc
+                                .add(tr("gui.minopp.cards.count_color", c, entry.totalCards(c, expandedPalette), def));
                         }
                         String linked = ruleNames(TableConfig.rulesForCard(entry.typeId()));
                         if (!linked.isEmpty()) t.desc.add(tr("gui.minopp.cards.enables", linked));
@@ -947,7 +959,7 @@ public class GameSettingsScreen extends GuiScreen {
     private int effectiveCount(CardPack pack, CardPack.Entry entry) {
         if (effectiveCounts.containsKey(entry)) return effectiveCounts.getInt(entry);
         int count = 0;
-        for (CardFace face : pack.faces(entry.key())) count = Math.max(count, effective.getInt(face));
+        for (CardFace face : pack.faces(entry.key(), expandedPalette)) count = Math.max(count, effective.getInt(face));
         effectiveCounts.put(entry, count);
         return count;
     }
@@ -968,9 +980,10 @@ public class GameSettingsScreen extends GuiScreen {
     private String sharedWith(CardPack owner, List<CardFace> faces) {
         if (facePacks == null) {
             facePacks = new HashMap<>();
-            for (CardPack pack : CardPack.all()) for (CardPack.Entry e : pack.entries)
-                for (CardFace f : pack.faces(e.key())) facePacks.computeIfAbsent(f, k -> new LinkedHashSet<>())
-                    .add(pack);
+            for (CardPack pack : CardPack.all())
+                for (CardPack.Entry e : pack.entries) for (CardFace f : pack.faces(e.key(), expandedPalette))
+                    facePacks.computeIfAbsent(f, k -> new LinkedHashSet<>())
+                        .add(pack);
         }
         Set<String> names = new LinkedHashSet<>();
         for (CardFace f : faces)
@@ -1495,11 +1508,14 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private static CardFace sampleFace(CardPack.Entry entry, int variant) {
+        return sampleFace(entry, variant, false);
+    }
+
+    private static CardFace sampleFace(CardPack.Entry entry, int variant, boolean expandedColors) {
+        List<CardColor> colors = CardColor.forSide(entry.dark(), expandedColors);
         CardType type = CardTypes.get(entry.typeId());
         CardColor color = type.wild ? CardColor.WILD
-            : type.fixedColor != null ? type.fixedColor
-                : CardColor.forSide(entry.dark())
-                    .get(variant % 4);
+            : type.fixedColor != null ? type.fixedColor : colors.get(Math.floorMod(variant, colors.size()));
         int[] numbers = entry.numbers();
         int number = numbers.length > 0 ? numbers[Math.min(variant, numbers.length - 1)] : -1;
         return new CardFace(type.id, color, number, entry.flexColor() && !entry.single() ? color.flexPartner() : null);
@@ -1508,7 +1524,10 @@ public class GameSettingsScreen extends GuiScreen {
     private List<CardFace> entrySamples(CardPack.Entry entry) {
         return entrySamples.computeIfAbsent(entry, key -> {
             List<CardFace> samples = new ArrayList<>();
-            for (int i = 0; i < (key.single() ? 1 : 4); i++) samples.add(sampleFace(key, i));
+            for (int i = 0; i < (key.single() ? 1
+                : CardColor.forSide(key.dark(), expandedPalette)
+                    .size()); i++)
+                samples.add(sampleFace(key, i, expandedPalette));
             return samples;
         });
     }
@@ -1542,8 +1561,8 @@ public class GameSettingsScreen extends GuiScreen {
         List<CardFace> faces = new ArrayList<>();
         for (String id : cfg.packs) {
             CardPack p = CardPack.get(id);
-            if (p != null && !p.entries.isEmpty())
-                faces.add(sampleFace(p.entries.get(p.entries.size() - 1), faces.size()));
+            if (p != null && !p.entries.isEmpty()) faces.add(
+                sampleFace(p.entries.get(p.entries.size() - 1), faces.size(), cfg.getBool(GameRules.EIGHT_COLORS)));
             if (faces.size() >= 4) break;
         }
         if (faces.isEmpty()) faces.add(new CardFace("number", CardColor.RED, 7));

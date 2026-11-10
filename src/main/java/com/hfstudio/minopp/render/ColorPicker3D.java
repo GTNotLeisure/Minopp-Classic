@@ -30,7 +30,7 @@ public class ColorPicker3D {
     private static final IntBuffer VIEWPORT = BufferUtils.createIntBuffer(16);
     private static final FloatBuffer WIN = BufferUtils.createFloatBuffer(3);
     private static final double[][] RING_POINTS = new double[14][3];
-    private static final float[][] BOUNDS = new float[4][6];
+    private static float[][] bounds = new float[0][6];
     private static final double[][] FRUSTUM_CORNERS = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
     private static final float[] SIDE_SHADES = { 0.85f, 0.7f, 0.85f, 0.7f };
 
@@ -39,12 +39,12 @@ public class ColorPicker3D {
     public static int hovered = -1;
     private static long openedAt;
     private static boolean ring;
-    private static final float[] height = new float[4];
+    private static float[] height = new float[0];
     private static long lastNanos = System.nanoTime();
     /**
      * Screen-space (GUI scale) bounds of each pillar of the last frame: {minX, minY, maxX, maxY, centerX, centerY}.
      */
-    private static final float[][] screenBounds = new float[4][];
+    private static float[][] screenBounds = new float[0][];
 
     /**
      * Clears hit regions before world rendering so culled pickers cannot retain clickable bounds.
@@ -58,18 +58,18 @@ public class ColorPicker3D {
     }
 
     /**
-     * {@code asRing}: a plain wild picks from a see-through ring cut in four; draw wilds pick from four blocks.
+     * {@code asRing}: plain wilds use ring sectors and draw wilds use one block per available color.
      */
     public static void open(BlockPos pos, List<CardColor> choices, boolean asRing) {
         ring = asRing;
         tablePos = pos;
-        colors = choices;
+        if (choices.isEmpty()) throw new IllegalArgumentException("Color choices cannot be empty");
+        colors = List.copyOf(choices);
         hovered = -1;
         openedAt = System.currentTimeMillis();
-        for (int i = 0; i < 4; i++) {
-            height[i] = 0;
-            screenBounds[i] = null;
-        }
+        height = new float[colors.size()];
+        screenBounds = new float[colors.size()][];
+        bounds = new float[colors.size()][6];
     }
 
     public static void close() {
@@ -86,7 +86,7 @@ public class ColorPicker3D {
     public static int hitTest(int mouseX, int mouseY) {
         int best = -1;
         double bestDist = Double.MAX_VALUE;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < screenBounds.length; i++) {
             float[] b = screenBounds[i];
             if (b == null || mouseX < b[0] || mouseX > b[2] || mouseY < b[1] || mouseY > b[3]) continue;
             double d = Math.hypot(mouseX - b[4], mouseY - b[5]);
@@ -99,7 +99,7 @@ public class ColorPicker3D {
     }
 
     public static float[] center(int i) {
-        float[] b = i >= 0 && i < 4 ? screenBounds[i] : null;
+        float[] b = i >= 0 && i < screenBounds.length ? screenBounds[i] : null;
         return b == null ? null : new float[] { b[4], b[5] };
     }
 
@@ -131,7 +131,8 @@ public class ColorPicker3D {
     }
 
     public static boolean visible() {
-        for (int i = 0; i < 4; i++) if (screenBounds[i] == null) return false;
+        if (colors == null || colors.isEmpty()) return false;
+        for (float[] region : screenBounds) if (region == null) return false;
         return true;
     }
 
@@ -140,7 +141,7 @@ public class ColorPicker3D {
         draw(viewX - (pos.x + 1.5), viewZ - (pos.z + 1.5), colors, ring, hovered, openedAt, height, true);
     }
 
-    private static final float[] REMOTE_HEIGHT = new float[4];
+    private static float[] remoteHeight = new float[0];
     private static long remoteNanos = System.nanoTime();
 
     /**
@@ -148,7 +149,8 @@ public class ColorPicker3D {
      */
     public static void renderRemote(double dirX, double dirZ, List<CardColor> choices, boolean asRing, int hover,
         long since) {
-        draw(dirX, dirZ, choices, asRing, hover, since, REMOTE_HEIGHT, false);
+        if (remoteHeight.length != choices.size()) remoteHeight = new float[choices.size()];
+        draw(dirX, dirZ, choices, asRing, hover, since, remoteHeight, false);
     }
 
     private static void draw(double fx, double fz, List<CardColor> colors, boolean ring, int hovered, long openedAt,
@@ -169,7 +171,8 @@ public class ColorPicker3D {
             fz /= len;
         }
         double rx = fz, rz = -fx;
-        float spread = 0.44f, half = 0.17f;
+        int count = colors.size();
+        float spread = count > 4 ? 0.58f : 0.44f;
 
         GL11.glPushMatrix();
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -195,46 +198,38 @@ public class ColorPicker3D {
             displayHeight = mc.displayHeight;
         }
 
-        int count = Math.min(4, colors.size());
         for (int i = 0; i < count; i++) {
             boolean hot = i == hovered;
             float target = (hot ? 0.55f : 0.24f) * appear;
             height[i] += (target - height[i]) * ease;
             float h = Math.max(0.01f, height[i]);
-            double offsetX = switch (i) {
-                case 0 -> fx * spread;
-                case 1 -> rx * spread;
-                case 2 -> -fx * spread;
-                default -> -rx * spread;
-            };
-            double offsetZ = switch (i) {
-                case 0 -> fz * spread;
-                case 1 -> rz * spread;
-                case 2 -> -fz * spread;
-                default -> -rz * spread;
-            };
+            double angle = 2 * Math.PI * i / count;
+            double cosine = Math.cos(angle), sine = Math.sin(angle);
+            double offsetX = (fx * cosine + rx * sine) * spread;
+            double offsetZ = (fz * cosine + rz * sine) * spread;
             double cx = 1.5 + offsetX, cz = 1.5 + offsetZ;
             float y0 = 0.945f, y1 = y0 + h;
             int rgb = colors.get(i).rgb;
             if (ring) {
                 double mid = Math.atan2(offsetZ, offsetX);
-                double a0 = mid - Math.toRadians(45), a1 = mid + Math.toRadians(45);
+                double a0 = mid - Math.PI / count, a1 = mid + Math.PI / count;
                 double ox = 1.5 + Math.cos(mid) * 0.05, oz = 1.5 + Math.sin(mid) * 0.05;
-                drawQuarter(ox, oz, a0, a1, 0, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
+                double radius = 0.56 * (hot ? 1.16 : 1.04);
+                drawQuarter(ox, oz, a0, a1, 0, radius, 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
                 arrow(ox, oz, mid, 0.18, 0.36, 0.085, y1 + 0.004, hot ? 0.95f : 0.8f);
                 if (local) {
                     double[][] pts = RING_POINTS;
                     for (int k = 0; k < 6; k++) {
                         double a = a0 + (a1 - a0) * k / 5;
-                        pts[k][0] = pts[k + 6][0] = 1.5 + Math.cos(a) * 0.56;
+                        pts[k][0] = pts[k + 6][0] = ox + Math.cos(a) * radius;
                         pts[k][1] = y0;
                         pts[k + 6][1] = y1;
-                        pts[k][2] = pts[k + 6][2] = 1.5 + Math.sin(a) * 0.56;
+                        pts[k][2] = pts[k + 6][2] = oz + Math.sin(a) * radius;
                     }
-                    pts[12][0] = pts[13][0] = 1.5;
+                    pts[12][0] = pts[13][0] = ox;
                     pts[12][1] = y0;
                     pts[13][1] = y1;
-                    pts[12][2] = pts[13][2] = 1.5;
+                    pts[12][2] = pts[13][2] = oz;
                     screenBounds[i] = projectPoints(
                         pts,
                         modelview,
@@ -242,11 +237,12 @@ public class ColorPicker3D {
                         viewport,
                         scale,
                         displayHeight,
-                        BOUNDS[i]);
+                        bounds[i]);
                 }
                 continue;
             }
             float alpha = hot ? 0.95f : 0.78f;
+            float half = hot ? 0.21f : 0.18f;
             drawFrustum(cx, cz, 0.15, hot ? 0.21 : 0.18, y0, y1, rgb, alpha, hot);
             arrow(cx, cz, Math.atan2(offsetZ, offsetX), -0.07, 0.09, 0.07, y1 + 0.004, alpha);
             if (local) screenBounds[i] = project(
@@ -261,7 +257,7 @@ public class ColorPicker3D {
                 viewport,
                 scale,
                 displayHeight,
-                BOUNDS[i]);
+                bounds[i]);
         }
 
         GL11.glEnable(GL11.GL_CULL_FACE);

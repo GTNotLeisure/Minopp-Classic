@@ -631,7 +631,7 @@ public class TableFx {
                     PILE_Y,
                     1.5,
                     game.currentColor.rgb,
-                    new Object[] { game.currentColor, blocks, dir[0], dir[1] }));
+                    new PillarData(game.currentColor, blocks, dir[0], dir[1], game.colors())));
         }
 
         void slabs(int count, int rgb) {
@@ -1113,8 +1113,8 @@ public class TableFx {
         long[] stopAt = (long[]) d[1];
         CardGame live = table.game;
         if (live == null) return;
-        boolean dark = live.darkSide;
-        List<CardColor> colors = CardColor.forSide(dark);
+        List<CardColor> colors = live.colors();
+        double sector = 360.0 / colors.size();
         CardColor result = live.currentColor;
         if (stopAt[0] == 0 && result != CardColor.WILD && colors.contains(result)) stopAt[0] = now;
         double spinRate = 0.9;
@@ -1124,7 +1124,7 @@ public class TableFx {
             angle = (now - f.start) * spinRate;
         } else {
             double atStop = (stopAt[0] - f.start) * spinRate;
-            double center = colors.indexOf(result) * 90 + 45;
+            double center = (colors.indexOf(result) + 0.5) * sector;
             double target = atStop + 540 + ((90 - center - atStop) % 360 + 720) % 360;
             float k = Math.min(1f, (now - stopAt[0]) / 1300f);
             angle = atStop + (target - atStop) * easeOutCubic(k);
@@ -1146,12 +1146,12 @@ public class TableFx {
             tes.draw();
             GL11.glRotatef((float) angle, 0, 0, 1);
             tes.startDrawingQuads();
-            for (int q = 0; q < Math.min(4, colors.size()); q++) {
+            for (int q = 0; q < colors.size(); q++) {
                 int rgb = colors.get(q).rgb & 0xFFFFFF;
                 int seg = 6;
                 for (int i = 0; i < seg; i++) {
-                    double a0 = Math.toRadians(q * 90 + 2 + 86.0 * i / seg),
-                        a1 = Math.toRadians(q * 90 + 2 + 86.0 * (i + 1) / seg);
+                    double a0 = Math.toRadians(q * sector + 2 + (sector - 4) * i / seg),
+                        a1 = Math.toRadians(q * sector + 2 + (sector - 4) * (i + 1) / seg);
                     prism(
                         tes,
                         new double[] { 0, Math.cos(a0), Math.cos(a1) },
@@ -1243,15 +1243,17 @@ public class TableFx {
         }
     }
 
+    private record PillarData(CardColor chosen, boolean blocks, double x, double z, List<CardColor> colors) {}
+
     private static void wildPillar(Fx f, float t) {
-        Object[] d = (Object[]) f.data;
-        CardColor chosen = (CardColor) d[0];
-        boolean square = (Boolean) d[1];
-        double fx = (Double) d[2], fz = (Double) d[3], len = Math.max(1e-6, Math.hypot(fx, fz));
+        PillarData data = (PillarData) f.data;
+        CardColor chosen = data.chosen();
+        boolean square = data.blocks();
+        double fx = data.x(), fz = data.z(), len = Math.max(1e-6, Math.hypot(fx, fz));
         fx /= len;
         fz /= len;
-        double[][] off = { { fx, fz }, { fz, -fx }, { -fx, -fz }, { -fz, fx } };
-        List<CardColor> colors = CardColor.forSide(chosen.side == CardColor.Side.DARK);
+        List<CardColor> colors = data.colors();
+        double spread = colors.size() > 4 ? 0.58 : 0.44;
         int pick = Math.max(0, colors.indexOf(chosen));
         float lift = easeOutCubic(Math.min(1f, t / 0.22f));
         float pull = Math.max(0f, Math.min(1f, (t - 0.3f) / 0.3f));
@@ -1260,16 +1262,19 @@ public class TableFx {
         GL11.glTranslated(f.x, PILE_Y - 0.005 - 0.3 * pull, f.z);
         Tessellator tes = Tessellator.instance;
         tes.startDrawingQuads();
-        for (int q = 0; q < Math.min(4, colors.size()); q++) {
+        for (int q = 0; q < colors.size(); q++) {
             boolean picked = q == pick;
             double h = (picked ? 0.55 + 0.25 * lift : 0.24) * (1 - 0.85 * pull);
             double y0 = picked ? 0.12 * lift : 0;
             if (h <= 0.005) continue;
             int rgb = colors.get(q).rgb & 0xFFFFFF;
-            double mid = Math.atan2(off[q][1], off[q][0]);
+            double angle = 2 * Math.PI * q / colors.size();
+            double dx = fx * Math.cos(angle) + fz * Math.sin(angle);
+            double dz = fz * Math.cos(angle) - fx * Math.sin(angle);
+            double mid = Math.atan2(dz, dx);
             double grow = picked ? 1 + 0.22 * lift : 1;
             if (square) {
-                double cx = off[q][0] * 0.44 * (1 - pull), cz = off[q][1] * 0.44 * (1 - pull), k = 1 - 0.6 * pull;
+                double cx = dx * spread * (1 - pull), cz = dz * spread * (1 - pull), k = 1 - 0.6 * pull;
                 frustum(tes, cx, cz, 0.15 * k * grow, 0.18 * k * grow * (picked ? 1.15 : 1), y0, y0 + h, rgb);
                 if (pull <= 0f) topArrow(tes, cx, cz, mid, -0.07, 0.09, 0.07, y0 + h + 0.004);
             } else {
@@ -1278,8 +1283,8 @@ public class TableFx {
                     tes,
                     ox,
                     oz,
-                    mid - Math.toRadians(45),
-                    mid + Math.toRadians(45),
+                    mid - Math.PI / colors.size(),
+                    mid + Math.PI / colors.size(),
                     0,
                     0.56 * k * grow * (picked ? 1.12 : 1.04),
                     0.5 * k * grow,

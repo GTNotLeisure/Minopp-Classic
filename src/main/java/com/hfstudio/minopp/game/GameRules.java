@@ -94,6 +94,7 @@ public class GameRules {
     public static final String COINS = bool("coins", Category.MODES, false);
 
     public static final String FLIP_MODE = bool("flipMode", Category.MODES, false);
+    public static final String EIGHT_COLORS = bool("eightColors", Category.MODES, false);
     public static final String FLEX_POWER = bool("flexPower", Category.MODES, false);
 
     public static final String MAX_PLAYERS = integer("maxPlayers", Category.TABLE, 4, 2, 20);

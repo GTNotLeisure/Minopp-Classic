@@ -97,8 +97,21 @@ public class PlayChoiceScreen extends GuiScreen {
         if (init) initGui();
     }
 
+    private List<CardColor> colors() {
+        BlockEntityMinoTable table = table();
+        return table != null && table.game != null ? table.game.colors() : CardColor.forSide(darkSide);
+    }
+
+    private int colorColumns() {
+        return Math.max(1, Math.min(4, (width - (canCancel() ? 90 : 24)) / 62));
+    }
+
+    private int colorRows() {
+        return (colors().size() + colorColumns() - 1) / colorColumns();
+    }
+
     private int bandTop() {
-        return height - 74;
+        return height - 74 - (colorStep ? (colorRows() - 1) * 22 : 0);
     }
 
     // only debug games may back out of a play once its color or targets are being chosen
@@ -117,20 +130,21 @@ public class PlayChoiceScreen extends GuiScreen {
         int cy = height / 2;
         int band = bandTop();
         if (colorStep) {
-            List<CardColor> colors = CardColor.forSide(darkSide);
+            List<CardColor> colors = colors();
             ringPicker = !card.face(darkSide)
                 .type()
                 .isDraw();
             ColorPicker3D.open(gamePos, colors, ringPicker);
             shareChoice(true, -1);
-            int bw = 56, gap = 6, total = colors.size() * bw + (colors.size() - 1) * gap;
+            int bw = 56, gap = 6, columns = colorColumns(), rows = colorRows();
+            int total = columns * bw + (columns - 1) * gap;
             for (int i = 0; i < colors.size(); i++) {
                 CardColor c = colors.get(i);
                 buttonList.add(
                     new UiButton(
                         c.ordinal(),
-                        width / 2 - total / 2 + i * (bw + gap),
-                        height - 30,
+                        width / 2 - total / 2 + i % columns * (bw + gap),
+                        height - 30 - (rows - 1 - i / columns) * 22,
                         bw,
                         18,
                         EnumChatFormatting.getTextWithoutFormattingCodes(
@@ -286,8 +300,8 @@ public class PlayChoiceScreen extends GuiScreen {
 
     // WASD / arrows move between the pillars by where they appear on screen, so it works from any side of the table
     private void movePick(int dx, int dy) {
-        List<CardColor> colors = CardColor.forSide(darkSide);
-        int n = Math.min(4, colors.size());
+        List<CardColor> colors = colors();
+        int n = colors.size();
         float ox = 0, oy = 0;
         int found = 0;
         for (int i = 0; i < n; i++) {
@@ -347,7 +361,7 @@ public class PlayChoiceScreen extends GuiScreen {
                     return;
                 }
                 case Keyboard.KEY_RETURN, Keyboard.KEY_NUMPADENTER, Keyboard.KEY_SPACE -> {
-                    List<CardColor> colors = CardColor.forSide(darkSide);
+                    List<CardColor> colors = colors();
                     if (keyPick >= 0 && keyPick < colors.size()) chooseColor(colors.get(keyPick));
                     return;
                 }
@@ -359,8 +373,8 @@ public class PlayChoiceScreen extends GuiScreen {
             advance(true);
             return;
         }
-        if (colorStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_4) {
-            List<CardColor> colors = CardColor.forSide(darkSide);
+        if (colorStep && keyCode >= Keyboard.KEY_1 && keyCode <= Keyboard.KEY_8) {
+            List<CardColor> colors = colors();
             int i = keyCode - Keyboard.KEY_1;
             if (i < colors.size()) chooseColor(colors.get(i));
             return;
@@ -389,7 +403,7 @@ public class PlayChoiceScreen extends GuiScreen {
         if (!colorStep && !pickStep && !numberStep && picker != null && picker.click(mouseX, mouseY)) return;
         if (colorStep && button == 0) {
             int hit = ColorPicker3D.hitTest(mouseX, mouseY);
-            List<CardColor> colors = CardColor.forSide(darkSide);
+            List<CardColor> colors = colors();
             if (hit >= 0 && hit < colors.size()) {
                 mc.getSoundHandler()
                     .playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
@@ -436,7 +450,7 @@ public class PlayChoiceScreen extends GuiScreen {
         String theme = ThemeManager.INSTANCE.selected();
         int band = bandTop();
         if (colorStep) {
-            UiDraw.gradient(0, height - 84, width, height, 0x00200404, 0xB0200404);
+            UiDraw.gradient(0, band - 10, width, height, 0x00200404, 0xB0200404);
             String title = Chat.translatable("gui.minopp.wild_selection.title")
                 .getFormattedText();
             int tw = fontRendererObj.getStringWidth(title);
@@ -444,12 +458,12 @@ public class PlayChoiceScreen extends GuiScreen {
             GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, band, 0xFFFFE070);
             GuiDraw.drawCenteredString(
                 fontRendererObj,
-                Chat.translatable("gui.minopp.wild_selection.hint")
+                Chat.translatable("gui.minopp.wild_selection.hint", colors().size())
                     .getFormattedText(),
                 width / 2,
                 band + 15,
                 0xFFDDDDDD);
-            List<CardColor> colors = CardColor.forSide(darkSide);
+            List<CardColor> colors = colors();
             if (lastMouseX != Integer.MIN_VALUE && (mouseX != lastMouseX || mouseY != lastMouseY)) keyPick = -1;
             lastMouseX = mouseX;
             lastMouseY = mouseY;
@@ -483,7 +497,7 @@ public class PlayChoiceScreen extends GuiScreen {
                 fontRendererObj.drawStringWithShadow(name, tx + 12, ty - 12, colors.get(hit).rgb | 0xFF000000);
             }
         } else if (numberStep) {
-            UiDraw.gradient(0, height - 84, width, height, 0x00200404, 0xB0200404);
+            UiDraw.gradient(0, band - 10, width, height, 0x00200404, 0xB0200404);
             String title = Chat.translatable("gui.minopp.choice.number")
                 .getFormattedText();
             int tw = fontRendererObj.getStringWidth(title);

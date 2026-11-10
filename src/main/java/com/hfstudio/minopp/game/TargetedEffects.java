@@ -132,6 +132,10 @@ public class TargetedEffects {
         return null;
     }
 
+    private static int defenseKind(int answer) {
+        return answer / (answer >= 256 ? 256 : 16);
+    }
+
     private static class Handler implements DecisionTypes.Handler {
 
         @Override
@@ -143,13 +147,13 @@ public class TargetedEffects {
             for (int kind = 1; kind <= 2; kind++) {
                 Card card = defense(game, player, kind);
                 if (card == null) continue;
-                for (CardColor color : CardColor.forSide(game.darkSide)) {
+                for (CardColor color : game.colors()) {
                     String label = game.face(card)
                         .getFaceName()
                         .getUnformattedText() + " / "
                         + Chat.translatable(color.langKey())
                             .getUnformattedText();
-                    options.add(new DecisionTypes.Option(kind * 16 + color.ordinal(), label));
+                    options.add(new DecisionTypes.Option(kind * 256 + color.ordinal(), label));
                 }
             }
             return options;
@@ -159,7 +163,7 @@ public class TargetedEffects {
         public boolean answer(CardGame game, PendingDecision decision, int answer, UUID target) {
             if (!DecisionTypes.Handler.super.answer(game, decision, answer, target)) return false;
             if (answer != 0) {
-                Card card = defense(game, game.deAmputate(decision.player), answer / 16);
+                Card card = defense(game, game.deAmputate(decision.player), defenseKind(answer));
                 decision.data.setInteger("defense", card.uid);
             }
             return true;
@@ -172,11 +176,11 @@ public class TargetedEffects {
                 if (source == null || target == null || target.eliminated) continue;
                 int response = decision.answer;
                 if (response != 0) {
-                    Card card = defense(game, target, response / 16);
+                    Card card = defense(game, target, defenseKind(response));
                     if (card == null || card.uid != decision.data.getInteger("defense")) response = 0;
                     else {
                         game.doDiscardCard(target, card, report);
-                        game.currentColor = CardColor.values()[response % 16];
+                        game.currentColor = CardColor.values()[response % (response >= 256 ? 256 : 16)];
                         if (target.hand.size() == 1) target.hasShoutedMino = true;
                         report.messageAll(
                             Chat.translatable(
@@ -186,8 +190,8 @@ public class TargetedEffects {
                                     .getFaceName()));
                     }
                 }
-                if (response / 16 == 1) continue;
-                CardPlayer recipient = response / 16 == 2 ? source : target;
+                if (defenseKind(response) == 1) continue;
+                CardPlayer recipient = defenseKind(response) == 2 ? source : target;
                 if (recipient.eliminated) continue;
                 EFFECTS.get(decision.data.getString("effect"))
                     .apply(game, source, recipient, decision.data.getCompoundTag("arguments"), report);

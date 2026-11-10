@@ -191,11 +191,11 @@ public class DevPreview {
             table.sync();
             return;
         }
-        List<CardColor> colors = CardColor.forSide(game.darkSide);
+        List<CardColor> colors = game.colors();
         Card pick = null;
         for (Card c : me.hand) {
             CardFace f = game.face(c);
-            if (f.type().id.equals(id) && (f.isWild() || f.color == colors.get(scriptStep % 4))) {
+            if (f.type().id.equals(id) && (f.isWild() || f.color == colors.get(scriptStep % colors.size()))) {
                 pick = c;
                 break;
             }

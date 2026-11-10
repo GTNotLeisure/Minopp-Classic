@@ -102,15 +102,16 @@ public class DecisionScreen extends GuiScreen {
                             .getFormattedText()));
             }
             case ROULETTE_COLOR -> {
-                List<CardColor> colors = CardColor.forSide(game != null && game.darkSide);
-                int bw = 60, gap = 8, total = colors.size() * bw + (colors.size() - 1) * gap;
+                List<CardColor> colors = game == null ? CardColor.LIGHT : game.colors();
+                int bw = 60, gap = 8, columns = Math.max(1, Math.min(4, (width - 24) / 68));
+                int total = columns * bw + (columns - 1) * gap;
                 for (int i = 0; i < colors.size(); i++) {
                     CardColor c = colors.get(i);
                     buttonList.add(
                         new UiButton(
                             c.ordinal(),
-                            width / 2 - total / 2 + i * (bw + gap),
-                            cy,
+                            width / 2 - total / 2 + i % columns * (bw + gap),
+                            cy + i / columns * 24,
                             bw,
                             20,
                             EnumChatFormatting.getTextWithoutFormattingCodes(
