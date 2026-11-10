@@ -59,6 +59,8 @@ public class TableConfig {
             Map.entry("wild_reverse_draw8", new String[] { GameRules.MERCY }),
             Map.entry("wild_sudden_death", new String[] { GameRules.MERCY }),
             Map.entry("wild_final_attack", new String[] { GameRules.MERCY }),
+            Map.entry("wild_team_play", new String[] { GameRules.TEAM_MODE }),
+            Map.entry("wild_all_flip", new String[] { GameRules.FLEX_POWER }),
             Map.entry("power_number", new String[] { GameRules.FLEX_POWER }),
             Map.entry("flex_skip", new String[] { GameRules.FLEX_POWER }),
             Map.entry("flex_reverse", new String[] { GameRules.FLEX_POWER }),
@@ -177,10 +179,19 @@ public class TableConfig {
     }
 
     private boolean requiresDiscardPile() {
-        for (CardPack pack : CardPack.all()) for (CardPack.Entry entry : pack.entries) {
-            if (getCount(pack, entry) > 0 && Arrays.asList(rulesForCard(entry.typeId()))
-                .contains(GameRules.DISCARD_PILE)) return true;
+        return requiresDiscardPile(false) || getBool(GameRules.FLIP_MODE) && requiresDiscardPile(true);
+    }
+
+    private boolean requiresDiscardPile(boolean backSide) {
+        for (Object2IntMap.Entry<CardFace> entry : mergedCounts(backSide, GameRules.DISCARD_PILE)
+            .object2IntEntrySet()) {
+            if (entry.getIntValue() > 0) return true;
         }
+        return false;
+    }
+
+    private static boolean requiresRule(String typeId, String rule) {
+        for (String required : CARD_RULES.getOrDefault(typeId, NONE)) if (required.equals(rule)) return true;
         return false;
     }
 
@@ -299,12 +310,17 @@ public class TableConfig {
     }
 
     private Object2IntLinkedOpenHashMap<CardFace> mergedCounts(boolean backSide) {
+        return mergedCounts(backSide, null);
+    }
+
+    private Object2IntLinkedOpenHashMap<CardFace> mergedCounts(boolean backSide, String requiredRule) {
         boolean expandedColors = getBool(GameRules.EIGHT_COLORS);
         Object2IntLinkedOpenHashMap<CardFace> defaults = new Object2IntLinkedOpenHashMap<>();
         Object2IntLinkedOpenHashMap<CardFace> overridden = new Object2IntLinkedOpenHashMap<>();
         for (CardPack pack : CardPack.all()) {
             if (pack.backSideOnly != backSide) continue;
             for (CardPack.Entry entry : pack.entries) {
+                if (requiredRule != null && !requiresRule(entry.typeId(), requiredRule)) continue;
                 boolean override = hasOverride(pack, entry);
                 int count = getCount(pack, entry);
                 if (count <= 0 && !override) continue;

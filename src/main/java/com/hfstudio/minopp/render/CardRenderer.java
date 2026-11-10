@@ -63,7 +63,7 @@ public class CardRenderer {
         ResourceLocation[] layers = CardBatch.textures(face, theme);
         for (int i = 0; i < layers.length; i++) {
             if (layers[i] == null) continue;
-            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i);
+            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i, layers[i]);
             GL11.glColor4f((tint >> 16 & 255) / 255f, (tint >> 8 & 255) / 255f, (tint & 255) / 255f, 1);
             Minecraft.getMinecraft()
                 .getTextureManager()

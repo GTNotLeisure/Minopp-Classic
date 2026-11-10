@@ -129,7 +129,7 @@ public class CardBatch {
     public void face(CardFace face, String theme, float hw, float hh, float z, int color, boolean flipped) {
         ResourceLocation[] tex = textures(face, theme);
         for (int i = 0; i < tex.length; i++) {
-            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i);
+            int tint = ThemeManager.INSTANCE.layerTint(theme, face, i, tex[i]);
             int c = tint == 0xFFFFFF ? color
                 : ((color >> 16 & 255) * (tint >> 16 & 255) / 255) << 16
                     | ((color >> 8 & 255) * (tint >> 8 & 255) / 255) << 8

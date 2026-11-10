@@ -203,6 +203,17 @@ public class ThemeManager implements IResourceManagerReloadListener {
         return info != null && info.tint() ? face.color.rgb & 0xFFFFFF : 0xFFFFFF;
     }
 
+    /**
+     * Preserves the printed partner color of flex textures, including custom layer orders and theme fallbacks.
+     */
+    public int layerTint(String theme, CardFace face, int layer, ResourceLocation texture) {
+        if (texture != null) {
+            String path = texture.getResourcePath();
+            if (path.startsWith("flex_", path.lastIndexOf('/') + 1)) return 0xFFFFFF;
+        }
+        return layerTint(theme, face, layer);
+    }
+
     public ResourceLocation texture(String theme, String layer) {
         Map<String, ResourceLocation> byLayer = textureCache.computeIfAbsent(theme, k -> new HashMap<>());
         ResourceLocation cached = byLayer.get(layer);

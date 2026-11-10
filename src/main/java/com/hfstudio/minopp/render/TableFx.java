@@ -1779,7 +1779,7 @@ public class TableFx {
     private static void bentFace(CardFace face, String theme, float w, float h, float bend, boolean mirror) {
         ResourceLocation[] layers = CardBatch.textures(face, theme);
         int[] tints = new int[layers.length];
-        for (int i = 0; i < layers.length; i++) tints[i] = ThemeManager.INSTANCE.layerTint(theme, face, i);
+        for (int i = 0; i < layers.length; i++) tints[i] = ThemeManager.INSTANCE.layerTint(theme, face, i, layers[i]);
         bentLayers(layers, tints, w, h, bend, mirror);
     }
 
