@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -47,6 +48,7 @@ import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
+import com.hfstudio.minopp.network.S2CChoosingPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
@@ -71,6 +73,7 @@ public class BlockEntityMinoTable extends TileEntity {
     public UUID choosingUuid;
     public boolean choosingRing;
     public int choosingHover = -1;
+    private long choosingRevision;
     /**
      * Client side: when the current choice was first seen, for its pop-in.
      */
@@ -239,6 +242,7 @@ public class BlockEntityMinoTable extends TileEntity {
         compoundTag.setBoolean("gameEnd", gameEnd);
         if (lastPlayedByUuid != null) NbtUtil.putUUID(compoundTag, "lastPlayedBy", lastPlayedByUuid);
         if (ownerUuid != null) NbtUtil.putUUID(compoundTag, "owner", ownerUuid);
+        compoundTag.setLong("chooserRevision", choosingRevision);
         if (choosingUuid != null) {
             NbtUtil.putUUID(compoundTag, "chooser", choosingUuid);
             compoundTag.setBoolean("chooserRing", choosingRing);
@@ -326,10 +330,12 @@ public class BlockEntityMinoTable extends TileEntity {
 
         ownerUuid = NbtUtil.hasUUID(compoundTag, "owner") ? NbtUtil.getUUID(compoundTag, "owner") : null;
         UUID chooser = NbtUtil.hasUUID(compoundTag, "chooser") ? NbtUtil.getUUID(compoundTag, "chooser") : null;
-        if (chooser != null && !chooser.equals(choosingUuid)) choosingSeenAt = System.currentTimeMillis();
-        choosingUuid = chooser;
-        choosingRing = compoundTag.getBoolean("chooserRing");
-        choosingHover = chooser == null ? -1 : compoundTag.getInteger("chooserHover");
+        if (previousGame == null || game == null || previousGame.id != game.id) choosingRevision = 0;
+        updateChoosing(
+            chooser,
+            compoundTag.getBoolean("chooserRing"),
+            compoundTag.getInteger("chooserHover"),
+            compoundTag.getLong("chooserRevision"));
         ownerName = compoundTag.getString("ownerName");
         hostUuid = NbtUtil.hasUUID(compoundTag, "host") ? NbtUtil.getUUID(compoundTag, "host") : null;
         hostName = compoundTag.getString("hostName");
@@ -527,6 +533,12 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     public IChatComponent startProblem() {
+        int players = getPlayersList().size();
+        int deckSize = config.countDeckSize();
+        if (deckSize == 0) deckSize = new TableConfig().countDeckSize();
+        long available = (long) deckSize * config.effectiveCopies(players, deckSize);
+        long required = (long) players * config.getInt(GameRules.INITIAL_HAND) + 1;
+        if (available < required) return Chat.translatable("game.minopp.play.deck_too_small", available, required);
         if (!Teams.enabled(config)) return null;
         List<CardPlayer> seated = getPlayersList();
         Teams.normalize(seated, Teams.count(config));
@@ -615,10 +627,10 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         settlement.clear();
         matchWinner = "";
-        state = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND)).state;
+        ActionReport report = game.initiate(initiator, config.getInt(GameRules.INITIAL_HAND));
         lastHandMoveCounter = 0;
-        sendSeatActionTakenToAll();
-        sync();
+        if (!report.shouldDestroyGame) sendSeatActionTakenToAll();
+        handleActionResult(report, initiator, null);
     }
 
     private void giveHandCards(EntityPlayer mcPlayer, CardPlayer cardPlayer) {
@@ -757,48 +769,50 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     public void handleActionResult(ActionReport result, CardPlayer cardPlayer, EntityPlayerMP player) {
-        if (result != null && !result.isFail) choosingUuid = null;
-        if (result != null) {
-            if (result.shouldDestroyGame) {
-                scoreRound(result.winners, result);
-                destroyGame(cardPlayer);
-            }
-            if (result.state != null) state = result.state;
-            for (ActionMessage message : result.messages) {
-                switch (message.type()) {
-                    case FAIL -> {
-                        if (player != null) S2CActionEphemeralPacket.sendS2C(player, getBlockPos(), message);
-                    }
-                    case MESSAGE_ALL -> sendMessageToAll(message);
-                    default -> {}
+        if (result == null) return;
+        if (!result.isFail) choosingUuid = null;
+        if (result.shouldDestroyGame) {
+            scoreRound(result.winners, result);
+            destroyGame(cardPlayer);
+        }
+        if (result.state != null) state = result.state;
+        for (ActionMessage message : result.messages) {
+            switch (message.type()) {
+                case FAIL -> {
+                    if (player != null) S2CActionEphemeralPacket.sendS2C(player, getBlockPos(), message);
                 }
+                case MESSAGE_ALL -> sendMessageToAll(message);
+                default -> {}
             }
-            if (!result.effects.isEmpty()) {
-                BlockPos tableCenterPos = getBlockPos().offset(1, 0, 1);
-                for (EffectEvent effect : result.effects) {
-                    effect.summonServer((WorldServer) worldObj, tableCenterPos, this);
-                }
-                for (Object o : worldObj.playerEntities) {
-                    EntityPlayerMP serverPlayer = (EntityPlayerMP) o;
-                    double dx = serverPlayer.posX - (tableCenterPos.x + 0.5);
-                    double dy = serverPlayer.posY - (tableCenterPos.y + 0.5);
-                    double dz = serverPlayer.posZ - (tableCenterPos.z + 0.5);
-                    if (dx * dx + dy * dy + dz * dz <= EffectEvents.EFFECT_RADIUS * EffectEvents.EFFECT_RADIUS) {
-                        UUID id = serverPlayer.getGameProfile()
-                            .getId();
-                        boolean playerPartOfGame = getPlayersList().stream()
-                            .anyMatch(p -> p.uuid.equals(id));
-                        S2CEffectListPacket.sendS2C(serverPlayer, result.effects, tableCenterPos, playerPartOfGame);
-                    }
+        }
+        if (!result.effects.isEmpty()) {
+            BlockPos tableCenterPos = getBlockPos().offset(1, 0, 1);
+            for (EffectEvent effect : result.effects) {
+                effect.summonServer((WorldServer) worldObj, tableCenterPos, this);
+            }
+            for (Object o : worldObj.playerEntities) {
+                EntityPlayerMP serverPlayer = (EntityPlayerMP) o;
+                double dx = serverPlayer.posX - (tableCenterPos.x + 0.5);
+                double dy = serverPlayer.posY - (tableCenterPos.y + 0.5);
+                double dz = serverPlayer.posZ - (tableCenterPos.z + 0.5);
+                if (dx * dx + dy * dy + dz * dz <= EffectEvents.EFFECT_RADIUS * EffectEvents.EFFECT_RADIUS) {
+                    UUID id = serverPlayer.getGameProfile()
+                        .getId();
+                    boolean playerPartOfGame = getPlayersList().stream()
+                        .anyMatch(p -> p.uuid.equals(id));
+                    S2CEffectListPacket.sendS2C(serverPlayer, result.effects, tableCenterPos, playerPartOfGame);
                 }
             }
         }
-        sync();
+        if (!result.isFail || result.shouldDestroyGame || result.state != null || !result.effects.isEmpty()) sync();
     }
 
     @Override
     public void updateEntity() {
         if (worldObj.isRemote || game == null) return;
+        ActionReport timed = game.tickTurnTimers();
+        if (timed != null) handleActionResult(timed, game.currentPlayer(), null);
+        if (game == null) return;
         long time = worldObj.getTotalWorldTime();
         if (time % 10 != 0) return;
         MinecraftServer server = MinecraftServer.getServer();
@@ -883,6 +897,7 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     public void sync() {
+        if (worldObj != null && !worldObj.isRemote) choosingRevision++;
         markDirty();
         if (worldObj == null) return;
         if (worldObj.isRemote || peekAll() || game == null) {
@@ -891,16 +906,41 @@ public class BlockEntityMinoTable extends TileEntity {
         }
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
+        forEachViewer(player -> sendTo(player, tag));
+    }
+
+    public void syncChoosing() {
+        if (worldObj == null || worldObj.isRemote) return;
+        choosingRevision++;
+        markDirty();
+        S2CChoosingPacket.send(this, choosingRevision);
+    }
+
+    /**
+     * Applies picker state only when it is at least as recent as the last full or incremental update.
+     */
+    public void updateChoosing(UUID chooser, boolean ring, int hover, long revision) {
+        if (revision < choosingRevision) return;
+        choosingRevision = revision;
+        if (chooser != null && !chooser.equals(choosingUuid)) choosingSeenAt = System.currentTimeMillis();
+        choosingUuid = chooser;
+        choosingRing = ring;
+        choosingHover = chooser == null ? -1 : hover;
+    }
+
+    public void forEachViewer(Consumer<EntityPlayerMP> action) {
+        if (worldObj == null || worldObj.isRemote) return;
         double range = Math.max(
             4,
             MinecraftServer.getServer()
                 .getConfigurationManager()
                 .getViewDistance())
             * 16 + 16;
+        double rangeSq = range * range;
         for (Object o : worldObj.playerEntities) {
             if (!(o instanceof EntityPlayerMP player)) continue;
-            if (player.getDistanceSq(xCoord + 1.5, player.posY, zCoord + 1.5) > range * range) continue;
-            sendTo(player, tag);
+            if (player.getDistanceSq(xCoord + 1.5, player.posY, zCoord + 1.5) > rangeSq) continue;
+            action.accept(player);
         }
     }
 
@@ -914,8 +954,7 @@ public class BlockEntityMinoTable extends TileEntity {
         UUID viewer = player.getGameProfile()
             .getId();
         boolean reveal = peekAll() || game != null && game.isPeeking(viewer);
-        NBTTagCompound tag = reveal ? fullTag
-            : HandMask.maskTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS));
+        NBTTagCompound tag = HandMask.clientTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS), reveal);
         player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }
 
@@ -924,7 +963,7 @@ public class BlockEntityMinoTable extends TileEntity {
         NBTTagCompound tag = new NBTTagCompound();
         writeToNBT(tag);
         // ChunkWatchEvent sends each viewer their hand after this masked chunk update.
-        if (!peekAll()) tag = HandMask.maskTableTag(tag, null, config.getBool(GameRules.FLIP_BACKS));
+        tag = HandMask.clientTableTag(tag, null, config.getBool(GameRules.FLIP_BACKS), peekAll());
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag);
     }
 

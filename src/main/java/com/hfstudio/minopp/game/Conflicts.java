@@ -18,6 +18,12 @@ public class Conflicts {
 
     private static final Map<String, Set<String>> LINKS = new LinkedHashMap<>();
 
+    private static long revision;
+
+    public static long revision() {
+        return revision;
+    }
+
     public static String rule(String id) {
         return "rule:" + id;
     }
@@ -36,6 +42,7 @@ public class Conflicts {
      * Marks every key in {@code a} as not recommended with every key in {@code b}.
      */
     public static void link(String[] a, String... b) {
+        revision++;
         for (String x : a) for (String y : b) {
             if (x.equals(y)) continue;
             LINKS.computeIfAbsent(x, k -> new LinkedHashSet<>())

@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
-import java.util.WeakHashMap;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -68,6 +67,12 @@ public class TableFx {
 
     private static class State {
 
+        private final long gameId;
+
+        private State(long gameId) {
+            this.gameId = gameId;
+        }
+
         int topUid = Integer.MIN_VALUE;
         CardColor color;
         boolean dark, anti;
@@ -92,7 +97,8 @@ public class TableFx {
     private static final ResourceLocation TEX_NO_MERCY = Mino.id("textures/fx/coin_no_mercy.png");
     static final double PILE_Y = 0.95;
 
-    private static final Map<BlockEntityMinoTable, State> STATES = new WeakHashMap<>();
+    // The client tick and world unload event own state lifetime, including custom effects that retain their table.
+    private static final Map<BlockEntityMinoTable, State> STATES = new HashMap<>();
     private static final Random RANDOM = new Random();
     private static final int[][] BALLOON = balloonVoxels();
 
@@ -125,8 +131,46 @@ public class TableFx {
         return e;
     }
 
+    public static void clear(World world) {
+        STATES.keySet()
+            .removeIf(table -> table.getWorldObj() == world);
+        HOLDERS.clear();
+        holderScan = 0;
+    }
+
+    public static void tick() {
+        World world = Minecraft.getMinecraft().theWorld;
+        long now = System.currentTimeMillis();
+        STATES.entrySet()
+            .removeIf(entry -> {
+                BlockEntityMinoTable table = entry.getKey();
+                if (world == null || table.getWorldObj() != world
+                    || table.isInvalid()
+                    || table.game == null
+                    || table.game.id != entry.getValue().gameId
+                    || !world.blockExists(table.xCoord, table.yCoord, table.zCoord)
+                    || world.getTileEntity(table.xCoord, table.yCoord, table.zCoord) != table) return true;
+                expire(entry.getValue(), now);
+                return false;
+            });
+        HOLDERS.values()
+            .removeIf(ref -> {
+                Entity entity = ref.get();
+                return entity == null || entity.isDead || entity.worldObj != world;
+            });
+    }
+
+    private static void expire(State state, long now) {
+        if (!ClientConfig.display.tableEffects) state.fx.clear();
+        else state.fx.removeIf(f -> f.t(now) >= 1f);
+    }
+
     public static void render(BlockEntityMinoTable table, CardGame game, float partialTick) {
-        State s = STATES.computeIfAbsent(table, k -> new State());
+        State s = STATES.get(table);
+        if (s == null || s.gameId != game.id) {
+            s = new State(game.id);
+            STATES.put(table, s);
+        }
         long now = System.currentTimeMillis();
         float dt = Math.min(0.1f, (now - s.lastFrame) / 1000f);
         s.lastFrame = now;
@@ -142,68 +186,76 @@ public class TableFx {
         float lx = OpenGlHelper.lastBrightnessX, ly = OpenGlHelper.lastBrightnessY;
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240f, 240f);
 
-        s.ringSpeed += (1f - s.ringSpeed) * Math.min(1f, dt * 1.5f);
-        s.ringAngle += dt * 22f * s.ringSpeed * (game.isAntiClockwise ? 1 : -1);
-        directionRing(s.ringAngle, s.ringSpeed, game.isAntiClockwise);
+        try {
+            s.ringSpeed += (1f - s.ringSpeed) * Math.min(1f, dt * 1.5f);
+            s.ringAngle += dt * 22f * s.ringSpeed * (game.isAntiClockwise ? 1 : -1);
+            directionRing(s.ringAngle, s.ringSpeed, game.isAntiClockwise);
 
-        if (game.balloonHolder != null) {
-            int seat = seatOf(game, game.balloonHolder);
-            if (seat >= 0) {
-                s.balloonSeat = seat;
-                boolean busy = false;
-                for (Fx f : s.fx) busy |= now >= f.start && f.kind != Kind.SHOCK && f.kind != Kind.SKIP;
-                Vec3d seatPos = table.getSeatLocalPos(seat);
-                double bx = seatPos.x + (seatPos.x - 1.5) * 0.15, bz = seatPos.z + (seatPos.z - 1.5) * 0.15,
-                    by = seatPos.y + 2.15;
-                Entity holder = holderEntity(game.balloonHolder);
-                if (holder != null && holder.getDistanceSq(table.xCoord + 1.5, table.yCoord, table.zCoord + 1.5) < 64) {
-                    bx = holder.prevPosX + (holder.posX - holder.prevPosX) * partialTick - table.xCoord;
-                    bz = holder.prevPosZ + (holder.posZ - holder.prevPosZ) * partialTick - table.zCoord;
-                    by = holder.prevPosY + (holder.posY - holder.prevPosY) * partialTick
-                        - holder.yOffset
-                        + holder.height
-                        + 0.55
-                        - table.yCoord;
-                }
-                balloon(table, new Vec3d(bx, by, bz), game.balloonFuse, now, busy);
-            }
-        }
-
-        s.fx.removeIf(f -> f.t(now) >= 1f);
-        if (!ClientConfig.display.tableEffects) s.fx.clear();
-        for (Fx f : s.fx) {
-            float t = f.t(now);
-            if (now < f.start) continue;
-            switch (f.kind) {
-                case SKIP -> skipMark(f, t);
-                case COIN -> coin(f, t);
-                case FLIP -> flipCard(f, t);
-                case SHOCK -> shockwave(f, t);
-                case POP -> burst(f, t, 14, 0.06f);
-                case REVERSE -> reverseSymbol(f, t);
-                case WILD -> wildPillar(f, t);
-                case SKIP_SIGN -> skipSymbol(f, t);
-                case DRAW -> drawSlabs(f, t);
-                case SHOUT -> shoutText(f, t);
-                case PLUS -> plusText(f, t);
-                case TOSS -> toss(f, t);
-                case ROULETTE -> roulette(f, now);
-                case SYMBOL -> symbolPop(f, t);
-                case DICE -> dice(f, now);
-                case COIN3D -> coin3d(f, now);
-                case CUSTOM -> {
-                    Object[] d = (Object[]) f.data;
-                    GL11.glPushMatrix();
-                    GL11.glTranslated(f.x, f.y, f.z);
-                    ((CardFxRegistry.Renderer) d[0]).render(t, (CardFxRegistry.Context) d[1]);
-                    GL11.glPopMatrix();
+            if (game.balloonHolder != null) {
+                int seat = seatOf(game, game.balloonHolder);
+                if (seat >= 0) {
+                    s.balloonSeat = seat;
+                    boolean busy = false;
+                    for (Fx f : s.fx) busy |= now >= f.start && f.kind != Kind.SHOCK && f.kind != Kind.SKIP;
+                    Vec3d seatPos = table.getSeatLocalPos(seat);
+                    double bx = seatPos.x + (seatPos.x - 1.5) * 0.15, bz = seatPos.z + (seatPos.z - 1.5) * 0.15,
+                        by = seatPos.y + 2.15;
+                    Entity holder = holderEntity(game.balloonHolder);
+                    if (holder != null
+                        && holder.getDistanceSq(table.xCoord + 1.5, table.yCoord, table.zCoord + 1.5) < 64) {
+                        bx = holder.prevPosX + (holder.posX - holder.prevPosX) * partialTick - table.xCoord;
+                        bz = holder.prevPosZ + (holder.posZ - holder.prevPosZ) * partialTick - table.zCoord;
+                        by = holder.prevPosY + (holder.posY - holder.prevPosY) * partialTick
+                            - holder.yOffset
+                            + holder.height
+                            + 0.55
+                            - table.yCoord;
+                    }
+                    balloon(table, new Vec3d(bx, by, bz), game.balloonFuse, now, busy);
                 }
             }
-        }
 
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lx, ly);
-        GL11.glPopAttrib();
-        GL11.glColor4f(1, 1, 1, 1);
+            expire(s, now);
+            int frameEffects = s.fx.size();
+            for (int i = 0; i < frameEffects; i++) {
+                Fx f = s.fx.get(i);
+                float t = f.t(now);
+                if (now < f.start) continue;
+                switch (f.kind) {
+                    case SKIP -> skipMark(f, t);
+                    case COIN -> coin(f, t);
+                    case FLIP -> flipCard(f, t);
+                    case SHOCK -> shockwave(f, t);
+                    case POP -> burst(f, t, 14, 0.06f);
+                    case REVERSE -> reverseSymbol(f, t);
+                    case WILD -> wildPillar(f, t);
+                    case SKIP_SIGN -> skipSymbol(f, t);
+                    case DRAW -> drawSlabs(f, t);
+                    case SHOUT -> shoutText(f, t);
+                    case PLUS -> plusText(f, t);
+                    case TOSS -> toss(f, t);
+                    case ROULETTE -> roulette(f, now);
+                    case SYMBOL -> symbolPop(f, t);
+                    case DICE -> dice(f, now);
+                    case COIN3D -> coin3d(f, now);
+                    case CUSTOM -> {
+                        Object[] d = (Object[]) f.data;
+                        GL11.glPushMatrix();
+                        try {
+                            GL11.glTranslated(f.x, f.y, f.z);
+                            ((CardFxRegistry.Renderer) d[0]).render(t, (CardFxRegistry.Context) d[1]);
+                        } finally {
+                            GL11.glPopMatrix();
+                        }
+                    }
+                }
+            }
+
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lx, ly);
+            GL11.glPopAttrib();
+            GL11.glColor4f(1, 1, 1, 1);
+        }
     }
 
     private static int seatOf(CardGame game, UUID uuid) {
@@ -213,19 +265,20 @@ public class TableFx {
 
     private static void observe(BlockEntityMinoTable table, CardGame game, State s, long now) {
         boolean first = s.topUid == Integer.MIN_VALUE;
+        boolean enabled = ClientConfig.display.tableEffects;
         int top = game.topCard == null ? -1 : game.topCard.uid;
         String theme = ThemeManager.INSTANCE.selected();
         boolean turned = !first && game.isAntiClockwise != s.anti;
         if (turned) s.ringSpeed = 9f;
         for (CardPlayer p : game.players) {
-            if (p.hasShoutedMino && !s.shouted.contains(p.uuid) && !first) {
+            if (enabled && p.hasShoutedMino && !s.shouted.contains(p.uuid) && !first) {
                 Vec3d at = head(table, p.seat, 1.95);
                 s.fx.add(new Fx(Kind.SHOUT, now, 1800, at.x, at.y, at.z, 0, null));
             }
         }
         s.shouted.clear();
         for (CardPlayer p : game.players) if (p.hasShoutedMino) s.shouted.add(p.uuid);
-        if (!first && game.debugShoutSeq != s.shoutSeq && game.debugShoutBy != null) {
+        if (enabled && !first && game.debugShoutSeq != s.shoutSeq && game.debugShoutBy != null) {
             int seat = seatOf(game, game.debugShoutBy);
             if (seat >= 0) {
                 Vec3d at = head(table, seat, 1.95);
@@ -235,7 +288,8 @@ public class TableFx {
         s.shoutSeq = game.debugShoutSeq;
         if (!first && game.tossSeq != s.tossSeq && game.tossHeads != null && game.tossTails != null) {
             int hs = seatOf(game, game.tossHeads), ts = seatOf(game, game.tossTails);
-            if (hs >= 0 && ts >= 0) {
+            if (hs >= 0 && ts >= 0 && !enabled) skipThrow();
+            if (enabled && hs >= 0 && ts >= 0) {
                 Vec3d h = head(table, hs, 1.7), tl = head(table, ts, 1.7);
                 s.fx.add(new Fx(Kind.TOSS, now, 3200, 1.5, PILE_Y, 1.5, 0, new Object[] { h, tl, game.tossHeadsUp }));
                 s.fx.add(
@@ -253,12 +307,16 @@ public class TableFx {
         s.tossSeq = game.tossSeq;
         if (!first && game.diceSeq != s.diceSeq && game.diceSides > 0 && game.diceRoller != null) {
             int seat = seatOf(game, game.diceRoller);
-            if (seat >= 0) s.fx.add(throwDie(table, seat, game.diceSides, game.diceResult, now));
+            if (seat >= 0) {
+                if (enabled) s.fx.add(throwDie(table, seat, game.diceSides, game.diceResult, now));
+                else skipThrow();
+            }
         }
         s.diceSeq = game.diceSeq;
         if (!first && game.luckySeq != s.luckySeq && game.luckyPlayer != null) {
             int seat = seatOf(game, game.luckyPlayer);
-            if (seat >= 0) {
+            if (seat >= 0 && !enabled && game.luckyResult != CardGame.LUCKY_SEVENS) skipThrow();
+            if (enabled && seat >= 0) {
                 Vec3d at = head(table, seat, 1.6);
                 boolean win = game.luckyResult != CardGame.LUCKY_TAILS;
                 long lands = 200;
@@ -282,6 +340,10 @@ public class TableFx {
         s.luckySeq = game.luckySeq;
         for (CardPlayer p : game.players) {
             if (p.coinUsed && !s.coins.contains(p.uuid) && !first) {
+                if (!enabled) {
+                    skipThrow();
+                    continue;
+                }
                 Vec3d at = head(table, p.seat, 1.6);
                 ResourceLocation side = p.coinNoMercy ? TEX_NO_MERCY : TEX_MERCY,
                     other = p.coinNoMercy ? TEX_MERCY : TEX_NO_MERCY;
@@ -301,7 +363,7 @@ public class TableFx {
         }
         s.coins.clear();
         for (CardPlayer p : game.players) if (p.coinUsed) s.coins.add(p.uuid);
-        if (!first && game.darkSide != s.dark && game.topCard != null) {
+        if (enabled && !first && game.darkSide != s.dark && game.topCard != null) {
             CardFace[] faces = { s.dark ? game.topCard.dark : game.topCard.light,
                 game.darkSide ? game.topCard.dark : game.topCard.light };
             s.fx.add(new Fx(Kind.FLIP, now, 1400, 1.5, PILE_Y, 1.5, 0, new Object[] { faces, theme, game.darkSide }));
@@ -309,17 +371,17 @@ public class TableFx {
         if (!first && s.balloon != null && game.balloonHolder == null && s.balloonSeat >= 0) {
             Vec3d p = table.getSeatLocalPos(s.balloonSeat);
             Vec3d at = new Vec3d(p.x + (p.x - 1.5) * 0.15, p.y + 2.15, p.z + (p.z - 1.5) * 0.15);
-            s.fx.add(new Fx(Kind.POP, now, 900, at.x, at.y, at.z, 0xE83030, now));
+            if (enabled) s.fx.add(new Fx(Kind.POP, now, 900, at.x, at.y, at.z, 0xE83030, now));
             particles(table, "largeexplode", at.x, at.y, at.z, 1, 0);
         }
         if (!first && top != s.topUid && game.topCard != null) {
             CardFace face = game.topFace();
-            s.fx.add(new Fx(Kind.SHOCK, now, 500, 1.5, PILE_Y, 1.5, game.currentColor.rgb, null));
+            if (enabled) s.fx.add(new Fx(Kind.SHOCK, now, 500, 1.5, PILE_Y, 1.5, game.currentColor.rgb, null));
             Sink sink = new Sink(table, game, s, now);
             CardFxRegistry.Context ctx = new CardFxRegistry.Context(table, game, face, now, sink);
             sink.ctx = ctx;
             CardFxRegistry.dispatch(ctx);
-            if (!ctx.defaultsCancelled) {
+            if (enabled && !ctx.defaultsCancelled) {
                 String id = face.type().id;
                 int rgb = ctx.color();
                 boolean reverseCard = face.type().matchKey.equals("reverse") || id.contains("reverse");
@@ -363,7 +425,8 @@ public class TableFx {
                     .isDraw());
         }
         s.color = game.currentColor;
-        if (turned) s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, 0xFFD43A, game.isAntiClockwise));
+        if (enabled && turned)
+            s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, 0xFFD43A, game.isAntiClockwise));
         s.topUid = top;
         s.dark = game.darkSide;
         s.anti = game.isAntiClockwise;
@@ -535,10 +598,12 @@ public class TableFx {
         }
 
         void skipSymbol(int rgb) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.SKIP_SIGN, now, 1300, 1.5, PILE_Y, 1.5, rgb, null));
         }
 
         void skipSigns() {
+            if (!ClientConfig.display.tableEffects) return;
             for (int seat : skippedSeats(game)) {
                 Vec3d at = head(table, seat, 1.5);
                 s.fx.add(new Fx(Kind.SKIP, now, 1600, at.x, at.y, at.z, 0, null));
@@ -546,10 +611,12 @@ public class TableFx {
         }
 
         void reverse(int rgb) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.REVERSE, now, 1300, 1.5, PILE_Y, 1.5, rgb, game.isAntiClockwise));
         }
 
         void pillar(boolean blocks) {
+            if (!ClientConfig.display.tableEffects) return;
             double[] dir = BlockEntityMinoTableRenderer
                 .seatDir(table, game, game.topCard == null ? null : game.topCard.owner);
             if (dir == null) dir = new double[] { 0, 1 };
@@ -566,6 +633,7 @@ public class TableFx {
         }
 
         void slabs(int count, int rgb) {
+            if (!ClientConfig.display.tableEffects) return;
             int seat = ctx.victimSeat();
             Vec3d victim = null;
             if (seat >= 0) {
@@ -585,10 +653,12 @@ public class TableFx {
         }
 
         void text(String text, int rgb, Vec3d at, long delay, int duration) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.PLUS, now + delay, duration, at.x, at.y, at.z, rgb, text));
         }
 
         void symbol(CardFace face, Vec3d at, long delay) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(
                 new Fx(
                     Kind.SYMBOL,
@@ -602,15 +672,18 @@ public class TableFx {
         }
 
         void roulette() {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(
                 new Fx(Kind.ROULETTE, now, 9000, 1.5, PILE_Y + 0.95, 1.5, 0, new Object[] { table, new long[] { 0 } }));
         }
 
         void coin(Vec3d at) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.COIN, now, 1600, at.x, at.y, at.z, 0, null));
         }
 
         void burst(Vec3d at, int rgb, long delay) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.POP, now + delay, 900, at.x, at.y, at.z, rgb, now));
         }
 
@@ -620,6 +693,7 @@ public class TableFx {
         }
 
         void custom(Vec3d at, long delay, int duration, CardFxRegistry.Renderer renderer) {
+            if (!ClientConfig.display.tableEffects) return;
             s.fx.add(new Fx(Kind.CUSTOM, now + delay, duration, at.x, at.y, at.z, 0, new Object[] { renderer, ctx }));
         }
     }
@@ -806,6 +880,12 @@ public class TableFx {
         return new double[] { h.x - dx / len * 0.35, h.y, h.z - dz / len * 0.35 };
     }
 
+    private static void skipThrow() {
+        // Preserve the shared random sequence when optional simulations are disabled.
+        RANDOM.nextDouble();
+        RANDOM.nextLong();
+    }
+
     private static long landingMs(Fx f) {
         return ((Dice.Roll) ((Object[]) f.data)[0]).settleEnd * 1000L / Dice.FPS;
     }
@@ -836,8 +916,8 @@ public class TableFx {
         double[] world = (double[]) d[1];
         int[] heard = (int[]) d[2];
         double sec = (now - f.start) / 1000.0;
-        while (heard[0] < roll.bounces.size() && roll.bounces.get(heard[0]) <= sec * Dice.FPS) {
-            double[] p = roll.pos.get(roll.bounces.get(heard[0]));
+        while (heard[0] < roll.bounces.size() && roll.bounces.getInt(heard[0]) <= sec * Dice.FPS) {
+            double[] p = roll.pos.get(roll.bounces.getInt(heard[0]));
             Minecraft.getMinecraft().theWorld.playSound(
                 world[0] + p[0],
                 world[1] + p[1],
@@ -902,8 +982,8 @@ public class TableFx {
         double sec = (now - f.start) / 1000.0;
         float t = f.t(now);
         double frame = sec * Dice.FPS;
-        while (heard[0] < roll.bounces.size() && roll.bounces.get(heard[0]) <= frame) {
-            double[] p = roll.pos.get(roll.bounces.get(heard[0]));
+        while (heard[0] < roll.bounces.size() && roll.bounces.getInt(heard[0]) <= frame) {
+            double[] p = roll.pos.get(roll.bounces.getInt(heard[0]));
             float loud = 0.55f / (1 + heard[0]);
             Minecraft.getMinecraft().theWorld.playSound(
                 world[0] + p[0],
@@ -928,7 +1008,7 @@ public class TableFx {
         Object[] d = (Object[]) f.data;
         CardFace face = (CardFace) d[0];
         String theme = (String) d[1];
-        ResourceLocation tex = ThemeManager.INSTANCE.texture(theme, "symbol_" + face.type().symbol);
+        ResourceLocation tex = ThemeManager.INSTANCE.texture(theme, CardRenderer.symbolLayer(face));
         float scale = 0.5f * overshoot(Math.min(1f, t / 0.25f));
         float alpha = fadeOut(t, 0.72f);
         int rgb = face.color.isWild() ? 0x2A2630 : face.color.rgb & 0xFFFFFF;

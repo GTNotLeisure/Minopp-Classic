@@ -24,9 +24,19 @@ public class HandMask {
      * holder stays visible, as with real Flip cards; without it both sides are hidden.
      */
     public static NBTTagCompound maskTableTag(NBTTagCompound tableTag, UUID viewer, boolean showBacks) {
+        return clientTableTag(tableTag, viewer, showBacks, false);
+    }
+
+    /**
+     * Creates a client snapshot, excluding server-only challenge evidence even when all hands are revealed.
+     */
+    public static NBTTagCompound clientTableTag(NBTTagCompound tableTag, UUID viewer, boolean showBacks,
+        boolean revealHands) {
         if (!tableTag.hasKey("game", 10)) return tableTag;
         NBTTagCompound copy = (NBTTagCompound) tableTag.copy();
         NBTTagCompound game = copy.getCompoundTag("game");
+        game.removeTag("challengeableHadColor");
+        if (revealHands) return copy;
         boolean darkSide = game.getBoolean("darkSide");
         UUID revealed = game.getInteger("revealOneTurns") > 0 && NbtUtil.hasUUID(game, "revealedOne")
             ? NbtUtil.getUUID(game, "revealedOne")

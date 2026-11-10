@@ -29,6 +29,10 @@ public class ColorPicker3D {
     private static final FloatBuffer PROJECTION = BufferUtils.createFloatBuffer(16);
     private static final IntBuffer VIEWPORT = BufferUtils.createIntBuffer(16);
     private static final FloatBuffer WIN = BufferUtils.createFloatBuffer(3);
+    private static final double[][] RING_POINTS = new double[14][3];
+    private static final float[][] BOUNDS = new float[4][6];
+    private static final double[][] FRUSTUM_CORNERS = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+    private static final float[] SIDE_SHADES = { 0.85f, 0.7f, 0.85f, 0.7f };
 
     private static BlockPos tablePos;
     private static List<CardColor> colors;
@@ -111,7 +115,19 @@ public class ColorPicker3D {
         GL11.glGetInteger(GL11.GL_VIEWPORT, VIEWPORT);
         Minecraft mc = Minecraft.getMinecraft();
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        return project(x0, y0, z0, x1, y1, z1, MODELVIEW, PROJECTION, VIEWPORT, res.getScaleFactor(), mc.displayHeight);
+        return project(
+            x0,
+            y0,
+            z0,
+            x1,
+            y1,
+            z1,
+            MODELVIEW,
+            PROJECTION,
+            VIEWPORT,
+            res.getScaleFactor(),
+            mc.displayHeight,
+            new float[6]);
     }
 
     public static boolean visible() {
@@ -154,8 +170,6 @@ public class ColorPicker3D {
         }
         double rx = fz, rz = -fx;
         float spread = 0.44f, half = 0.17f;
-        double[][] offsets = { { fx * spread, fz * spread }, { rx * spread, rz * spread },
-            { -fx * spread, -fz * spread }, { -rx * spread, -rz * spread } };
 
         GL11.glPushMatrix();
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -187,31 +201,54 @@ public class ColorPicker3D {
             float target = (hot ? 0.55f : 0.24f) * appear;
             height[i] += (target - height[i]) * ease;
             float h = Math.max(0.01f, height[i]);
-            double cx = 1.5 + offsets[i][0], cz = 1.5 + offsets[i][1];
+            double offsetX = switch (i) {
+                case 0 -> fx * spread;
+                case 1 -> rx * spread;
+                case 2 -> -fx * spread;
+                default -> -rx * spread;
+            };
+            double offsetZ = switch (i) {
+                case 0 -> fz * spread;
+                case 1 -> rz * spread;
+                case 2 -> -fz * spread;
+                default -> -rz * spread;
+            };
+            double cx = 1.5 + offsetX, cz = 1.5 + offsetZ;
             float y0 = 0.945f, y1 = y0 + h;
             int rgb = colors.get(i).rgb;
             if (ring) {
-                double mid = Math.atan2(offsets[i][1], offsets[i][0]);
+                double mid = Math.atan2(offsetZ, offsetX);
                 double a0 = mid - Math.toRadians(45), a1 = mid + Math.toRadians(45);
                 double ox = 1.5 + Math.cos(mid) * 0.05, oz = 1.5 + Math.sin(mid) * 0.05;
                 drawQuarter(ox, oz, a0, a1, 0, 0.56 * (hot ? 1.16 : 1.04), 0.5, y0, y1, rgb, hot ? 0.9f : 0.7f, hot);
                 arrow(ox, oz, mid, 0.18, 0.36, 0.085, y1 + 0.004, hot ? 0.95f : 0.8f);
                 if (local) {
-                    double[][] pts = new double[14][];
+                    double[][] pts = RING_POINTS;
                     for (int k = 0; k < 6; k++) {
                         double a = a0 + (a1 - a0) * k / 5;
-                        pts[k] = new double[] { 1.5 + Math.cos(a) * 0.56, y0, 1.5 + Math.sin(a) * 0.56 };
-                        pts[k + 6] = new double[] { 1.5 + Math.cos(a) * 0.56, y1, 1.5 + Math.sin(a) * 0.56 };
+                        pts[k][0] = pts[k + 6][0] = 1.5 + Math.cos(a) * 0.56;
+                        pts[k][1] = y0;
+                        pts[k + 6][1] = y1;
+                        pts[k][2] = pts[k + 6][2] = 1.5 + Math.sin(a) * 0.56;
                     }
-                    pts[12] = new double[] { 1.5, y0, 1.5 };
-                    pts[13] = new double[] { 1.5, y1, 1.5 };
-                    screenBounds[i] = projectPoints(pts, modelview, projection, viewport, scale, displayHeight);
+                    pts[12][0] = pts[13][0] = 1.5;
+                    pts[12][1] = y0;
+                    pts[13][1] = y1;
+                    pts[12][2] = pts[13][2] = 1.5;
+                    screenBounds[i] = projectPoints(
+                        pts,
+                        modelview,
+                        projection,
+                        viewport,
+                        scale,
+                        displayHeight,
+                        BOUNDS[i]);
                 }
                 continue;
             }
             float alpha = hot ? 0.95f : 0.78f;
             drawFrustum(cx, cz, 0.15, hot ? 0.21 : 0.18, y0, y1, rgb, alpha, hot);
-            arrow(cx, cz, Math.atan2(offsets[i][1], offsets[i][0]), -0.07, 0.09, 0.07, y1 + 0.004, alpha);
+            arrow(cx, cz, Math.atan2(offsetZ, offsetX), -0.07, 0.09, 0.07, y1 + 0.004, alpha);
             if (local) screenBounds[i] = project(
                 cx - half,
                 y0,
@@ -223,7 +260,8 @@ public class ColorPicker3D {
                 projection,
                 viewport,
                 scale,
-                displayHeight);
+                displayHeight,
+                BOUNDS[i]);
         }
 
         GL11.glEnable(GL11.GL_CULL_FACE);
@@ -308,7 +346,8 @@ public class ColorPicker3D {
             t.addVertex(ox + c1 * r1Bottom, y0, oz + s1 * r1Bottom);
             t.addVertex(ox + c0 * r1Bottom, y0, oz + s0 * r1Bottom);
         }
-        for (double a : new double[] { a0, a1 }) {
+        for (int end = 0; end < 2; end++) {
+            double a = end == 0 ? a0 : a1;
             double c = Math.cos(a), s = Math.sin(a);
             t.setColorRGBA_F(r * 0.7f, g * 0.7f, b * 0.7f, alpha);
             t.addVertex(ox + c * r0, y1, oz + s * r0);
@@ -352,8 +391,8 @@ public class ColorPicker3D {
         t.addVertex(cx - hwTop, y1, cz + hwTop);
         t.addVertex(cx + hwTop, y1, cz + hwTop);
         t.addVertex(cx + hwTop, y1, cz - hwTop);
-        double[][] top = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
-        float[] shade = { 0.85f, 0.7f, 0.85f, 0.7f };
+        double[][] top = FRUSTUM_CORNERS;
+        float[] shade = SIDE_SHADES;
         for (int k = 0; k < 4; k++) {
             double[] p = top[k], q = top[(k + 1) % 4];
             t.setColorRGBA_F(r * shade[k], g * shade[k], b * shade[k], alpha);
@@ -387,7 +426,7 @@ public class ColorPicker3D {
     }
 
     private static float[] projectPoints(double[][] pts, FloatBuffer modelview, FloatBuffer projection,
-        IntBuffer viewport, int scale, int displayHeight) {
+        IntBuffer viewport, int scale, int displayHeight, float[] out) {
         FloatBuffer win = WIN;
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         float sx = 0, sy = 0;
@@ -405,11 +444,11 @@ public class ColorPicker3D {
             sx += gx;
             sy += gy;
         }
-        return new float[] { minX, minY, maxX, maxY, sx / pts.length, sy / pts.length };
+        return bounds(out, minX, minY, maxX, maxY, sx / pts.length, sy / pts.length);
     }
 
     private static float[] project(double x0, double y0, double z0, double x1, double y1, double z1,
-        FloatBuffer modelview, FloatBuffer projection, IntBuffer viewport, int scale, int displayHeight) {
+        FloatBuffer modelview, FloatBuffer projection, IntBuffer viewport, int scale, int displayHeight, float[] out) {
         FloatBuffer win = WIN;
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         for (int c = 0; c < 8; c++) {
@@ -424,6 +463,17 @@ public class ColorPicker3D {
             minY = Math.min(minY, gy);
             maxY = Math.max(maxY, gy);
         }
-        return new float[] { minX, minY, maxX, maxY, (minX + maxX) / 2, (minY + maxY) / 2 };
+        return bounds(out, minX, minY, maxX, maxY, (minX + maxX) / 2, (minY + maxY) / 2);
+    }
+
+    private static float[] bounds(float[] out, float minX, float minY, float maxX, float maxY, float centerX,
+        float centerY) {
+        out[0] = minX;
+        out[1] = minY;
+        out[2] = maxX;
+        out[3] = maxY;
+        out[4] = centerX;
+        out[5] = centerY;
+        return out;
     }
 }

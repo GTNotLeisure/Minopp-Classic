@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import net.minecraft.util.ResourceLocation;
 
@@ -41,12 +42,24 @@ public class SoundBank {
      */
     public record Slot(String id, String group, String sample) {
 
+        public Slot {
+            validateId(id);
+            Objects.requireNonNull(group, "group");
+            Objects.requireNonNull(sample, "sample");
+        }
+
         public String langKey() {
             return key(id, "sound.");
         }
     }
 
     public record Pack(String id, ResourceLocation icon, Map<String, Sound> sounds) {
+
+        public Pack {
+            validateId(id);
+            Objects.requireNonNull(icon, "icon");
+            sounds = Map.copyOf(sounds);
+        }
 
         public String langKey() {
             return key(id, "sound.pack.");
@@ -163,6 +176,13 @@ public class SoundBank {
             : "gui." + id.substring(0, colon) + "." + kind + id.substring(colon + 1);
     }
 
+    private static void validateId(String id) {
+        Objects.requireNonNull(id, "id");
+        if (id.isBlank() || id.indexOf('=') >= 0 || id.indexOf(';') >= 0) {
+            throw new IllegalArgumentException("Invalid sound pack or slot id: " + id);
+        }
+    }
+
     private static String bare(String sound) {
         return sound.startsWith("minecraft:") ? sound.substring("minecraft:".length()) : sound;
     }
@@ -193,6 +213,7 @@ public class SoundBank {
         Slot s = new Slot(id, group, sample);
         SLOTS.add(s);
         SLOT_BY_ID.put(id, s);
+        SOUND_SLOT.put(bare(sample), id);
         for (String sound : sounds) SOUND_SLOT.put(bare(sound), id);
         return s;
     }

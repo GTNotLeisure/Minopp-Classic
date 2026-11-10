@@ -2,8 +2,23 @@ package com.hfstudio.minopp.effect;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class EffectEvents {
+
+    public static <T extends EffectEvent> EffectEvent.Type<T> register(EffectEvent.Type<T> type) {
+        Objects.requireNonNull(type, "type");
+        if (REGISTRY.putIfAbsent(type.id(), type) != null) {
+            throw new IllegalArgumentException("Effect already registered: " + type.id());
+        }
+        return type;
+    }
+
+    public static EffectEvent.Type<?> get(String id) {
+        EffectEvent.Type<?> type = REGISTRY.get(id);
+        if (type == null) throw new IllegalArgumentException("Unknown effect type: " + id);
+        return type;
+    }
 
     public static final int EFFECT_RADIUS = 16;
 
@@ -28,7 +43,7 @@ public class EffectEvents {
     static {
         for (EffectEvent.Type<?> type : new EffectEvent.Type<?>[] { SOUND, PLAYER_FIREWORK, PLAYER_GLOW, GRANT_REWARD,
             SEAT_ACTION_TAKEN }) {
-            REGISTRY.put(type.id(), type);
+            register(type);
         }
     }
 }

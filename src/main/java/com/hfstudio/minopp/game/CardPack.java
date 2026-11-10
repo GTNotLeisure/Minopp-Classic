@@ -3,9 +3,13 @@ package com.hfstudio.minopp.game;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 public class CardPack {
 
@@ -54,6 +58,19 @@ public class CardPack {
      */
     public record Entry(String key, String typeId, int[] numbers, int count, boolean dark, boolean flexColor) {
 
+        public Entry {
+            Objects.requireNonNull(key, "key");
+            Objects.requireNonNull(typeId, "typeId");
+            if (key.isBlank() || key.indexOf(':') >= 0) throw new IllegalArgumentException("Invalid entry key: " + key);
+            if (count < 0 || count > 64) throw new IllegalArgumentException("Entry count must be between 0 and 64");
+            numbers = numbers.clone();
+        }
+
+        @Override
+        public int[] numbers() {
+            return numbers.clone();
+        }
+
         public boolean isWild() {
             return CardTypes.get(typeId).wild;
         }
@@ -76,22 +93,49 @@ public class CardPack {
     public final List<Entry> entries;
     public final Map<String, Integer> presetRules;
     public final int minPlayers, maxPlayers;
+    public final String basePackId;
+    public final String backSideOf;
+    private final Map<String, EntryData> entryIndex;
+
+    private static class EntryData {
+
+        private final Entry entry;
+        private final String countKey;
+        private volatile List<CardFace> faces;
+
+        private EntryData(Entry entry, String countKey) {
+            this.entry = entry;
+            this.countKey = countKey;
+        }
+
+        private List<CardFace> faces() {
+            List<CardFace> cached = faces;
+            if (cached != null) return cached;
+            if (!CardTypes.exists(entry.typeId))
+                throw new IllegalArgumentException("Unknown card type: " + entry.typeId);
+            cached = List.copyOf(TableConfig.entryFaces(entry));
+            faces = cached;
+            return cached;
+        }
+    }
 
     private CardPack(String id, boolean backSideOnly, List<Entry> entries, Map<String, Integer> presetRules,
-        int minPlayers, int maxPlayers) {
+        int minPlayers, int maxPlayers, String basePackId, String backSideOf) {
         this.id = id;
         this.backSideOnly = backSideOnly;
-        this.entries = Collections.unmodifiableList(entries);
-        this.presetRules = Collections.unmodifiableMap(presetRules);
+        this.entries = List.copyOf(entries);
+        this.presetRules = Collections.unmodifiableMap(new LinkedHashMap<>(presetRules));
         this.minPlayers = minPlayers;
         this.maxPlayers = maxPlayers;
+        this.basePackId = basePackId;
+        this.backSideOf = backSideOf;
+        Map<String, EntryData> index = new HashMap<>();
+        for (Entry entry : this.entries) index.put(entry.key, new EntryData(entry, id + ":" + entry.key));
+        this.entryIndex = Collections.unmodifiableMap(index);
     }
 
     public boolean isAddon() {
-        if (backSideOnly) return false;
-        // a pack with plain number cards is a deck of its own; special numbers (Fast, Colorless) still ride on one
-        for (Entry e : entries) if (e.typeId.equals("number")) return false;
-        return true;
+        return basePackId != null;
     }
 
     public static String alias(String id) {
@@ -107,34 +151,84 @@ public class CardPack {
     }
 
     public Entry entry(String key) {
-        for (Entry e : entries) if (e.key.equals(key)) return e;
-        return null;
+        EntryData data = entryIndex.get(key);
+        return data == null ? null : data.entry;
+    }
+
+    public String countKey(String entryKey) {
+        EntryData data = entryIndex.get(entryKey);
+        return data == null ? id + ":" + entryKey : data.countKey;
+    }
+
+    /**
+     * Returns immutable face templates in entry order, shared safely by the client and game threads.
+     */
+    public List<CardFace> faces(String entryKey) {
+        EntryData data = entryIndex.get(entryKey);
+        if (data == null) throw new IllegalArgumentException("Unknown entry: " + countKey(entryKey));
+        return data.faces();
     }
 
     private static final Map<String, CardPack> REGISTRY = new LinkedHashMap<>();
+    private static final Collection<CardPack> ALL = Collections.unmodifiableCollection(REGISTRY.values());
+    private static final Map<String, List<CardPack>> BACKS_BY_FRONT = new HashMap<>();
+
+    /**
+     * Returns the immutable, registration-ordered snapshot of back packs associated with a front pack.
+     */
+    public static List<CardPack> backPacks(String frontPackId) {
+        return BACKS_BY_FRONT.getOrDefault(frontPackId, List.of());
+    }
 
     public static CardPack get(String id) {
         return REGISTRY.get(id);
     }
 
     public static boolean isEntryKey(String countKey) {
-        int colon = countKey.indexOf(':');
+        int colon = countKey.lastIndexOf(':');
         if (colon < 0) return false;
         CardPack pack = get(countKey.substring(0, colon));
         if (pack == null) return false;
-        String key = countKey.substring(colon + 1);
-        for (Entry e : pack.entries) if (e.key()
-            .equals(key)) return true;
-        return false;
+        return pack.entry(countKey.substring(colon + 1)) != null;
     }
 
     public static Collection<CardPack> all() {
-        return Collections.unmodifiableCollection(REGISTRY.values());
+        return ALL;
+    }
+
+    private static long revision;
+
+    public static long revision() {
+        return revision;
     }
 
     public static CardPack register(CardPack pack) {
-        REGISTRY.put(pack.id, pack);
+        Objects.requireNonNull(pack, "pack");
+        requireFrontPack(pack.basePackId);
+        requireFrontPack(pack.backSideOf);
+        for (Entry entry : pack.entries) {
+            if (!CardTypes.exists(entry.typeId))
+                throw new IllegalArgumentException("Unknown card type: " + entry.typeId);
+        }
+        for (String rule : pack.presetRules.keySet()) {
+            if (GameRules.get(rule) == null) throw new IllegalArgumentException("Unknown rule: " + rule);
+        }
+        if (REGISTRY.putIfAbsent(pack.id, pack) != null)
+            throw new IllegalArgumentException("Card pack already registered: " + pack.id);
+        if (pack.backSideOnly) {
+            List<CardPack> backs = new ArrayList<>(backPacks(pack.backSideOf));
+            backs.add(pack);
+            BACKS_BY_FRONT.put(pack.backSideOf, List.copyOf(backs));
+        }
+        revision++;
         return pack;
+    }
+
+    private static void requireFrontPack(String id) {
+        if (id == null) return;
+        CardPack pack = get(id);
+        if (pack == null || pack.backSideOnly)
+            throw new IllegalArgumentException("Register the front/base pack first: " + id);
     }
 
     private static final int[] ZERO = { 0 };
@@ -142,51 +236,90 @@ public class CardPack {
     private static final int[] ZERO_TO_NINE = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     private static final int[] NONE = {};
 
-    private static class Builder {
+    public static Builder builder(String id) {
+        return new Builder(id);
+    }
+
+    public static class Builder {
 
         private final String id;
         private boolean backSideOnly;
         private final List<Entry> entries = new ArrayList<>();
+        private final Set<String> entryKeys = new HashSet<>();
         private final Map<String, Integer> rules = new LinkedHashMap<>();
         private int minPlayers = 2, maxPlayers = 10;
+        private String basePackId, backSideOf;
+        private boolean standalone;
 
-        Builder(String id) {
-            this.id = id;
+        private Builder(String id) {
+            this.id = Objects.requireNonNull(id, "id");
+            if (id.isBlank() || id.endsWith(":")) throw new IllegalArgumentException("Invalid pack id: " + id);
         }
 
-        Builder numbers(String key, int[] numbers, int count) {
-            entries.add(new Entry(key, "number", numbers, count, false, false));
+        public Builder numbers(String key, int[] numbers, int count) {
+            return entry(key, "number", numbers, count, false, false);
+        }
+
+        public Builder entry(String typeId, int count) {
+            return entry(typeId.substring(typeId.indexOf(':') + 1), typeId, NONE, count, false, false);
+        }
+
+        public Builder entry(String key, String typeId, int[] numbers, int count, boolean dark, boolean flex) {
+            Entry entry = new Entry(key, typeId, numbers, count, dark, flex);
+            if (!entryKeys.add(key)) throw new IllegalArgumentException("Duplicate entry key: " + key);
+            entries.add(entry);
             return this;
         }
 
-        Builder entry(String typeId, int count) {
-            entries.add(new Entry(typeId, typeId, NONE, count, false, false));
-            return this;
-        }
-
-        Builder entry(String key, String typeId, int[] numbers, int count, boolean dark, boolean flex) {
-            entries.add(new Entry(key, typeId, numbers, count, dark, flex));
-            return this;
-        }
-
-        Builder players(int min, int max) {
+        public Builder players(int min, int max) {
+            if (min < 2 || max < min || max > 20) throw new IllegalArgumentException("Invalid player range");
             minPlayers = min;
             maxPlayers = max;
             return this;
         }
 
-        Builder rule(String rule, int value) {
+        public Builder rule(String rule, int value) {
             rules.put(rule, value);
             return this;
         }
 
-        Builder backSideOnly() {
+        public Builder backSideOnly() {
+            return backSideOf(FLIP);
+        }
+
+        public Builder backSideOf(String packId) {
             backSideOnly = true;
+            backSideOf = Objects.requireNonNull(packId, "packId");
             return this;
         }
 
-        CardPack build() {
-            return register(new CardPack(id, backSideOnly, entries, rules, minPlayers, maxPlayers));
+        public Builder basePack(String packId) {
+            basePackId = Objects.requireNonNull(packId, "packId");
+            standalone = false;
+            return this;
+        }
+
+        public Builder standalone() {
+            basePackId = null;
+            standalone = true;
+            return this;
+        }
+
+        /**
+         * Creates an independent pack without registering it.
+         */
+        public CardPack build() {
+            String base = basePackId;
+            if (backSideOnly || standalone) base = null;
+            else if (base == null && entries.stream()
+                .noneMatch(e -> e.typeId.equals("number"))) base = CLASSIC;
+            if (id.equals(base) || id.equals(backSideOf))
+                throw new IllegalArgumentException("A pack cannot depend on itself");
+            return new CardPack(id, backSideOnly, entries, rules, minPlayers, maxPlayers, base, backSideOf);
+        }
+
+        public CardPack register() {
+            return CardPack.register(build());
         }
     }
 
@@ -198,7 +331,7 @@ public class CardPack {
         .entry("wild", 4)
         .entry("wild_draw4", 4)
         .players(2, 10)
-        .build();
+        .register();
 
     public static final CardPack PACK_NO_MERCY = new Builder(NO_MERCY).numbers("numbers", ZERO_TO_NINE, 2)
         .entry("skip", 3)
@@ -217,7 +350,7 @@ public class CardPack {
         .rule(GameRules.SEVEN_ZERO, 1)
         .rule(GameRules.DRAW_TO_MATCH, 1)
         .players(2, 6)
-        .build();
+        .register();
 
     public static final CardPack PACK_FLIP = new Builder(FLIP).numbers("numbers", ONE_TO_NINE, 2)
         .entry("draw1", 2)
@@ -228,7 +361,7 @@ public class CardPack {
         .entry("wild_draw2", 4)
         .rule(GameRules.FLIP_MODE, 1)
         .players(2, 10)
-        .build();
+        .register();
 
     public static final CardPack PACK_FLIP_DARK = new Builder(FLIP_DARK)
         .entry("numbers", "number", ONE_TO_NINE, 2, true, false)
@@ -239,7 +372,7 @@ public class CardPack {
         .entry("wild", 4)
         .entry("wild_draw_color", 4)
         .backSideOnly()
-        .build();
+        .register();
 
     public static final CardPack PACK_FLEX = new Builder(FLEX).numbers("zero", ZERO, 1)
         .numbers("numbers", new int[] { 1, 2, 3, 4, 6, 7, 8 }, 2)
@@ -256,7 +389,7 @@ public class CardPack {
         .entry("flex_wild_draw4", 4)
         .rule(GameRules.FLEX_POWER, 1)
         .players(2, 6)
-        .build();
+        .register();
 
     public static final CardPack PACK_ALL_WILD = new Builder(ALL_WILD).entry("aw_wild", 26)
         .entry("aw_reverse", 14)
@@ -267,7 +400,7 @@ public class CardPack {
         .entry("aw_targeted_draw2", 14)
         .entry("aw_forced_swap", 14)
         .players(2, 10)
-        .build();
+        .register();
 
     public static final CardPack PACK_PARTY = new Builder(PARTY).entry("point_taken", 1)
         .entry("wild_drawn_together", 3)
@@ -275,123 +408,124 @@ public class CardPack {
         .rule(GameRules.JUMP_IN, 1)
         .rule(GameRules.MAX_PLAYERS, 16)
         .players(6, 16)
-        .build();
+        .register();
 
     public static final CardPack PACK_LEGEND = new Builder(LEGEND).entry("wild_trial", 4)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_ANNIVERSARY = new Builder(ANNIVERSARY).entry("wild_fifty_fifty", 4)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_WEEKEND = new Builder(WEEKEND).entry("wild_plus6", 2)
         .entry("wild_reverse_plus6", 2)
         .entry("double_discard_all", 1)
         .entry("wild_time_balloon", 2)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_BLASTER = new Builder(BLASTER).entry("blaster", 2)
         .entry("trade_hands", 1)
         .entry("discard_all", 1)
         .entry("wild_blast_all", 4)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_MODERN = new Builder(MODERN).entry("gift", 1)
         .entry("bonus_turn", 1)
         .entry("wild_swap_hands", 2)
         .entry("wild_hand_shuffle", 1)
         .players(2, 10)
-        .build();
+        .register();
     public static final CardPack PACK_JUNGLE = new Builder(JUNGLE).entry("wild_hand_shuffle", 2)
         .entry("wild_rebound", 2)
         .entry("wild_smoke", 1)
         .entry("wild_echo", 1)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_DANCE = new Builder(DANCE).entry("wild_crossfade", 2)
         .entry("wild_dance_floor", 2)
         .entry("wild_even_out", 1)
         .entry("wild_surprise", 1)
         .players(3, 10)
-        .build();
+        .register();
     public static final CardPack PACK_RASCAL = new Builder(RASCAL).entry("wild_card_storm", 1)
         .entry("wild_booby_trap", 2)
         .entry("wild_hurry_up", 1)
         .entry("wild_shield", 2)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_MYTH = new Builder(MYTH).entry("wild_trickster", 3)
         .entry("wild_surge", 3)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_TEAMS = new Builder(TEAMS).entry("wild_team_play", 4)
         .entry("wild_team_draw4", 2)
         .rule(GameRules.TEAM_MODE, 1)
         .rule(GameRules.TEAM_RELAY, 1)
         .players(4, 20)
-        .build();
+        .register();
     public static final CardPack PACK_WHIRLWIND = new Builder(WHIRLWIND).entry("wild_cyclone", 2)
         .entry("wild_thief", 2)
         .players(3, 8)
-        .build();
+        .register();
     public static final CardPack PACK_STACK = new Builder(STACK).entry("stack1", 1)
         .entry("stack2", 1)
         .entry("wild_stack3", 3)
         .entry("wild_stack_number", 3)
         .rule(GameRules.STACKING, 1)
         .players(2, 10)
-        .build();
+        .register();
     public static final CardPack PACK_SWAP = new Builder(SWAP).entry("swap_one", 1)
         .entry("refresh_hand", 1)
         .entry("wild_force_trade", 3)
         .entry("wild_pass_hands", 3)
         .players(3, 10)
-        .build();
+        .register();
     public static final CardPack PACK_REVERSE = new Builder(REVERSE_PACK).entry("reverse_skip", 1)
         .entry("reverse_draw2", 1)
         .entry("wild_power_reverse", 3)
         .entry("wild_no_u", 3)
         .players(3, 10)
-        .build();
+        .register();
     public static final CardPack PACK_SPEED = new Builder(SPEED).entry("speed_up", 3)
         .entry("wild_double_speed", 4)
         .players(2, 8)
-        .build();
+        .register();
     public static final CardPack PACK_FRENEMIES = new Builder(FRENEMIES).entry("wild_petty_play", 2)
         .entry("wild_eliminator", 1)
         .entry("wild_instigator", 2)
         .entry("wild_nemesis", 1)
         .players(3, 10)
-        .build();
+        .register();
     public static final CardPack PACK_DEFENSE = new Builder(DEFENSE).entry("wild_block", 2)
         .entry("wild_block_rebound", 2)
         .entry("wild_block_deflect", 1)
         .entry("wild_redirect", 1)
         .players(2, 10)
-        .build();
+        .register();
     public static final CardPack PACK_COMEBACK = new Builder(COMEBACK).entry("wild_swap_hands", 2)
         .entry("wild_match_max", 2)
         .entry("wild_misery", 2)
         .players(2, 10)
-        .build();
+        .register();
     public static final CardPack PACK_LOVE_ISLAND = new Builder(LOVE_ISLAND).entry("wild_eggs_basket", 2)
         .entry("wild_pull_chat", 2)
         .entry("wild_got_text", 2)
         .players(3, 10)
-        .build();
+        .register();
     public static final CardPack PACK_BILLIE = new Builder(BILLIE).entry("wild_pass_color", 2)
         .entry("trick_wild", 2)
         .entry("wild_color_challenge", 2)
         .entry("reveal_hands", 1)
         .players(2, 10)
-        .build();
-    public static final CardPack PACK_SHOW_EM = new Builder(SHOW_EM).entry("play_again_10", 2)
+        .register();
+    public static final CardPack PACK_SHOW_EM = new Builder(SHOW_EM).basePack(NO_MERCY)
+        .entry("play_again_10", 2)
         .entry("wild_discard_all", 2)
         .entry("wild_reverse_draw8", 2)
         .entry("wild_final_attack", 1)
         .entry("wild_sudden_death", 1)
         .rule(GameRules.COINS, 1)
         .players(2, 6)
-        .build();
+        .register();
 
     public static final CardPack PACK_INFINITY = new Builder(INFINITY)
         .entry("fast", "fast_number", ONE_TO_NINE, 2, false, false)
@@ -423,7 +557,7 @@ public class CardPack {
         .rule(GameRules.STACKING, 1)
         .rule(GameRules.MERCY, 1)
         .players(2, 10)
-        .build();
+        .register();
 
     public static void init() {
         CardTypes.init();

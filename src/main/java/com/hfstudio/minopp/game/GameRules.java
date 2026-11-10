@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class GameRules {
 
@@ -19,6 +20,17 @@ public class GameRules {
 
     public record Rule(String id, Category category, int defaultValue, int min, int max, boolean bool) {
 
+        public Rule {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(category, "category");
+            if (id.isBlank() || min > max
+                || defaultValue < min
+                || defaultValue > max
+                || bool && (min != 0 || max != 1)) {
+                throw new IllegalArgumentException("Invalid rule: " + id);
+            }
+        }
+
         public String langKey() {
             return "gui.minopp.rule." + id;
         }
@@ -29,14 +41,29 @@ public class GameRules {
     }
 
     private static final Map<String, Rule> REGISTRY = new LinkedHashMap<>();
+    private static volatile List<Rule> rules = List.of();
+    private static long revision;
 
-    private static String bool(String id, Category category, boolean def) {
-        REGISTRY.put(id, new Rule(id, category, def ? 1 : 0, 0, 1, true));
+    public static Rule register(Rule rule) {
+        Objects.requireNonNull(rule, "rule");
+        if (REGISTRY.putIfAbsent(rule.id(), rule) != null)
+            throw new IllegalArgumentException("Rule already registered: " + rule.id());
+        rules = null;
+        revision++;
+        return rule;
+    }
+
+    public static long revision() {
+        return revision;
+    }
+
+    public static String bool(String id, Category category, boolean def) {
+        register(new Rule(id, category, def ? 1 : 0, 0, 1, true));
         return id;
     }
 
-    private static String integer(String id, Category category, int def, int min, int max) {
-        REGISTRY.put(id, new Rule(id, category, def, min, max, false));
+    public static String integer(String id, Category category, int def, int min, int max) {
+        register(new Rule(id, category, def, min, max, false));
         return id;
     }
 
@@ -78,10 +105,28 @@ public class GameRules {
     public static final String PEEK_HANDS = bool("peekHands", Category.TABLE, false);
     public static final String FLIP_BACKS = bool("flipBacks", Category.TABLE, true);
 
-    private static final Map<String, int[]> PRESETS = Map.of(SCORE_TARGET, new int[] { 0, 200, 300, 500, 750, 1000 });
+    private static final Map<String, int[]> PRESETS = new LinkedHashMap<>();
+
+    static {
+        registerPresets(SCORE_TARGET, 0, 200, 300, 500, 750, 1000);
+    }
+
+    public static void registerPresets(String id, int... values) {
+        Rule rule = Objects.requireNonNull(get(id), "Unknown rule: " + id);
+        if (values.length == 0) throw new IllegalArgumentException("Presets cannot be empty");
+        int[] copy = values.clone();
+        for (int i = 0; i < copy.length; i++) {
+            if (copy[i] < rule.min() || copy[i] > rule.max() || i > 0 && copy[i] <= copy[i - 1]) {
+                throw new IllegalArgumentException("Presets must be ordered, unique and within the rule range");
+            }
+        }
+        PRESETS.put(id, copy);
+        revision++;
+    }
 
     public static int[] presets(String id) {
-        return PRESETS.get(id);
+        int[] values = PRESETS.get(id);
+        return values == null ? null : values.clone();
     }
 
     public static int stepPreset(String id, int value, int dir) {
@@ -100,7 +145,12 @@ public class GameRules {
     }
 
     public static List<Rule> all() {
-        return List.copyOf(REGISTRY.values());
+        List<Rule> snapshot = rules;
+        if (snapshot == null) {
+            snapshot = List.copyOf(REGISTRY.values());
+            rules = snapshot;
+        }
+        return snapshot;
     }
 
     public static List<Rule> byCategory(Category category) {

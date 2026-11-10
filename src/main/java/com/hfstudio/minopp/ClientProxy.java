@@ -8,6 +8,7 @@ import net.minecraftforge.client.event.FOVUpdateEvent;
 import net.minecraftforge.client.event.MouseEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.world.WorldEvent;
 
 import com.gtnewhorizon.gtnhlib.client.model.loading.ModelRegistry;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
@@ -17,6 +18,7 @@ import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.gui.GameOverlayLayer;
 import com.hfstudio.minopp.gui.HandScreen;
+import com.hfstudio.minopp.gui.PlayerPicker;
 import com.hfstudio.minopp.gui.TurnDeadMan;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -24,6 +26,7 @@ import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.render.EntityAutoPlayerRenderer;
 import com.hfstudio.minopp.render.HandCardsItemRenderer;
+import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Mth;
@@ -93,6 +96,18 @@ public class ClientProxy extends CommonProxy {
             if (event.phase == TickEvent.Phase.START) {
                 HandScreen.beginFrame();
                 MinoClient.tick();
+                TableFx.tick();
+            }
+        }
+
+        @SubscribeEvent
+        public void onWorldUnload(WorldEvent.Unload event) {
+            if (event.world.isRemote) {
+                MinoClient.SOUND_QUEUE.clear();
+                PlayerPicker.clearSkinCache();
+                TableFx.clear(event.world);
+                GameOverlayLayer.INSTANCE.clearHand();
+                HandScreen.beginFrame();
             }
         }
 
@@ -114,11 +129,9 @@ public class ClientProxy extends CommonProxy {
             BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, handCardGamePos);
             if (tableEntity == null || tableEntity.game == null) return;
 
-            CardPlayer playerWithoutHand = ItemHandCards.getCardPlayer(player);
-            CardPlayer realPlayer = tableEntity.game.players.stream()
-                .filter(p -> p.equals(playerWithoutHand))
-                .findFirst()
-                .orElse(null);
+            CardPlayer realPlayer = tableEntity.game.deAmputate(
+                player.getGameProfile()
+                    .getId());
             if (realPlayer == null) return;
 
             int handIndex = ItemDataUtils.getHandIndex(holding);

@@ -1,5 +1,8 @@
 package com.hfstudio.minopp.game;
 
+import java.util.Objects;
+import java.util.function.BiConsumer;
+
 public class CardType {
 
     public enum Choice {
@@ -41,6 +44,15 @@ public class CardType {
         boolean test(CardGame game, CardPlayer player, CardFace face);
     }
 
+    public interface Automation {
+
+        default int score(CardGame game, CardPlayer player, Card card, boolean useFlex, int defaultScore) {
+            return defaultScore;
+        }
+
+        default void choose(CardGame game, CardPlayer player, Card card, PlayContext.PlayChoices choices) {}
+    }
+
     public final String id;
     public final String packId;
     public final boolean wild;
@@ -48,6 +60,7 @@ public class CardType {
     public final String matchKey;
     public final String shortLabel;
     public final String symbol;
+    public final boolean customSymbol;
     public final int sortOrder;
     public final int drawValue;
     public final boolean keepsColor;
@@ -70,6 +83,8 @@ public class CardType {
      * Cards printed in one color only, such as the colorless numbers; null for the usual four.
      */
     public final CardColor fixedColor;
+    public final Automation automation;
+    public final BiConsumer<CardGame, CardFace> opening;
 
     public static final int PICK_HALF = -1;
 
@@ -81,6 +96,7 @@ public class CardType {
         this.matchKey = b.matchKey == null ? b.id : b.matchKey;
         this.shortLabel = b.shortLabel == null ? "" : b.shortLabel;
         this.symbol = b.symbol == null ? b.id : b.symbol;
+        this.customSymbol = b.symbol != null;
         this.sortOrder = b.sortOrder;
         this.drawValue = b.drawValue;
         this.keepsColor = b.keepsColor;
@@ -94,6 +110,8 @@ public class CardType {
         this.pick = b.pick;
         this.fast = b.fast;
         this.fixedColor = b.fixedColor;
+        this.automation = b.automation;
+        this.opening = b.opening;
     }
 
     /**
@@ -133,10 +151,14 @@ public class CardType {
         private Effect effect = ctx -> {};
         private Effect flexEffect;
         private Condition condition;
+        private Automation automation;
+        private BiConsumer<CardGame, CardFace> opening;
 
         private Builder(String id, String packId) {
-            this.id = id;
-            this.packId = packId;
+            this.id = Objects.requireNonNull(id, "id");
+            this.packId = Objects.requireNonNull(packId, "packId");
+            if (id.isBlank() || packId.isBlank())
+                throw new IllegalArgumentException("Card and pack ids cannot be blank");
         }
 
         public Builder wild() {
@@ -229,6 +251,16 @@ public class CardType {
 
         public Builder fixedColor(CardColor color) {
             this.fixedColor = color;
+            return this;
+        }
+
+        public Builder automation(Automation automation) {
+            this.automation = Objects.requireNonNull(automation, "automation");
+            return this;
+        }
+
+        public Builder opening(BiConsumer<CardGame, CardFace> opening) {
+            this.opening = Objects.requireNonNull(opening, "opening");
             return this;
         }
 

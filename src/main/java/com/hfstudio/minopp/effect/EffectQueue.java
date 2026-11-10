@@ -12,10 +12,23 @@ import com.hfstudio.minopp.util.BlockPos;
 public class EffectQueue {
 
     private final PriorityQueue<TimedEvent> queue = new PriorityQueue<>(Comparator.comparingLong(a -> a.time));
+    private World world;
+
+    public void clear() {
+        synchronized (queue) {
+            queue.clear();
+            world = null;
+        }
+    }
 
     public void tick(World level) {
         long time = System.currentTimeMillis();
         synchronized (queue) {
+            if (level == null || level != world) {
+                queue.clear();
+                world = level;
+                return;
+            }
             while (!queue.isEmpty() && queue.peek().time <= time) {
                 queue.poll()
                     .summon(level);
@@ -24,7 +37,12 @@ public class EffectQueue {
     }
 
     public void addAll(List<EffectEvent> events, BlockPos origin, EntityPlayer self, boolean selfIsPartOfSourceGame) {
+        if (self == null || self.worldObj == null) return;
         synchronized (queue) {
+            if (world != self.worldObj) {
+                queue.clear();
+                world = self.worldObj;
+            }
             long time = System.currentTimeMillis();
             for (EffectEvent event : events) {
                 if (event.target()

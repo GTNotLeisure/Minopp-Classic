@@ -81,7 +81,7 @@ public class CardFace implements Comparable<CardFace> {
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString("t", typeId);
         tag.setString("c", color.id());
-        if (number >= 0) tag.setByte("n", (byte) number);
+        if (number != -1) tag.setInteger("n", number);
         if (flexColor != null) tag.setString("f", flexColor.id());
         return tag;
     }
@@ -91,7 +91,7 @@ public class CardFace implements Comparable<CardFace> {
         return new CardFace(
             tag.getString("t"),
             color == null ? CardColor.WILD : color,
-            tag.hasKey("n") ? tag.getByte("n") : -1,
+            tag.hasKey("n") ? tag.getInteger("n") : -1,
             CardColor.byId(tag.getString("f")));
     }
 

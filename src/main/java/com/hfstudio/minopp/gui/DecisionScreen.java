@@ -11,6 +11,7 @@ import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.DecisionTypes;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
@@ -28,12 +29,15 @@ public class DecisionScreen extends GuiScreen {
     private final BlockPos gamePos;
     private final CardPlayer self;
     private final PendingDecision.Type type;
+    private final PendingDecision decision;
     private PlayerPicker picker;
+    private int customPage;
 
     public DecisionScreen(BlockPos gamePos, CardPlayer self, PendingDecision decision) {
         this.gamePos = gamePos;
         this.self = self;
         this.type = decision.type;
+        this.decision = decision;
     }
 
     private CardGame game() {
@@ -47,6 +51,36 @@ public class DecisionScreen extends GuiScreen {
         CardGame game = game();
         int cy = height / 2;
         switch (type) {
+            case CUSTOM -> {
+                if (game == null) return;
+                List<DecisionTypes.Option> options = DecisionTypes.get(decision.typeId)
+                    .handler()
+                    .options(game, decision);
+                int columns = Math.max(1, Math.min(3, (width - 20) / 130));
+                int pageSize = columns * Math.max(1, (height - 100) / 24);
+                int pages = Math.max(1, (options.size() + pageSize - 1) / pageSize);
+                customPage = Math.floorMod(customPage, pages);
+                int from = customPage * pageSize, to = Math.min(options.size(), from + pageSize);
+                int rows = (to - from + columns - 1) / columns;
+                int top = Math.max(50, cy - rows * 12);
+                for (int i = from; i < to; i++) {
+                    DecisionTypes.Option option = options.get(i);
+                    int index = i - from;
+                    buttonList.add(
+                        new UiButton(
+                            option.value(),
+                            width / 2 - columns * 65 + index % columns * 130,
+                            top + index / columns * 24,
+                            124,
+                            20,
+                            Chat.translatable(option.labelKey())
+                                .getFormattedText()));
+                }
+                if (pages > 1) {
+                    buttonList.add(new UiButton(-3, width / 2 - 70, height - 28, 60, 20, "<"));
+                    buttonList.add(new UiButton(-4, width / 2 + 10, height - 28, 60, 20, ">"));
+                }
+            }
             case CHALLENGE -> {
                 buttonList.add(
                     new UiButton(
@@ -112,13 +146,17 @@ public class DecisionScreen extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (type == PendingDecision.Type.CUSTOM && (button.id == -3 || button.id == -4)) {
+            customPage += button.id == -3 ? -1 : 1;
+            initGui();
+            return;
+        }
         if (button.id == -2) {
             if (picker == null || picker.selected.isEmpty()) return;
-            C2SPlayCardPacket.Client.sendDecisionC2S(gamePos, 0, picker.selected.get(0));
+            C2SPlayCardPacket.Client.sendDecisionC2S(gamePos, decision, 0, picker.selected.get(0));
         } else {
-            C2SPlayCardPacket.Client.sendDecisionC2S(gamePos, button.id, null);
+            C2SPlayCardPacket.Client.sendDecisionC2S(gamePos, decision, button.id, null);
         }
-        mc.displayGuiScreen(null);
     }
 
     @Override
@@ -131,18 +169,21 @@ public class DecisionScreen extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         UiDraw.gradient(0, 0, width, height, 0xB0601010, 0xE0200404);
         CardGame game = game();
-        if (game == null || game.decisionFor(self.uuid) == null) {
+        PendingDecision current = game == null ? null : game.decisionFor(self.uuid);
+        if (current == null || !current.id.equals(decision.id)) {
             mc.displayGuiScreen(null);
             return;
         }
         String title = Chat.translatable(
-            "gui.minopp.decision." + type.name()
-                .toLowerCase(),
+            type == PendingDecision.Type.CUSTOM ? DecisionTypes.get(decision.typeId)
+                .titleKey()
+                : "gui.minopp.decision." + type.name()
+                    .toLowerCase(),
             game.pendingDraw)
             .getFormattedText();
-        int y = type == PendingDecision.Type.POINT_TAKEN ? 24 : height / 2 - 30;
+        int y = type == PendingDecision.Type.POINT_TAKEN || type == PendingDecision.Type.CUSTOM ? 24 : height / 2 - 30;
         GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, y, 0xFFFFFFFF);
-        long left = Math.max(0, (game.decisionFor(self.uuid).deadline - System.currentTimeMillis()) / 1000);
+        long left = Math.max(0, (current.deadline - System.currentTimeMillis()) / 1000);
         GuiDraw.drawCenteredString(fontRendererObj, left + "s", width / 2, y + 12, 0xFFAAAAAA);
         if (picker != null) picker.draw(fontRendererObj, mouseX, mouseY);
         super.drawScreen(mouseX, mouseY, partialTicks);

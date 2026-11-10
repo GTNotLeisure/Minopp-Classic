@@ -24,7 +24,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
-import com.hfstudio.minopp.gui.DecisionScreen;
+import com.hfstudio.minopp.gui.DecisionScreens;
 import com.hfstudio.minopp.gui.GameSettingsScreen;
 import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayChoiceScreen;
@@ -33,8 +33,8 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.MinoNetwork;
 import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
-import com.hfstudio.minopp.network.S2CEffectListPacket;
 import com.hfstudio.minopp.network.S2CChoosingPacket;
+import com.hfstudio.minopp.network.S2CEffectListPacket;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
 import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
@@ -112,6 +112,8 @@ public class MinoClient {
                 mc.displayGuiScreen(GameSettingsScreen.preview());
             }
             GLOWS.clear();
+            SOUND_QUEUE.clear();
+            lastOpenedDecision = null;
             if (wasInWorld) ThemeManager.INSTANCE.onDisconnect();
             wasInWorld = false;
             return;
@@ -177,11 +179,10 @@ public class MinoClient {
             lastOpenedDecision = null;
             return;
         }
-        boolean same = lastOpenedDecision != null && lastOpenedDecision.type == decision.type
-            && lastOpenedDecision.deadline == decision.deadline;
+        boolean same = lastOpenedDecision != null && lastOpenedDecision.id.equals(decision.id);
         if (!same && mc.currentScreen == null) {
             lastOpenedDecision = decision;
-            mc.displayGuiScreen(new DecisionScreen(gamePos, self, decision));
+            mc.displayGuiScreen(DecisionScreens.create(gamePos, self, decision));
         }
     }
 

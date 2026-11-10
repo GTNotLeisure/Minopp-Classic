@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import com.hfstudio.minopp.game.CardType.Choice;
 
@@ -12,9 +13,20 @@ public class CardTypes {
     private CardTypes() {}
 
     private static final Map<String, CardType> REGISTRY = new LinkedHashMap<>();
+    private static final Collection<CardType> ALL = Collections.unmodifiableCollection(REGISTRY.values());
+
+    private static long revision;
+
+    public static long revision() {
+        return revision;
+    }
 
     public static CardType register(CardType type) {
-        REGISTRY.put(type.id, type);
+        Objects.requireNonNull(type, "type");
+        if (HandMask.HIDDEN_TYPE.equals(type.id)) throw new IllegalArgumentException("Reserved card type: " + type.id);
+        if (REGISTRY.putIfAbsent(type.id, type) != null)
+            throw new IllegalArgumentException("Card type already registered: " + type.id);
+        revision++;
         return type;
     }
 
@@ -28,7 +40,7 @@ public class CardTypes {
     }
 
     public static Collection<CardType> all() {
-        return Collections.unmodifiableCollection(REGISTRY.values());
+        return ALL;
     }
 
     public static final CardType NUMBER = register(

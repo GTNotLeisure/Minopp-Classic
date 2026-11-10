@@ -1,5 +1,6 @@
 package com.hfstudio.minopp.effect;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -30,18 +31,19 @@ public interface EffectEvent {
     public class Type<T extends EffectEvent> {
 
         private final String id;
-        private final Function<ByteBuf, EffectEvent> function;
+        private final Function<ByteBuf, T> function;
 
-        public Type(String id, Function<ByteBuf, EffectEvent> function) {
-            this.id = id;
-            this.function = function;
+        public Type(String id, Function<ByteBuf, T> function) {
+            this.id = Objects.requireNonNull(id, "id");
+            this.function = Objects.requireNonNull(function, "function");
+            if (id.isBlank()) throw new IllegalArgumentException("Effect id cannot be blank");
         }
 
         public String id() {
             return id;
         }
 
-        public Function<ByteBuf, EffectEvent> function() {
+        public Function<ByteBuf, T> function() {
             return function;
         }
     }

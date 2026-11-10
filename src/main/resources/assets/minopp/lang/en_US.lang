@@ -23,6 +23,7 @@ game.minopp.play.seats_reset=%1$s reset the seats. Please reallocate seats.
 game.minopp.play.game_won=§6%1$s WON THE GAME! Congratulations!
 game.minopp.play.game_nearly_won=%1$s has %2$s card(s) left.
 game.minopp.play.deck_depleted=Somehow the whole deck ended up in your hands. The game ends here.
+game.minopp.play.deck_too_small=The deck has %s cards, but dealing and the opening card require at least %s. Increase the card counts or deck copies.
 game.minopp.play.player_unavailable=Player %1$s is not available. Please reallocate seats.
 game.minopp.play.no_game=Table is idle.
 game.minopp.play.mino_shout=%1$s: §6Mino!

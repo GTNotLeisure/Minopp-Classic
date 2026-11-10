@@ -22,6 +22,7 @@ game.minopp.play.seats_reset=%1$s 清空了座位。请重新入座。
 game.minopp.play.game_won=§6%1$s 胜利！恭喜！
 game.minopp.play.game_nearly_won=%1$s 还剩 %2$s 张牌。
 game.minopp.play.deck_depleted=你们把所有牌全都摸到手上了，本局不再进行。
+game.minopp.play.deck_too_small=牌组只有 %s 张牌，发牌及起始牌至少需要 %s 张。请增加卡牌数量或牌组份数。
 game.minopp.play.player_unavailable=%1$s 现在似乎不在，请重新入座。
 game.minopp.play.no_game=桌子空闲。
 game.minopp.play.mino_shout=%1$s: §6Mino!

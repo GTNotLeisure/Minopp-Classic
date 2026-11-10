@@ -156,6 +156,10 @@ public class EntityAutoPlayer extends EntityLiving {
             if (tableEntity.game != null) {
                 heal(10);
                 CardGame game = tableEntity.game;
+                if (game.awaitingCutIn || !game.decisions.isEmpty()) {
+                    isThinking = false;
+                    return;
+                }
                 if (game.players.get(game.currentPlayerIndex)
                     .equals(cardPlayer)) {
                     if (autoPlayer.aiNoDelay > 0) {

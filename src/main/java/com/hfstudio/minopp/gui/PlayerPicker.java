@@ -1,7 +1,10 @@
 package com.hfstudio.minopp.gui;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
@@ -10,12 +13,12 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
 
 import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardPlayer;
-import com.hfstudio.minopp.util.WorldUtil;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -27,6 +30,15 @@ public class PlayerPicker {
     public static final int TILE_H = 64;
     private static final int GAP = 8;
     private static final int HEAD = 18;
+    private static final Map<UUID, WeakReference<Entity>> SKIN_ENTITIES = new HashMap<>();
+    private static WeakReference<World> skinWorld = new WeakReference<>(null);
+    private static long skinScanTick = Long.MIN_VALUE;
+
+    public static void clearSkinCache() {
+        SKIN_ENTITIES.clear();
+        skinWorld.clear();
+        skinScanTick = Long.MIN_VALUE;
+    }
 
     private final List<CardPlayer> players;
     private final List<Integer> handSizes;
@@ -66,9 +78,28 @@ public class PlayerPicker {
 
     public static ResourceLocation skinOf(UUID uuid) {
         Minecraft mc = Minecraft.getMinecraft();
-        EntityPlayer levelPlayer = WorldUtil.getPlayerByUUID(mc.theWorld, uuid);
-        if (levelPlayer instanceof AbstractClientPlayer clientPlayer) return clientPlayer.getLocationSkin();
-        Entity e = WorldUtil.getEntityByUUID(mc.theWorld, uuid);
+        World world = mc.theWorld;
+        if (world == null || uuid == null) return AbstractClientPlayer.locationStevePng;
+        long tick = world.getTotalWorldTime();
+        if (skinWorld.get() != world || skinScanTick != tick) {
+            SKIN_ENTITIES.clear();
+            skinWorld = new WeakReference<>(world);
+            skinScanTick = tick;
+            for (Object object : world.loadedEntityList) {
+                if (object instanceof EntityAutoPlayer bot)
+                    SKIN_ENTITIES.put(bot.getUniqueID(), new WeakReference<>(bot));
+            }
+            for (EntityPlayer player : world.playerEntities) {
+                SKIN_ENTITIES.put(
+                    player.getGameProfile()
+                        .getId(),
+                    new WeakReference<>(player));
+            }
+        }
+        WeakReference<Entity> reference = SKIN_ENTITIES.get(uuid);
+        Entity e = reference == null ? null : reference.get();
+        if (e == null || e.isDead || e.worldObj != world) return AbstractClientPlayer.locationStevePng;
+        if (e instanceof AbstractClientPlayer clientPlayer) return clientPlayer.getLocationSkin();
         if (e instanceof EntityAutoPlayer bot && bot.clientSkinLocation != null) return bot.clientSkinLocation;
         return AbstractClientPlayer.locationStevePng;
     }

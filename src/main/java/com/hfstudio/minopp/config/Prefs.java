@@ -3,6 +3,7 @@ package com.hfstudio.minopp.config;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -34,6 +35,24 @@ public class Prefs {
      */
     public record Pref(String id, Type type, int def, int min, int max, int step, List<String> choices, String unit,
         IntSupplier get, IntConsumer set, Runnable saver) {
+
+        public Pref {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(type, "type");
+            Objects.requireNonNull(unit, "unit");
+            Objects.requireNonNull(get, "get");
+            Objects.requireNonNull(set, "set");
+            Objects.requireNonNull(saver, "saver");
+            if (id.isBlank() || min > max || def < min || def > max || step <= 0) {
+                throw new IllegalArgumentException("Invalid personal setting: " + id);
+            }
+            if (type == Type.CHOICE) {
+                choices = List.copyOf(choices);
+                if (choices.isEmpty() || min != 0 || max != choices.size() - 1) {
+                    throw new IllegalArgumentException("Invalid choices: " + id);
+                }
+            }
+        }
 
         public int value() {
             return get.getAsInt();

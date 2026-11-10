@@ -1,5 +1,9 @@
 package com.hfstudio.minopp.game;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
 import net.minecraft.util.ResourceLocation;
 
 import com.hfstudio.minopp.Mino;
@@ -7,6 +11,25 @@ import com.hfstudio.minopp.Mino;
 public class GameSounds {
 
     private GameSounds() {}
+
+    private static final Map<String, CardSound> CARD_SOUNDS = new HashMap<>();
+
+    @FunctionalInterface
+    public interface CardSound {
+
+        void play(ActionReport report, CardType type, boolean flex);
+    }
+
+    /**
+     * Replaces the type-specific sound sequence; the ordinary card placement sound remains.
+     */
+    public static void register(String typeId, CardSound sound) {
+        Objects.requireNonNull(sound, "sound");
+        if (!CardTypes.exists(typeId)) throw new IllegalArgumentException("Unknown card type: " + typeId);
+        if (CARD_SOUNDS.putIfAbsent(typeId, sound) != null) {
+            throw new IllegalArgumentException("Card sound already registered: " + typeId);
+        }
+    }
 
     public static final ResourceLocation PLAY = Mino.id("game.play");
     public static final ResourceLocation DRAW = Mino.id("game.draw");
@@ -40,6 +63,11 @@ public class GameSounds {
     }
 
     public static void cardPlayed(ActionReport report, CardType type, boolean flex) {
+        CardSound custom = CARD_SOUNDS.get(type.id);
+        if (custom != null) {
+            custom.play(report, type, flex);
+            return;
+        }
         String id = type.id;
         if (type.isDraw() && !flex) {
             report.sound(mc("random.bowhit"), 120, 0.7f, 1.15f);

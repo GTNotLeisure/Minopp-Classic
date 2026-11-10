@@ -41,7 +41,7 @@ public class S2CEffectListPacket {
             List<EffectEvent> sounds = new ArrayList<>(size);
             for (int i = 0; i < size; i++) {
                 String id = Buf.readString(packet);
-                EffectEvent.Type<?> type = EffectEvents.REGISTRY.get(id);
+                EffectEvent.Type<?> type = EffectEvents.get(id);
                 sounds.add(
                     type.function()
                         .apply(packet));

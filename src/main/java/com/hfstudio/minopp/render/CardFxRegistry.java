@@ -1,14 +1,15 @@
 package com.hfstudio.minopp.render;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
+import com.hfstudio.minopp.game.CardTypes;
 import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
@@ -53,27 +54,34 @@ public class CardFxRegistry {
         void render(float t, Context ctx);
     }
 
-    private static final Map<String, List<CardFx>> BY_TYPE = new HashMap<>();
-    private static final List<Map.Entry<Predicate<CardFace>, CardFx>> BY_MATCH = new ArrayList<>();
+    private static final Map<String, CardFx[]> BY_TYPE = new HashMap<>();
+    private static Match[] matches = new Match[0];
+
+    private record Match(Predicate<CardFace> when, CardFx effect) {}
 
     public static void register(String typeId, CardFx fx) {
-        BY_TYPE.computeIfAbsent(typeId, k -> new ArrayList<>())
-            .add(fx);
+        if (!CardTypes.exists(typeId)) throw new IllegalArgumentException("Unknown card type: " + typeId);
+        Objects.requireNonNull(fx, "fx");
+        CardFx[] previous = BY_TYPE.get(typeId);
+        int size = previous == null ? 0 : previous.length;
+        CardFx[] next = previous == null ? new CardFx[1] : Arrays.copyOf(previous, size + 1);
+        next[size] = fx;
+        BY_TYPE.put(typeId, next);
     }
 
     public static void register(Predicate<CardFace> when, CardFx fx) {
-        BY_MATCH.add(Map.entry(when, fx));
+        Match match = new Match(Objects.requireNonNull(when, "when"), Objects.requireNonNull(fx, "fx"));
+        Match[] next = Arrays.copyOf(matches, matches.length + 1);
+        next[matches.length] = match;
+        matches = next;
     }
 
     static void dispatch(Context ctx) {
-        for (Map.Entry<Predicate<CardFace>, CardFx> e : BY_MATCH) {
-            if (e.getKey()
-                .test(ctx.face))
-                e.getValue()
-                    .play(ctx);
+        CardFx[] effects = BY_TYPE.get(ctx.face.type().id);
+        for (Match match : matches) {
+            if (match.when.test(ctx.face)) match.effect.play(ctx);
         }
-        List<CardFx> list = BY_TYPE.get(ctx.face.type().id);
-        if (list != null) for (CardFx fx : list) fx.play(ctx);
+        if (effects != null) for (CardFx fx : effects) fx.play(ctx);
     }
 
     /**

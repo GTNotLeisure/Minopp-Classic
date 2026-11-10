@@ -2,10 +2,9 @@ package com.hfstudio.minopp.render;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import net.minecraft.client.Minecraft;
@@ -19,6 +18,10 @@ import com.hfstudio.minopp.Mino;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 
 /**
  * Polyhedral dice and coins thrown onto the table: the throw is simulated once as a tumbling rigid body and played
@@ -73,7 +76,7 @@ public class Dice {
         }
     }
 
-    private static final Map<Integer, Poly> POLYS = new HashMap<>();
+    private static final Int2ObjectMap<Poly> POLYS = new Int2ObjectOpenHashMap<>();
 
     static Poly poly(int sides) {
         return POLYS.computeIfAbsent(sides, s -> {
@@ -315,7 +318,7 @@ public class Dice {
         final int sides, result;
         final List<double[]> pos = new ArrayList<>();
         final List<double[]> rot = new ArrayList<>();
-        final List<Integer> bounces = new ArrayList<>();
+        final IntList bounces = new IntArrayList();
         int settleEnd;
 
         Roll(int sides, int result) {
@@ -371,7 +374,7 @@ public class Dice {
     }
 
     private static void turnArt(Roll roll, double[] s) {
-        for (int i = 0; i < roll.rot.size(); i++) roll.rot.set(i, mul(roll.rot.get(i), s));
+        roll.rot.replaceAll(a -> mul(a, s));
     }
 
     /**
@@ -397,28 +400,38 @@ public class Dice {
             pts[i] = new double[] { shape[i][0] * r, shape[i][1] * r, shape[i][2] * r };
         double iinv = 1 / (inertia * r * r);
         double dt = 1.0 / (FPS * SUBSTEPS);
+        ContactWork work = new ContactWork(shape.length);
+        double[] spin = new double[4];
+        double[] rotation = new double[4];
         int still = 0, lastHit = -99;
         for (int frame = 0; frame < MAX_FRAMES; frame++) {
             boolean touching = false;
             double hit = 0;
             for (int sub = 0; sub < SUBSTEPS; sub++) {
                 v[1] += GRAVITY * dt;
-                List<double[]> arms = new ArrayList<>();
+                int contacts = 0;
                 for (double[] p : pts) {
-                    double[] arm = rotate(q, p);
-                    if (x[1] + arm[1] < floor + 0.002) arms.add(arm);
+                    double[] arm = work.arms[contacts];
+                    rotate(q, p, arm);
+                    if (x[1] + arm[1] < floor + 0.002) contacts++;
                 }
-                if (!arms.isEmpty()) {
+                if (contacts > 0) {
                     touching = true;
-                    hit = Math.max(hit, contact(arms, v, w, iinv));
+                    hit = Math.max(hit, contact(work, contacts, v, w, iinv));
                 }
                 for (int k = 0; k < 3; k++) x[k] += v[k] * dt;
-                double[] spin = mul(new double[] { 0, w[0], w[1], w[2] }, q);
-                q = norm4(
-                    new double[] { q[0] + spin[0] * dt / 2, q[1] + spin[1] * dt / 2, q[2] + spin[2] * dt / 2,
-                        q[3] + spin[3] * dt / 2 });
+                rotation[0] = 0;
+                rotation[1] = w[0];
+                rotation[2] = w[1];
+                rotation[3] = w[2];
+                mul(rotation, q, spin);
+                for (int k = 0; k < 4; k++) rotation[k] = q[k] + spin[k] * dt / 2;
+                norm4(rotation, q);
                 double deepest = 0;
-                for (double[] p : pts) deepest = Math.max(deepest, floor - x[1] - rotate(q, p)[1]);
+                for (double[] p : pts) {
+                    rotate(q, p, work.rotated);
+                    deepest = Math.max(deepest, floor - x[1] - work.rotated[1]);
+                }
                 x[1] += deepest;
                 keepOnTable(x, v);
             }
@@ -437,31 +450,50 @@ public class Dice {
         return q;
     }
 
+    private static class ContactWork {
+
+        private final double[][] arms;
+        private final double[] jn, jx, jz, bounce;
+        private final double[] rotated = new double[3];
+
+        private ContactWork(int capacity) {
+            arms = new double[capacity][3];
+            jn = new double[capacity];
+            jx = new double[capacity];
+            jz = new double[capacity];
+            bounce = new double[capacity];
+        }
+    }
+
     // sequential impulses on the corners touching the table; returns the hardest impact speed
-    private static double contact(List<double[]> arms, double[] v, double[] w, double iinv) {
-        int n = arms.size();
-        double[] jn = new double[n], jx = new double[n], jz = new double[n], bounce = new double[n];
+    private static double contact(ContactWork work, int n, double[] v, double[] w, double iinv) {
+        double[][] arms = work.arms;
+        double[] jn = work.jn, jx = work.jx, jz = work.jz, bounce = work.bounce;
+        Arrays.fill(jn, 0, n, 0);
+        Arrays.fill(jx, 0, n, 0);
+        Arrays.fill(jz, 0, n, 0);
         double impact = 0;
         for (int i = 0; i < n; i++) {
-            double vn = v[1] + cross(w, arms.get(i))[1];
+            double[] a = arms[i];
+            double vn = v[1] + (w[2] * a[0] - w[0] * a[2]);
             impact = Math.max(impact, -vn);
             bounce[i] = vn < -0.6 ? -RESTITUTION * vn : 0;
         }
         for (int it = 0; it < 8; it++) {
             for (int i = 0; i < n; i++) {
-                double[] a = arms.get(i);
-                double[] vel = add(v, cross(w, a));
-                double dj = (bounce[i] - vel[1]) / (1 + iinv * (a[0] * a[0] + a[2] * a[2]));
+                double[] a = arms[i];
+                double vy = v[1] + (w[2] * a[0] - w[0] * a[2]);
+                double dj = (bounce[i] - vy) / (1 + iinv * (a[0] * a[0] + a[2] * a[2]));
                 double nj = Math.max(0, jn[i] + dj);
                 push(v, w, a, 0, nj - jn[i], 0, iinv);
                 jn[i] = nj;
                 double limit = FRICTION * jn[i];
-                vel = add(v, cross(w, a));
-                nj = Math.max(-limit, Math.min(limit, jx[i] - vel[0] / (1 + iinv * (a[1] * a[1] + a[2] * a[2]))));
+                double vx = v[0] + (w[1] * a[2] - w[2] * a[1]);
+                nj = Math.max(-limit, Math.min(limit, jx[i] - vx / (1 + iinv * (a[1] * a[1] + a[2] * a[2]))));
                 push(v, w, a, nj - jx[i], 0, 0, iinv);
                 jx[i] = nj;
-                vel = add(v, cross(w, a));
-                nj = Math.max(-limit, Math.min(limit, jz[i] - vel[2] / (1 + iinv * (a[0] * a[0] + a[1] * a[1]))));
+                double vz = v[2] + (w[0] * a[1] - w[1] * a[0]);
+                nj = Math.max(-limit, Math.min(limit, jz[i] - vz / (1 + iinv * (a[0] * a[0] + a[1] * a[1]))));
                 push(v, w, a, 0, 0, nj - jz[i], iinv);
                 jz[i] = nj;
             }
@@ -470,11 +502,12 @@ public class Dice {
     }
 
     private static void push(double[] v, double[] w, double[] arm, double px, double py, double pz, double iinv) {
-        double[] p = { px, py, pz }, dw = cross(arm, p);
-        for (int k = 0; k < 3; k++) {
-            v[k] += p[k];
-            w[k] += dw[k] * iinv;
-        }
+        v[0] += px;
+        w[0] += (arm[1] * pz - arm[2] * py) * iinv;
+        v[1] += py;
+        w[1] += (arm[2] * px - arm[0] * pz) * iinv;
+        v[2] += pz;
+        w[2] += (arm[0] * py - arm[1] * px) * iinv;
     }
 
     // Constrain the roll to the table rim.
@@ -574,12 +607,16 @@ public class Dice {
     private static class Gl {
 
         static final FloatBuffer MATRIX = BufferUtils.createFloatBuffer(16);
+        private static final double[] ROTATION = new double[4];
+        private static final double[] NORMAL = new double[3];
     }
 
-    private static final Map<Integer, ResourceLocation> ART = new HashMap<>(), BADGE = new HashMap<>();
+    private static final Int2ObjectMap<ResourceLocation> ART = new Int2ObjectOpenHashMap<>(),
+        BADGE = new Int2ObjectOpenHashMap<>();
     private static final int COIN_SEGMENTS = 24;
     private static final double[][] COIN_RIM = coinRim();
     private static final double[][] COIN_NORMALS = coinNormals();
+    private static final double[][] COIN_FACE_NORMALS = { { 0, 1, 0 }, { 0, -1, 0 } };
 
     private static double[][] coinRim() {
         double[][] rim = new double[COIN_SEGMENTS + 1][2];
@@ -608,15 +645,15 @@ public class Dice {
     }
 
     /**
-     * Position and orientation at {@code seconds}: {x, y, z} and {w, x, y, z}.
+     * Returns an independent position snapshot and writes the orientation into the supplied buffer.
      */
-    private static double[][] pose(Roll roll, double seconds) {
+    private static double[] pose(Roll roll, double seconds, double[] rotation) {
         double fi = Math.min(roll.frames() - 1, Math.max(0, seconds * FPS));
         int i0 = (int) fi, i1 = Math.min(roll.frames() - 1, i0 + 1);
         double f = fi - i0;
         double[] a = roll.pos.get(i0), b = roll.pos.get(i1);
-        return new double[][] { { a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f },
-            slerp(roll.rot.get(i0), roll.rot.get(i1), f) };
+        slerp(roll.rot.get(i0), roll.rot.get(i1), f, rotation);
+        return new double[] { a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f };
     }
 
     /**
@@ -624,8 +661,8 @@ public class Dice {
      */
     static double[] draw(Roll roll, double seconds, double r, float alpha) {
         Poly poly = poly(roll.sides);
-        double[][] pose = pose(roll, seconds);
-        double[] p = pose[0], q = pose[1];
+        double[] q = Gl.ROTATION;
+        double[] p = pose(roll, seconds, q);
         GL11.glPushMatrix();
         GL11.glTranslated(p[0], p[1], p[2]);
         multiply(q);
@@ -640,7 +677,8 @@ public class Dice {
         for (int fIdx = 0; fIdx < poly.faces.length; fIdx++) {
             int[] face = poly.faces[fIdx];
             double[][] uv = poly.uv[fIdx];
-            int g = (int) (255 * (0.6 + 0.4 * Math.max(0, dot(rotate(q, poly.normals[fIdx]), LIGHT))));
+            rotate(q, poly.normals[fIdx], Gl.NORMAL);
+            int g = (int) (255 * (0.6 + 0.4 * Math.max(0, dot(Gl.NORMAL, LIGHT))));
             t.setColorRGBA(g, g, g, (int) (alpha * 255));
             for (int k = 1; k + 1 < face.length; k++) {
                 vertex(t, poly.v[face[0]], uv[0]);
@@ -660,8 +698,8 @@ public class Dice {
      */
     static double[] drawCoin(Roll roll, double seconds, double r, double thickness, ResourceLocation top,
         ResourceLocation bottom, int rimRgb, float alpha) {
-        double[][] pose = pose(roll, seconds);
-        double[] p = pose[0], q = pose[1];
+        double[] q = Gl.ROTATION;
+        double[] p = pose(roll, seconds, q);
         double h = thickness / 2 / r;
         GL11.glPushMatrix();
         GL11.glTranslated(p[0], p[1], p[2]);
@@ -673,7 +711,8 @@ public class Dice {
         t.startDrawingQuads();
         for (int i = 0; i < COIN_SEGMENTS; i++) {
             double[] start = COIN_RIM[i], end = COIN_RIM[i + 1];
-            double[] n = rotate(q, COIN_NORMALS[i]);
+            double[] n = Gl.NORMAL;
+            rotate(q, COIN_NORMALS[i], n);
             int c = shade(rimRgb, 0.55 + 0.45 * Math.max(0, dot(n, LIGHT)));
             t.setColorRGBA((c >> 16) & 255, (c >> 8) & 255, c & 255, (int) (alpha * 255));
             t.addVertex(start[0], -h, start[1]);
@@ -685,7 +724,8 @@ public class Dice {
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         for (int side = 0; side < 2; side++) {
             double y = side == 0 ? h : -h;
-            double[] n = rotate(q, new double[] { 0, side == 0 ? 1 : -1, 0 });
+            double[] n = Gl.NORMAL;
+            rotate(q, COIN_FACE_NORMALS[side], n);
             int g = (int) (255 * (0.6 + 0.4 * Math.max(0, dot(n, LIGHT))));
             Minecraft.getMinecraft()
                 .getTextureManager()
@@ -810,15 +850,27 @@ public class Dice {
     }
 
     private static double[] norm4(double[] q) {
+        double[] out = new double[4];
+        norm4(q, out);
+        return out;
+    }
+
+    private static void norm4(double[] q, double[] out) {
         double l = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-        return new double[] { q[0] / l, q[1] / l, q[2] / l, q[3] / l };
+        for (int i = 0; i < 4; i++) out[i] = q[i] / l;
     }
 
     private static double[] mul(double[] a, double[] b) {
-        return new double[] { a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
-            a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
-            a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
-            a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0] };
+        double[] out = new double[4];
+        mul(a, b, out);
+        return out;
+    }
+
+    private static void mul(double[] a, double[] b, double[] out) {
+        out[0] = a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3];
+        out[1] = a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2];
+        out[2] = a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1];
+        out[3] = a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0];
     }
 
     private static double[] axisAngle(double[] axis, double angle) {
@@ -827,13 +879,20 @@ public class Dice {
     }
 
     static double[] rotate(double[] q, double[] v) {
+        double[] out = new double[3];
+        rotate(q, v, out);
+        return out;
+    }
+
+    private static void rotate(double[] q, double[] v, double[] out) {
         double rw = q[0] * 0 - q[1] * v[0] - q[2] * v[1] - q[3] * v[2];
         double rx = q[0] * v[0] + q[1] * 0 + q[2] * v[2] - q[3] * v[1];
         double ry = q[0] * v[1] - q[1] * v[2] + q[2] * 0 + q[3] * v[0];
         double rz = q[0] * v[2] + q[1] * v[1] - q[2] * v[0] + q[3] * 0;
         double w = q[0], x = -q[1], y = -q[2], z = -q[3];
-        return new double[] { rw * x + rx * w + ry * z - rz * y, rw * y - rx * z + ry * w + rz * x,
-            rw * z + rx * y - ry * x + rz * w };
+        out[0] = rw * x + rx * w + ry * z - rz * y;
+        out[1] = rw * y - rx * z + ry * w + rz * x;
+        out[2] = rw * z + rx * y - ry * x + rz * w;
     }
 
     private static double[] fromTo(double[] a, double[] b) {
@@ -847,20 +906,25 @@ public class Dice {
     }
 
     private static double[] slerp(double[] a, double[] b, double t) {
+        double[] out = new double[4];
+        slerp(a, b, t, out);
+        return out;
+    }
+
+    private static void slerp(double[] a, double[] b, double t, double[] out) {
         double d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
-        double[] bb = b;
-        if (d < 0) {
-            d = -d;
-            bb = new double[] { -b[0], -b[1], -b[2], -b[3] };
-        }
+        boolean negate = d < 0;
+        if (negate) d = -d;
         if (d > 0.9995) {
-            return norm4(
-                new double[] { a[0] + (bb[0] - a[0]) * t, a[1] + (bb[1] - a[1]) * t, a[2] + (bb[2] - a[2]) * t,
-                    a[3] + (bb[3] - a[3]) * t });
+            for (int i = 0; i < 4; i++) {
+                double component = negate ? -b[i] : b[i];
+                out[i] = a[i] + (component - a[i]) * t;
+            }
+            norm4(out, out);
+            return;
         }
         double th = Math.acos(d), s = Math.sin(th);
         double wa = Math.sin((1 - t) * th) / s, wb = Math.sin(t * th) / s;
-        return new double[] { a[0] * wa + bb[0] * wb, a[1] * wa + bb[1] * wb, a[2] * wa + bb[2] * wb,
-            a[3] * wa + bb[3] * wb };
+        for (int i = 0; i < 4; i++) out[i] = a[i] * wa + (negate ? -b[i] : b[i]) * wb;
     }
 }

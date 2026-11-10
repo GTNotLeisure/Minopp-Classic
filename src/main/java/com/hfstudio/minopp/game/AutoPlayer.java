@@ -30,7 +30,12 @@ public class AutoPlayer {
     }
 
     public static PlayContext.PlayChoices defaultChoices(CardGame game, CardPlayer player, Card card) {
+        return defaultChoices(game, player, card, false);
+    }
+
+    public static PlayContext.PlayChoices defaultChoices(CardGame game, CardPlayer player, Card card, boolean useFlex) {
         PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
+        choices.useFlex = useFlex;
         choices.color = game.mostCommonColor(player);
         List<CardPlayer> others = game.activePlayers();
         others.remove(player);
@@ -46,10 +51,13 @@ public class AutoPlayer {
         }
         if (first != null) choices.targets.add(first.uuid);
         if (second != null) choices.targets.add(second.uuid);
+        CardType.Automation automation = game.face(card)
+            .type().automation;
+        if (automation != null) automation.choose(game, player, card, choices);
         return choices;
     }
 
-    private int score(CardGame game, CardPlayer player, Card card, boolean useFlex, int[] colorCounts) {
+    private int score(CardGame game, Card card, boolean useFlex, int[] colorCounts) {
         CardFace face = game.face(card);
         CardType type = face.type();
         CardFace top = game.topFace();
@@ -71,6 +79,7 @@ public class AutoPlayer {
     }
 
     public ActionReport playAtGame(CardGame game, CardPlayer realPlayer, MinecraftServer server) {
+        if (game.awaitingCutIn || !game.decisions.isEmpty()) return game.playNoCard(realPlayer);
         boolean forgetsMino = RANDOM.nextFloat() < aiForgetChance;
         boolean shoutsMino = !forgetsMino && realPlayer.hand.size() <= 2;
 
@@ -98,7 +107,9 @@ public class AutoPlayer {
                     colorCounts = new int[CardColor.values().length];
                     for (Card held : realPlayer.hand) colorCounts[game.face(held).color.ordinal()]++;
                 }
-                int s = score(game, realPlayer, card, useFlex, colorCounts) + RANDOM.nextInt(6);
+                int s = score(game, card, useFlex, colorCounts);
+                if (type.automation != null) s = type.automation.score(game, realPlayer, card, useFlex, s);
+                s += RANDOM.nextInt(6);
                 if (s > bestScore) {
                     bestScore = s;
                     best = card;
@@ -107,7 +118,7 @@ public class AutoPlayer {
             }
         }
         if (best != null) {
-            PlayContext.PlayChoices choices = defaultChoices(game, realPlayer, best);
+            PlayContext.PlayChoices choices = defaultChoices(game, realPlayer, best, bestFlex);
             choices.useFlex = bestFlex;
             choices.shout = shoutsMino;
             ActionReport result = game.playCard(realPlayer, best.uid, choices);

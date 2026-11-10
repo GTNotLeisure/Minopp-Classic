@@ -72,13 +72,19 @@ public class HandScreen extends GuiScreen {
      */
     public static List<Card> visibleHand(CardGame game, CardPlayer me) {
         boolean open = isOpen();
-        if (viewGame == game && viewPlayer == me && viewDark == game.darkSide && viewOpen == open
+        if (viewGame == game && viewPlayer == me
+            && viewDark == game.darkSide
+            && viewOpen == open
             && query.equals(viewQuery)) return viewHand;
         List<Card> hand = ItemHandCards.sortedHand(game, me);
         if (!query.isEmpty() && open) {
             List<Card> out = new ArrayList<>();
             for (Card c : hand) {
-                if (SearchMatch.matches(game.face(c).getDisplayName().getUnformattedText(), query)) out.add(c);
+                if (SearchMatch.matches(
+                    game.face(c)
+                        .getDisplayName()
+                        .getUnformattedText(),
+                    query)) out.add(c);
             }
             if (!out.isEmpty()) hand = out;
         }
@@ -658,7 +664,9 @@ public class HandScreen extends GuiScreen {
             BlockPos pos = ItemHandCards.getHandCardGamePos(mc.thePlayer);
             BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, pos);
             if (table == null || table.game == null) return null;
-            CardPlayer me = table.game.deAmputate(mc.thePlayer.getGameProfile().getId());
+            CardPlayer me = table.game.deAmputate(
+                mc.thePlayer.getGameProfile()
+                    .getId());
             if (me == null || me.hand.isEmpty()) return null;
             return new Context(pos, table, me);
         }

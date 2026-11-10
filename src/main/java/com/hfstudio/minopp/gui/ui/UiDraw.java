@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.gui.GuiDraw;
+import com.hfstudio.minopp.render.ThemeManager;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -38,28 +39,59 @@ public class UiDraw {
     public static final int GLOW = 0xFFFFC21E;
 
     public static ResourceLocation ui(String name) {
-        return Mino.id("textures/gui/ui/" + name + ".png");
+        int colon = name.indexOf(':');
+        return colon < 0 ? Mino.id("textures/gui/ui/" + name + ".png")
+            : new ResourceLocation(name.substring(0, colon), "textures/gui/ui/" + name.substring(colon + 1) + ".png");
     }
 
     public static void gradient(float x1, float y1, float x2, float y2, int top, int bottom) {
+        beginGradient();
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        gradientQuad(t, x1, y1, x2, y2, top, bottom);
+        t.draw();
+        endGradient();
+    }
+
+    private static void beginGradient() {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glDisable(GL11.GL_ALPHA_TEST);
         OpenGlHelper.glBlendFunc(770, 771, 1, 0);
         GL11.glShadeModel(GL11.GL_SMOOTH);
-        Tessellator t = Tessellator.instance;
-        t.startDrawingQuads();
+    }
+
+    private static void endGradient() {
+        GL11.glShadeModel(GL11.GL_FLAT);
+        GL11.glEnable(GL11.GL_ALPHA_TEST);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private static void gradientQuad(Tessellator t, float x1, float y1, float x2, float y2, int top, int bottom) {
         t.setColorRGBA_I(top & 0xFFFFFF, top >>> 24);
         t.addVertex(x2, y1, 0);
         t.addVertex(x1, y1, 0);
         t.setColorRGBA_I(bottom & 0xFFFFFF, bottom >>> 24);
         t.addVertex(x1, y2, 0);
         t.addVertex(x2, y2, 0);
-        t.draw();
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    // Cache common UI radii; larger corners are computed without retaining extra geometry.
+    private static final int[][] CORNER_INSETS = new int[65][];
+
+    private static int[] cornerInsets(int radius) {
+        if (radius >= CORNER_INSETS.length) return null;
+        if (CORNER_INSETS[radius] != null) return CORNER_INSETS[radius];
+        int[] insets = new int[radius];
+        for (int i = 0; i < radius; i++) insets[i] = cornerInset(radius, i);
+        CORNER_INSETS[radius] = insets;
+        return insets;
+    }
+
+    private static int cornerInset(int radius, int row) {
+        double dy = radius - row - 0.5;
+        return (int) Math.round(radius - Math.sqrt(radius * radius - dy * dy));
     }
 
     public static void roundRect(int x1, int y1, int x2, int y2, int r, int top, int bottom) {
@@ -69,11 +101,15 @@ public class UiDraw {
             return;
         }
         int h = y2 - y1;
+        int[] insets = cornerInsets(r);
+        beginGradient();
+        Tessellator tessellator = Tessellator.instance;
+        tessellator.startDrawingQuads();
         for (int i = 0; i < r; i++) {
-            double dy = r - i - 0.5;
-            int inset = (int) Math.round(r - Math.sqrt(r * r - dy * dy));
+            int inset = insets == null ? cornerInset(r, i) : insets[i];
             float t0 = i / (float) h, t1 = (i + 1f) / h;
-            gradient(
+            gradientQuad(
+                tessellator,
                 x1 + inset,
                 y1 + i,
                 x2 - inset,
@@ -81,7 +117,8 @@ public class UiDraw {
                 lerpColor(top, bottom, t0),
                 lerpColor(top, bottom, t1));
             float b0 = (h - i - 1f) / h, b1 = (h - i) / (float) h;
-            gradient(
+            gradientQuad(
+                tessellator,
                 x1 + inset,
                 y2 - i - 1,
                 x2 - inset,
@@ -89,13 +126,16 @@ public class UiDraw {
                 lerpColor(top, bottom, b0),
                 lerpColor(top, bottom, b1));
         }
-        gradient(
+        gradientQuad(
+            tessellator,
             x1,
             y1 + r,
             x2,
             y2 - r,
             lerpColor(top, bottom, r / (float) h),
             lerpColor(top, bottom, (h - r) / (float) h));
+        tessellator.draw();
+        endGradient();
     }
 
     public static void roundRect(int x1, int y1, int x2, int y2, int r, int color) {
@@ -257,7 +297,9 @@ public class UiDraw {
     }
 
     public static void icon(String id, float x, float y, float size) {
-        image("icon_" + id + (size <= 24 ? "_s" : ""), x, y, size, size);
+        int colon = id.indexOf(':');
+        String name = colon < 0 ? "icon_" + id : id.substring(0, colon + 1) + "icon_" + id.substring(colon + 1);
+        image(name + (size <= 24 ? "_s" : ""), x, y, size, size);
     }
 
     private static final long SEED = 1425;
@@ -290,7 +332,7 @@ public class UiDraw {
 
         fill(t, 0, 0, width, height, 0xFF9A0E14, 0xFF4C0306);
         float breathe = 0.5f + 0.5f * (float) Math.sin(time / 2600.0 * Math.PI * 2);
-        radial(t, cx, cy, radius, lerpColor(0xFFE8401C, 0xFFF4602A, breathe), 0x00A0141A, 48);
+        radial(t, cx, cy, radius, lerpColor(0xFFE8401C, 0xFFF4602A, breathe), 0x00A0141A, BACKGROUND_CIRCLE);
         vortex(t, cx - mx * 8, cy - my * 6, radius * 1.15f, (float) ((el * 0.0045) % 360));
         sweep(t, width, height, el);
         cards(t, width, height, el, mx, my);
@@ -368,49 +410,92 @@ public class UiDraw {
         return ((v % m) + m) % m;
     }
 
-    private static void cards(Tessellator t, int width, int height, double el, float mx, float my) {
-        Random rnd = new Random(SEED);
-        t.startDrawing(GL11.GL_TRIANGLES);
+    private static final List<BackgroundCard> BACKGROUND_CARDS = backgroundCards();
+
+    private static List<BackgroundCard> backgroundCards() {
+        Random random = new Random(SEED);
+        List<BackgroundCard> cards = new ArrayList<>();
         for (int layer = 0; layer < CARD_LAYERS.length; layer++) {
             int[] spec = CARD_LAYERS[layer];
-            float depth = 0.45f + layer * 0.55f;
-            for (int i = 0; i < spec[0]; i++) {
-                float size = spec[1] + rnd.nextFloat() * (spec[2] - spec[1]);
-                float alpha = spec[3] + rnd.nextFloat() * (spec[4] - spec[3]);
-                int tint = CARD_TINTS[rnd.nextInt(CARD_TINTS.length)];
-                double vy = (0.004 + rnd.nextFloat() * 0.005) * depth;
-                double vx = (rnd.nextFloat() - 0.35) * 0.004 * depth;
-                float margin = size + 24;
-                double bx = rnd.nextFloat() * (width + margin * 2), by = rnd.nextFloat() * (height + margin * 2);
-                double spin = (rnd.nextBoolean() ? 1 : -1) * (0.002 + rnd.nextFloat() * 0.004);
-                double angle = Math.toRadians(rnd.nextFloat() * 360 + el * spin);
-                double flip = rnd.nextFloat() * Math.PI * 2 + el * (0.0004 + rnd.nextFloat() * 0.0007);
-                double swayPhase = rnd.nextFloat() * Math.PI * 2;
-                float x = (float) (wrap(bx + el * vx, width + margin * 2) - margin
-                    + Math.sin(el / 1900.0 + swayPhase) * 6 * depth) - mx * 16 * depth;
-                float y = (float) (height + margin - wrap(by + el * vy, height + margin * 2)) - my * 10 * depth;
-                card(t, x, y, size * 0.66f, size, angle, (float) Math.cos(flip), tint, alpha);
+            for (int i = 0; i < spec[0]; i++) cards.add(new BackgroundCard(random, spec, 0.45f + layer * 0.55f));
+        }
+        return cards;
+    }
+
+    private static class BackgroundCard {
+
+        private final float depth, size, alpha, bx, by, initialAngle;
+        private final int tint;
+        private final double vy, vx, spin, flipPhase, flipSpeed, swayPhase;
+        private final float[] px = new float[16], py = new float[16];
+        private final double[][] ring = new double[120][2];
+
+        private BackgroundCard(Random rnd, int[] spec, float depth) {
+            this.depth = depth;
+            size = spec[1] + rnd.nextFloat() * (spec[2] - spec[1]);
+            alpha = spec[3] + rnd.nextFloat() * (spec[4] - spec[3]);
+            tint = CARD_TINTS[rnd.nextInt(CARD_TINTS.length)];
+            vy = (0.004 + rnd.nextFloat() * 0.005) * depth;
+            vx = (rnd.nextFloat() - 0.35) * 0.004 * depth;
+            bx = rnd.nextFloat();
+            by = rnd.nextFloat();
+            spin = (rnd.nextBoolean() ? 1 : -1) * (0.002 + rnd.nextFloat() * 0.004);
+            initialAngle = rnd.nextFloat() * 360;
+            flipPhase = rnd.nextFloat() * Math.PI * 2;
+            flipSpeed = 0.0004 + rnd.nextFloat() * 0.0007;
+            swayPhase = rnd.nextFloat() * Math.PI * 2;
+            float w = size * 0.66f, h = size;
+            float hw = w / 2, hh = h / 2, rr = Math.min(w, h) * 0.16f;
+            int corner = 4;
+            for (int q = 0; q < 4; q++) {
+                float ox = q == 0 || q == 3 ? hw - rr : -hw + rr, oy = q < 2 ? hh - rr : -hh + rr;
+                for (int j = 0; j < corner; j++) {
+                    double a = Math.PI / 2 * (q + (double) j / (corner - 1));
+                    px[q * corner + j] = ox + (float) Math.cos(a) * rr;
+                    py[q * corner + j] = oy + (float) Math.sin(a) * rr;
+                }
             }
+            double tilt = Math.toRadians(-32), tc = Math.cos(tilt), ts = Math.sin(tilt);
+            float ax = w * 0.40f, ay = h * 0.26f, inner = 1 - Math.max(0.12f, 2.2f / Math.min(ax, ay));
+            int steps = 20;
+            int[] order = { 0, 1, 2, 0, 2, 3 };
+            for (int i = 0; i < steps; i++) {
+                double e0 = Math.PI * 2 * i / steps, e1 = Math.PI * 2 * (i + 1) / steps;
+                double ox0 = Math.cos(e0) * ax, oy0 = Math.sin(e0) * ay, ox1 = Math.cos(e1) * ax,
+                    oy1 = Math.sin(e1) * ay;
+                double lx0 = ox0 * tc - oy0 * ts, ly0 = ox0 * ts + oy0 * tc, lx1 = ox1 * tc - oy1 * ts,
+                    ly1 = ox1 * ts + oy1 * tc;
+                double[][] quad = { { lx0, ly0 }, { lx1, ly1 }, { lx1 * inner, ly1 * inner },
+                    { lx0 * inner, ly0 * inner } };
+                for (int j = 0; j < order.length; j++) {
+                    ring[i * 6 + j][0] = quad[order[j]][0];
+                    ring[i * 6 + j][1] = quad[order[j]][1];
+                }
+            }
+        }
+    }
+
+    private static void cards(Tessellator t, int width, int height, double el, float mx, float my) {
+        t.startDrawing(GL11.GL_TRIANGLES);
+        for (BackgroundCard card : BACKGROUND_CARDS) {
+            float depth = card.depth, margin = card.size + 24;
+            double bx = card.bx * (width + margin * 2), by = card.by * (height + margin * 2);
+            double angle = Math.toRadians(card.initialAngle + el * card.spin);
+            double flip = card.flipPhase + el * card.flipSpeed;
+            float x = (float) (wrap(bx + el * card.vx, width + margin * 2) - margin
+                + Math.sin(el / 1900.0 + card.swayPhase) * 6 * depth) - mx * 16 * depth;
+            float y = (float) (height + margin - wrap(by + el * card.vy, height + margin * 2)) - my * 10 * depth;
+            card(t, card, x, y, angle, (float) Math.cos(flip));
         }
         t.draw();
     }
 
-    private static void card(Tessellator t, float x, float y, float w, float h, double angle, float sx, int tint,
-        float alpha) {
+    private static void card(Tessellator t, BackgroundCard card, float x, float y, double angle, float sx) {
         double c = Math.cos(angle), s = Math.sin(angle);
-        int r = tint >> 16 & 255, g = tint >> 8 & 255, b = tint & 255;
-        int fill = (int) (sx < 0 ? alpha * 0.7f : alpha);
-        float hw = w / 2, hh = h / 2, rr = Math.min(w, h) * 0.16f;
-        int corner = 4, n = corner * 4;
-        float[] px = new float[n], py = new float[n];
-        for (int q = 0; q < 4; q++) {
-            float ox = q == 0 || q == 3 ? hw - rr : -hw + rr, oy = q < 2 ? hh - rr : -hh + rr;
-            for (int j = 0; j < corner; j++) {
-                double a = Math.PI / 2 * (q + (double) j / (corner - 1));
-                px[q * corner + j] = ox + (float) Math.cos(a) * rr;
-                py[q * corner + j] = oy + (float) Math.sin(a) * rr;
-            }
-        }
+        int r = card.tint >> 16 & 255, g = card.tint >> 8 & 255, b = card.tint & 255;
+        int fill = (int) (sx < 0 ? card.alpha * 0.7f : card.alpha);
+        float[] px = card.px, py = card.py;
+        int n = px.length;
         t.setColorRGBA(r, g, b, fill);
         for (int i = 0; i < n; i++) {
             int k = (i + 1) % n;
@@ -419,35 +504,39 @@ public class UiDraw {
             t.addVertex(x + c * px[k] * sx - s * py[k], y + s * px[k] * sx + c * py[k], 0);
         }
         if (sx <= 0.15f) return;
-        int ring = Math.min(255, (int) (alpha * 1.8f));
-        double tilt = Math.toRadians(-32), tc = Math.cos(tilt), ts = Math.sin(tilt);
-        float ax = w * 0.40f, ay = h * 0.26f, inner = 1 - Math.max(0.12f, 2.2f / Math.min(ax, ay));
-        int steps = 20;
-        t.setColorRGBA(r, g, b, ring);
-        for (int i = 0; i < steps; i++) {
-            double e0 = Math.PI * 2 * i / steps, e1 = Math.PI * 2 * (i + 1) / steps;
-            double ox0 = Math.cos(e0) * ax, oy0 = Math.sin(e0) * ay, ox1 = Math.cos(e1) * ax, oy1 = Math.sin(e1) * ay;
-            double lx0 = ox0 * tc - oy0 * ts, ly0 = ox0 * ts + oy0 * tc, lx1 = ox1 * tc - oy1 * ts,
-                ly1 = ox1 * ts + oy1 * tc;
-            double[][] quad = { { lx0, ly0 }, { lx1, ly1 }, { lx1 * inner, ly1 * inner },
-                { lx0 * inner, ly0 * inner } };
-            int[] order = { 0, 1, 2, 0, 2, 3 };
-            for (int o : order) {
-                double lx = quad[o][0] * sx, ly = quad[o][1];
-                t.addVertex(x + c * lx - s * ly, y + s * lx + c * ly, 0);
-            }
+        t.setColorRGBA(r, g, b, Math.min(255, (int) (card.alpha * 1.8f)));
+        for (double[] vertex : card.ring) {
+            double lx = vertex[0] * sx, ly = vertex[1];
+            t.addVertex(x + c * lx - s * ly, y + s * lx + c * ly, 0);
         }
     }
 
-    private static void sparkles(Tessellator t, int width, int height, double el) {
+    private record Sparkle(double rise, float x, float y, double period, float arm) {}
+
+    private static final Sparkle[] SPARKLES = sparkles();
+
+    private static Sparkle[] sparkles() {
         Random rnd = new Random(SEED * 31);
+        Sparkle[] out = new Sparkle[22];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = new Sparkle(
+                0.006 + rnd.nextFloat() * 0.01,
+                rnd.nextFloat(),
+                rnd.nextFloat(),
+                700.0 + rnd.nextFloat() * 900,
+                1.4f + rnd.nextFloat() * 1.6f);
+        }
+        return out;
+    }
+
+    private static void sparkles(Tessellator t, int width, int height, double el) {
         t.startDrawing(GL11.GL_TRIANGLES);
         for (int i = 0; i < 22; i++) {
-            double rise = 0.006 + rnd.nextFloat() * 0.01;
-            float x = rnd.nextFloat() * width + (float) Math.sin(el / 1300.0 + i * 1.7) * 8;
-            float y = height + 10 - (float) wrap(rnd.nextFloat() * (height + 20) + el * rise, height + 20);
-            float twinkle = (float) Math.pow(0.5 + 0.5 * Math.sin(el / (700.0 + rnd.nextFloat() * 900) + i * 2.3), 3);
-            float arm = 1.4f + rnd.nextFloat() * 1.6f + twinkle * 3f, thin = 0.7f;
+            Sparkle sparkle = SPARKLES[i];
+            float x = sparkle.x * width + (float) Math.sin(el / 1300.0 + i * 1.7) * 8;
+            float y = height + 10 - (float) wrap(sparkle.y * (height + 20) + el * sparkle.rise, height + 20);
+            float twinkle = (float) Math.pow(0.5 + 0.5 * Math.sin(el / sparkle.period + i * 2.3), 3);
+            float arm = sparkle.arm + twinkle * 3f, thin = 0.7f;
             int alpha = (int) (40 + 150 * twinkle);
             t.setColorRGBA(255, 238, 206, alpha);
             for (int d = 0; d < 4; d++) {
@@ -461,13 +550,29 @@ public class UiDraw {
         t.draw();
     }
 
+    private record Circle(double[] cos, double[] sin) {
+
+        private static Circle of(int segments) {
+            double[] cos = new double[segments + 1], sin = new double[segments + 1];
+            for (int i = 0; i <= segments; i++) {
+                double angle = Math.PI * 2 * i / segments;
+                cos[i] = Math.cos(angle);
+                sin[i] = Math.sin(angle);
+            }
+            return new Circle(cos, sin);
+        }
+    }
+
+    private static final Circle BACKGROUND_CIRCLE = Circle.of(48);
+    private static final Circle RING_CIRCLE = Circle.of(40);
+
     private static void vignette(Tessellator t, float cx, float cy, int width, int height) {
         float ix = width * 0.30f, iy = height * 0.30f, ox = width * 0.80f, oy = height * 0.88f;
-        int segments = 48;
+        Circle circle = BACKGROUND_CIRCLE;
+        int segments = circle.cos.length - 1;
         t.startDrawingQuads();
         for (int i = 0; i < segments; i++) {
-            double a0 = Math.PI * 2 * i / segments, a1 = Math.PI * 2 * (i + 1) / segments;
-            double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+            double c0 = circle.cos[i], s0 = circle.sin[i], c1 = circle.cos[i + 1], s1 = circle.sin[i + 1];
             t.setColorRGBA(20, 0, 2, 0);
             t.addVertex(cx + c0 * ix, cy + s0 * iy, 0);
             t.addVertex(cx + c1 * ix, cy + s1 * iy, 0);
@@ -488,13 +593,13 @@ public class UiDraw {
         Tessellator t = Tessellator.instance;
         t.startDrawingQuads();
         t.setColorRGBA(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24);
-        int segments = 40;
+        Circle circle = RING_CIRCLE;
+        int segments = circle.cos.length - 1;
         for (int i = 0; i < segments; i++) {
-            double a0 = Math.PI * 2 * i / segments, a1 = Math.PI * 2 * (i + 1) / segments;
-            t.addVertex(cx + Math.cos(a0) * r1, cy + Math.sin(a0) * r1, 0);
-            t.addVertex(cx + Math.cos(a1) * r1, cy + Math.sin(a1) * r1, 0);
-            t.addVertex(cx + Math.cos(a1) * r2, cy + Math.sin(a1) * r2, 0);
-            t.addVertex(cx + Math.cos(a0) * r2, cy + Math.sin(a0) * r2, 0);
+            t.addVertex(cx + circle.cos[i] * r1, cy + circle.sin[i] * r1, 0);
+            t.addVertex(cx + circle.cos[i + 1] * r1, cy + circle.sin[i + 1] * r1, 0);
+            t.addVertex(cx + circle.cos[i + 1] * r2, cy + circle.sin[i + 1] * r2, 0);
+            t.addVertex(cx + circle.cos[i] * r2, cy + circle.sin[i] * r2, 0);
         }
         t.draw();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -502,33 +607,49 @@ public class UiDraw {
         GL11.glColor4f(1, 1, 1, 1);
     }
 
-    private static void radial(Tessellator t, float cx, float cy, float r, int inner, int outer, int segments) {
+    private static void radial(Tessellator t, float cx, float cy, float r, int inner, int outer, Circle circle) {
         t.startDrawing(GL11.GL_TRIANGLES);
-        for (int i = 0; i < segments; i++) {
-            double a0 = Math.PI * 2 * i / segments, a1 = Math.PI * 2 * (i + 1) / segments;
+        for (int i = 0; i < circle.cos.length - 1; i++) {
             t.setColorRGBA(inner >> 16 & 255, inner >> 8 & 255, inner & 255, inner >>> 24);
             t.addVertex(cx, cy, 0);
             t.setColorRGBA(outer >> 16 & 255, outer >> 8 & 255, outer & 255, outer >>> 24);
-            t.addVertex(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, 0);
-            t.addVertex(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, 0);
+            t.addVertex(cx + circle.cos[i + 1] * r, cy + circle.sin[i + 1] * r, 0);
+            t.addVertex(cx + circle.cos[i] * r, cy + circle.sin[i] * r, 0);
         }
         t.draw();
     }
+
+    private record TooltipLayout(List<String> source, List<String> wrapped, List<Boolean> titles, int width,
+        int maxWidth, FontRenderer font, long revision) {}
+
+    private static TooltipLayout tooltipLayout;
 
     public static void tooltip(FontRenderer font, List<String> lines, int mouseX, int mouseY, int screenW,
         int screenH) {
         if (lines.isEmpty()) return;
         int maxW = Math.max(80, Math.min(240, screenW - 24));
-        List<String> wrapped = new ArrayList<>();
-        List<Boolean> title = new ArrayList<>();
-        for (int i = 0; i < lines.size(); i++) {
-            for (String o : font.listFormattedStringToWidth(lines.get(i), maxW)) {
-                wrapped.add(o);
-                title.add(i == 0);
+        long revision = ThemeManager.INSTANCE.resourceRevision();
+        TooltipLayout layout = tooltipLayout;
+        if (layout == null || layout.font != font
+            || layout.maxWidth != maxW
+            || layout.revision != revision
+            || !layout.source.equals(lines)) {
+            List<String> wrapped = new ArrayList<>();
+            List<Boolean> title = new ArrayList<>();
+            for (int i = 0; i < lines.size(); i++) {
+                for (String text : font.listFormattedStringToWidth(lines.get(i), maxW)) {
+                    wrapped.add(text);
+                    title.add(i == 0);
+                }
             }
+            int width = 0;
+            for (String text : wrapped) width = Math.max(width, font.getStringWidth(text));
+            layout = new TooltipLayout(new ArrayList<>(lines), wrapped, title, width, maxW, font, revision);
+            tooltipLayout = layout;
         }
-        int w = 0;
-        for (String l : wrapped) w = Math.max(w, font.getStringWidth(l));
+        List<String> wrapped = layout.wrapped;
+        List<Boolean> title = layout.titles;
+        int w = layout.width;
         int h = wrapped.size() * 10 - 2;
         int x = mouseX + 12, y = mouseY - 12;
         if (x + w + 4 > screenW) x = mouseX - 16 - w;

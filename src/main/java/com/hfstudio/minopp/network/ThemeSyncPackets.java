@@ -23,12 +23,17 @@ public class ThemeSyncPackets {
 
     private static final Map<UUID, String> SERVER_THEMES = new HashMap<>();
     private static final Map<UUID, Long> LAST_CHANGE = new HashMap<>();
-    private static final Pattern THEME_ID = Pattern.compile("[a-z0-9_.:-]{1,64}");
+    private static final Pattern THEME_ID = Pattern.compile("[a-z0-9_.-]+(?::[a-z0-9_./-]+)?");
+
+    public static boolean validThemeId(String id) {
+        return id != null && id.length() <= 64
+            && THEME_ID.matcher(id)
+                .matches();
+    }
 
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         String theme = Buf.readString(packet);
-        if (!THEME_ID.matcher(theme)
-            .matches()) return;
+        if (!validThemeId(theme)) return;
         UUID id = player.getGameProfile()
             .getId();
         // each change goes to every player: ignore repeats and changes faster than one a second

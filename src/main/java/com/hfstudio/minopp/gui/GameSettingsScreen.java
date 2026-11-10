@@ -1,13 +1,17 @@
 package com.hfstudio.minopp.gui;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,6 +28,7 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
+import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.config.DesignStore;
 import com.hfstudio.minopp.config.Prefs;
 import com.hfstudio.minopp.effect.SoundBank;
@@ -49,6 +54,14 @@ import com.hfstudio.minopp.util.Chat;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.objects.Object2FloatMap;
+import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 @SideOnly(Side.CLIENT)
 public class GameSettingsScreen extends GuiScreen {
@@ -97,6 +110,7 @@ public class GameSettingsScreen extends GuiScreen {
         final Kind kind;
         final Object payload;
         int x, y, w, h;
+        int[] prefLayout;
         String title = "";
         String searchExtra = "";
         final List<String> desc = new ArrayList<>();
@@ -105,6 +119,7 @@ public class GameSettingsScreen extends GuiScreen {
          * "Not recommended with" lines; set together with conflictKey.
          */
         final List<String> warn = new ArrayList<>();
+        List<String> tooltip;
         String conflictKey;
         boolean clash;
 
@@ -120,7 +135,7 @@ public class GameSettingsScreen extends GuiScreen {
     private final BlockPos gamePos;
     private final GuiScreen parent;
     private final Map<Tab, SmoothScroll> scrolls = new EnumMap<>(Tab.class);
-    private final Map<String, Float> hoverAnim = new HashMap<>();
+    private final Object2FloatMap<String> hoverAnim = new Object2FloatOpenHashMap<>();
     private final List<Tile> tiles = new ArrayList<>();
     private Tile hovered;
     private Tile infoTile;
@@ -138,8 +153,146 @@ public class GameSettingsScreen extends GuiScreen {
     private String navId;
     private boolean navTabs;
     private int lastMouseX = Integer.MIN_VALUE, lastMouseY;
-    private Map<CardFace, Integer> effective = new HashMap<>();
+    private Object2IntMap<CardFace> effective = new Object2IntOpenHashMap<>();
     private int[] keyQ = new int[4], keyE = new int[4];
+
+    private static final List<CardFace> THEME_TILE_FACES = List.of(
+        new CardFace("number", CardColor.RED, 1),
+        new CardFace("number", CardColor.YELLOW, 2),
+        new CardFace("number", CardColor.GREEN, 3),
+        new CardFace("number", CardColor.BLUE, 4),
+        new CardFace("wild_draw4", CardColor.WILD, -1));
+    private static final List<CardFace> THEME_INFO_FACES = List.of(
+        new CardFace("number", CardColor.RED, 5),
+        new CardFace("number", CardColor.BLUE, 3),
+        new CardFace("skip", CardColor.GREEN, -1),
+        new CardFace("wild", CardColor.WILD, -1));
+    private final Object2IntMap<CardPack.Entry> effectiveCounts = new Object2IntOpenHashMap<>();
+    private int cachedContentHeight;
+    private Tab builtTab;
+    private String builtQuery, soundChoices;
+    private long resources = -1, cardTypes = -1, cardPacks = -1, conflictRevision = -1;
+    private long ruleRevision = -1, dependencyRevision = -1;
+    private int prefCount = -1, soundPackCount = -1, soundSlotCount = -1;
+    private final Map<TableConfig, ConfigView> configViews = new IdentityHashMap<>();
+    private final String[] designNames = new String[DesignStore.SLOTS];
+    private final TableConfig[] designConfigs = new TableConfig[DesignStore.SLOTS];
+    private final Map<CardPack, List<CardFace>> packSamples = new HashMap<>();
+    private final Map<CardPack.Entry, List<CardFace>> entrySamples = new HashMap<>();
+    private final Int2ObjectMap<Map<String, List<String>>> wrappedText = new Int2ObjectOpenHashMap<>();
+
+    private static class ConfigView {
+
+        private final Map<String, Integer> rules, counts;
+        private final List<String> packs;
+        private final int deckSize;
+        private List<CardFace> preview;
+
+        private ConfigView(TableConfig config) {
+            rules = new HashMap<>(config.rules);
+            counts = new HashMap<>(config.counts);
+            packs = new ArrayList<>(config.packs);
+            deckSize = config.countDeckSize();
+        }
+
+        private boolean matches(TableConfig config) {
+            return rules.equals(config.rules) && counts.equals(config.counts) && sameOrder(packs, config.packs);
+        }
+    }
+
+    private static boolean sameOrder(List<?> cached, Collection<?> current) {
+        if (cached.size() != current.size()) return false;
+        Iterator<?> iterator = current.iterator();
+        for (Object item : cached) if (!Objects.equals(item, iterator.next())) return false;
+        return true;
+    }
+
+    private ConfigView configView(TableConfig config) {
+        return configViews.computeIfAbsent(config, ConfigView::new);
+    }
+
+    private void refreshTiles(BlockEntityMinoTable table) {
+        long nextResources = ThemeManager.INSTANCE.resourceRevision();
+        long nextTypes = CardTypes.revision(), nextPacks = CardPack.revision(), nextConflicts = Conflicts.revision();
+        long nextRules = GameRules.revision(), nextDependencies = TableConfig.dependencyRevision();
+        boolean catalogChanged = cardTypes != nextTypes || cardPacks != nextPacks
+            || ruleRevision != nextRules
+            || dependencyRevision != nextDependencies;
+        boolean contentChanged = catalogChanged || resources != nextResources || conflictRevision != nextConflicts;
+        if (catalogChanged) {
+            configViews.clear();
+            packSamples.clear();
+            entrySamples.clear();
+            facePacks = null;
+        }
+        if (contentChanged) galleryCache = null;
+        cardTypes = nextTypes;
+        cardPacks = nextPacks;
+        resources = nextResources;
+        conflictRevision = nextConflicts;
+        ruleRevision = nextRules;
+        dependencyRevision = nextDependencies;
+        boolean configChanged = configViews.entrySet()
+            .removeIf(
+                entry -> !entry.getValue()
+                    .matches(entry.getKey()));
+        if (!configViews.containsKey(table.config)) configChanged = true;
+        configView(table.config);
+        boolean designsChanged = false;
+        if (tab == Tab.DESIGNS) {
+            for (int i = 0; i < DesignStore.SLOTS; i++) {
+                DesignStore.Design design = DesignStore.get(i);
+                TableConfig config = design == null ? null : design.config;
+                String name = design == null ? null : design.name;
+                if (designConfigs[i] != config || !Objects.equals(designNames[i], name)) designsChanged = true;
+                designConfigs[i] = config;
+                designNames[i] = name;
+                if (config != null) configView(config);
+            }
+        }
+        int nextPrefs = Prefs.all()
+            .size(),
+            nextSoundPacks = SoundBank.packs()
+                .size(),
+            nextSoundSlots = SoundBank.slots()
+                .size();
+        boolean extensionsChanged = prefCount != nextPrefs || soundPackCount != nextSoundPacks
+            || soundSlotCount != nextSoundSlots;
+        prefCount = nextPrefs;
+        soundPackCount = nextSoundPacks;
+        soundSlotCount = nextSoundSlots;
+        boolean soundsChanged = !Objects.equals(soundChoices, ClientConfig.display.soundPacks);
+        soundChoices = ClientConfig.display.soundPacks;
+        if (builtTab == tab && Objects.equals(builtQuery, query)
+            && !contentChanged
+            && !configChanged
+            && !designsChanged
+            && !extensionsChanged
+            && !(soundsChanged && tab == Tab.SOUNDS)) return;
+        matchCache.clear();
+        wrappedText.clear();
+        buildTiles();
+        int bottom = 0;
+        for (Tile tile : tiles) bottom = Math.max(bottom, tile.y + tile.h);
+        cachedContentHeight = bottom + 6;
+        if (infoTile != null) {
+            String id = infoTile.id;
+            for (Tile tile : tiles) if (tile.id.equals(id)) infoTile = tile;
+        }
+        configViews.keySet()
+            .removeIf(config -> {
+                if (config == table.config) return false;
+                for (TableConfig design : designConfigs) if (config == design) return false;
+                return true;
+            });
+        builtTab = tab;
+        builtQuery = query;
+    }
+
+    private List<String> wrap(String text, int width) {
+        return wrappedText.computeIfAbsent(width, key -> new HashMap<>())
+            .computeIfAbsent(text, value -> fontRendererObj.listFormattedStringToWidth(value, width));
+    }
 
     public GameSettingsScreen(BlockPos gamePos, GuiScreen parent) {
         this(gamePos, parent, null);
@@ -195,6 +348,7 @@ public class GameSettingsScreen extends GuiScreen {
 
     @Override
     public void initGui() {
+        builtTab = null;
         Keyboard.enableRepeatEvents(true);
         int margin = 8;
         showInfo = width >= 380;
@@ -274,7 +428,7 @@ public class GameSettingsScreen extends GuiScreen {
                         t.desc.add(
                             tr(
                                 "gui.minopp.design.summary",
-                                d.config.countDeckSize(),
+                                configView(d.config).deckSize,
                                 d.config.getInt(GameRules.MAX_PLAYERS)));
                         t.controls.add(tr("gui.minopp.controls.design_apply"));
                         t.controls.add(tr("gui.minopp.controls.design_overwrite"));
@@ -316,15 +470,18 @@ public class GameSettingsScreen extends GuiScreen {
                 }
             }
             case CARDS -> {
-                effective = new HashMap<>();
-                for (CardFace f : cfg.buildFaces(false)) effective.merge(f, 1, Integer::sum);
-                for (CardFace f : cfg.buildFaces(true)) effective.merge(f, 1, Integer::sum);
+                effectiveCounts.clear();
+                effective = new Object2IntOpenHashMap<>();
+                for (boolean back : new boolean[] { false, true }) {
+                    cfg.faceCounts(back)
+                        .forEach((face, count) -> { if (count > 0) effective.mergeInt(face, count, Integer::sum); });
+                }
                 Set<CardFace> shown = new HashSet<>();
                 for (CardPack pack : CardPack.all()) {
                     String packName = tr(pack.langKey());
                     List<Tile> list = new ArrayList<>();
                     for (CardPack.Entry entry : pack.entries) {
-                        List<CardFace> faces = TableConfig.entryFaces(entry);
+                        List<CardFace> faces = pack.faces(entry.key());
                         if (shown.containsAll(faces)) continue;
                         shown.addAll(faces);
                         Tile t = new Tile(
@@ -338,16 +495,11 @@ public class GameSettingsScreen extends GuiScreen {
                         String descKey = "game.minopp.card.type." + entry.typeId() + ".desc";
                         if (hasTr(descKey)) t.desc.add(tr(descKey));
                         int def = entry.count();
-                        int c = effectiveCount(entry);
-                        if (entry.isWild()) {
-                            t.desc.add(tr("gui.minopp.cards.count_wild", c, def));
+                        int c = effectiveCount(pack, entry);
+                        if (entry.single()) {
+                            t.desc.add(tr("gui.minopp.cards.count_wild", entry.totalCards(c), entry.totalCards(def)));
                         } else {
-                            t.desc.add(
-                                tr(
-                                    "gui.minopp.cards.count_color",
-                                    c,
-                                    c * 4 * Math.max(1, entry.numbers().length),
-                                    def));
+                            t.desc.add(tr("gui.minopp.cards.count_color", c, entry.totalCards(c), def));
                         }
                         String linked = ruleNames(TableConfig.rulesForCard(entry.typeId()));
                         if (!linked.isEmpty()) t.desc.add(tr("gui.minopp.cards.enables", linked));
@@ -546,11 +698,13 @@ public class GameSettingsScreen extends GuiScreen {
      * Where a row's parts start: control, control end, slider/text switch, reset button.
      */
     private int[] prefLayout(Tile t, Prefs.Pref p) {
+        if (t.prefLayout != null) return t.prefLayout;
         int resetW = Math.max(32, fontRendererObj.getStringWidth(tr("controls.reset")) + 12);
         int reset = t.x + t.w - resetW;
         int mode = p.type() == Prefs.Type.INT ? reset - 3 - t.h : reset;
         int start = t.x + Math.max(70, t.w * 2 / 5);
-        return new int[] { start, mode - 3, mode, reset };
+        t.prefLayout = new int[] { start, mode - 3, mode, reset };
+        return t.prefLayout;
     }
 
     private boolean inRow(int x1, int y1, int x2, int y2) {
@@ -764,6 +918,11 @@ public class GameSettingsScreen extends GuiScreen {
         if (!groupName.isEmpty() && cachedMatch("group:" + groupName, groupName)) return list;
         List<Tile> out = new ArrayList<>();
         for (Tile t : list) {
+            Boolean match = matchCache.get(t.id);
+            if (match != null) {
+                if (match) out.add(t);
+                continue;
+            }
             StringBuilder sb = new StringBuilder(t.title).append('\n')
                 .append(t.searchExtra);
             for (String d : t.desc) sb.append('\n')
@@ -782,10 +941,12 @@ public class GameSettingsScreen extends GuiScreen {
         return b;
     }
 
-    private int effectiveCount(CardPack.Entry entry) {
-        int c = 0;
-        for (CardFace f : TableConfig.entryFaces(entry)) c = Math.max(c, effective.getOrDefault(f, 0));
-        return c;
+    private int effectiveCount(CardPack pack, CardPack.Entry entry) {
+        if (effectiveCounts.containsKey(entry)) return effectiveCounts.getInt(entry);
+        int count = 0;
+        for (CardFace face : pack.faces(entry.key())) count = Math.max(count, effective.getInt(face));
+        effectiveCounts.put(entry, count);
+        return count;
     }
 
     private static String ruleNames(String[] ids) {
@@ -799,13 +960,13 @@ public class GameSettingsScreen extends GuiScreen {
         return sb.toString();
     }
 
-    private static Map<CardFace, Set<CardPack>> facePacks;
+    private Map<CardFace, Set<CardPack>> facePacks;
 
-    private static String sharedWith(CardPack owner, List<CardFace> faces) {
+    private String sharedWith(CardPack owner, List<CardFace> faces) {
         if (facePacks == null) {
             facePacks = new HashMap<>();
             for (CardPack pack : CardPack.all()) for (CardPack.Entry e : pack.entries)
-                for (CardFace f : TableConfig.entryFaces(e)) facePacks.computeIfAbsent(f, k -> new LinkedHashSet<>())
+                for (CardFace f : pack.faces(e.key())) facePacks.computeIfAbsent(f, k -> new LinkedHashSet<>())
                     .add(pack);
         }
         Set<String> names = new LinkedHashSet<>();
@@ -876,9 +1037,7 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private int contentHeight() {
-        int max = 0;
-        for (Tile t : tiles) max = Math.max(max, t.y + t.h);
-        return max + 6;
+        return cachedContentHeight;
     }
 
     @Override
@@ -897,7 +1056,7 @@ public class GameSettingsScreen extends GuiScreen {
         float dt = Math.min(0.1f, (now - lastFrame) / 1e9f);
         lastFrame = now;
 
-        buildTiles();
+        refreshTiles(te);
         SmoothScroll scroll = scrolls.get(tab);
         scroll.setBounds(contentHeight(), viewH());
         float offset = scroll.update();
@@ -951,7 +1110,7 @@ public class GameSettingsScreen extends GuiScreen {
             if (mouseOver) mouseTile = t;
             boolean hover = navId != null ? t.id.equals(navId) : mouseOver;
             if (hover) hovered = t;
-            float a = hoverAnim.getOrDefault(t.id, 0f);
+            float a = hoverAnim.getFloat(t.id);
             a += ((hover ? 1f : 0f) - a) * Math.min(1, dt * 16);
             hoverAnim.put(t.id, a);
             drawTile(te, t, a);
@@ -989,11 +1148,14 @@ public class GameSettingsScreen extends GuiScreen {
         if (hovered != null && rowTip
             && (navId == null || !showInfo)
             && System.currentTimeMillis() - hoverStart > 350) {
-            List<String> lines = new ArrayList<>();
-            lines.add(hovered.title);
-            for (String d : hovered.desc) lines.addAll(fontRendererObj.listFormattedStringToWidth(d, 200));
-            lines.addAll(hovered.warn);
-            for (String c : hovered.controls) lines.add(EnumChatFormatting.GRAY + c);
+            if (hovered.tooltip == null) {
+                hovered.tooltip = new ArrayList<>();
+                hovered.tooltip.add(hovered.title);
+                for (String d : hovered.desc) hovered.tooltip.addAll(wrap(d, 200));
+                hovered.tooltip.addAll(hovered.warn);
+                for (String c : hovered.controls) hovered.tooltip.add(EnumChatFormatting.GRAY + c);
+            }
+            List<String> lines = hovered.tooltip;
             int tx = mouseX, ty = mouseY;
             if (navId != null) {
                 tx = viewX() + hovered.x + hovered.w;
@@ -1168,10 +1330,10 @@ public class GameSettingsScreen extends GuiScreen {
                 Object[] p = (Object[]) t.payload;
                 CardPack pack = (CardPack) p[0];
                 CardPack.Entry entry = (CardPack.Entry) p[1];
-                int c = effectiveCount(entry);
+                int c = effectiveCount(pack, entry);
                 UiDraw.roundRect(x1, y1, x2, y2, 4, 0x80000000);
                 CardRenderer.drawFace2D(
-                    sampleFace(entry, 0),
+                    entrySamples(entry).get(0),
                     ThemeManager.INSTANCE.selected(),
                     x1 + 2,
                     y1 + 2,
@@ -1180,7 +1342,7 @@ public class GameSettingsScreen extends GuiScreen {
                 checked = c > 0;
                 dim = c == 0;
                 count = String.valueOf(c);
-                four = !entry.isWild();
+                four = !entry.single();
                 locked = !editable;
                 customCount = cfg.hasOverride(pack, entry);
             }
@@ -1225,12 +1387,7 @@ public class GameSettingsScreen extends GuiScreen {
             case THEME -> {
                 ThemeManager.ThemeInfo theme = (ThemeManager.ThemeInfo) t.payload;
                 UiDraw.roundFrame(x1, y1, x2, y2, 6, 2, 0xFFFFFFFF, 0xFFF0A040, 0xFFD06020);
-                List<CardFace> faces = List.of(
-                    new CardFace("number", CardColor.RED, 1),
-                    new CardFace("number", CardColor.YELLOW, 2),
-                    new CardFace("number", CardColor.GREEN, 3),
-                    new CardFace("number", CardColor.BLUE, 4),
-                    new CardFace("wild_draw4", CardColor.WILD, -1));
+                List<CardFace> faces = THEME_TILE_FACES;
                 drawFan(faces, theme.id(), x1 + t.w * 0.42f, y2 - 16, 24);
                 CardRenderer.drawBack2D(theme.id(), false, x2 - 30, y1 + 8, 24, 36);
                 UiDraw.fittedCentered(fontRendererObj, t.title, (x1 + x2) / 2f, y2 - 12, t.w - 8, 0xFFFFFFFF);
@@ -1313,7 +1470,7 @@ public class GameSettingsScreen extends GuiScreen {
     private void drawDeckInfo(BlockEntityMinoTable te, Tile t) {
         TableConfig cfg = te.config;
         UiDraw.roundRect(t.x, t.y, t.x + t.w, t.y + t.h, 5, 0x70000000);
-        int size = cfg.countDeckSize();
+        int size = configView(cfg).deckSize;
         int players = Math.max(
             te.getPlayersList()
                 .size(),
@@ -1337,13 +1494,27 @@ public class GameSettingsScreen extends GuiScreen {
     private static CardFace sampleFace(CardPack.Entry entry, int variant) {
         CardType type = CardTypes.get(entry.typeId());
         CardColor color = type.wild ? CardColor.WILD
-            : CardColor.forSide(entry.dark())
-                .get(variant % 4);
-        int number = entry.numbers().length > 0 ? entry.numbers()[Math.min(variant, entry.numbers().length - 1)] : -1;
-        return new CardFace(type.id, color, number, entry.flexColor() ? color.flexPartner() : null);
+            : type.fixedColor != null ? type.fixedColor
+                : CardColor.forSide(entry.dark())
+                    .get(variant % 4);
+        int[] numbers = entry.numbers();
+        int number = numbers.length > 0 ? numbers[Math.min(variant, numbers.length - 1)] : -1;
+        return new CardFace(type.id, color, number, entry.flexColor() && !entry.single() ? color.flexPartner() : null);
     }
 
-    private static List<CardFace> packFaces(CardPack pack) {
+    private List<CardFace> entrySamples(CardPack.Entry entry) {
+        return entrySamples.computeIfAbsent(entry, key -> {
+            List<CardFace> samples = new ArrayList<>();
+            for (int i = 0; i < (key.single() ? 1 : 4); i++) samples.add(sampleFace(key, i));
+            return samples;
+        });
+    }
+
+    private List<CardFace> packFaces(CardPack pack) {
+        return packSamples.computeIfAbsent(pack, GameSettingsScreen::buildPackFaces);
+    }
+
+    private static List<CardFace> buildPackFaces(CardPack pack) {
         List<CardFace> faces = new ArrayList<>();
         List<CardPack.Entry> actions = new ArrayList<>(), wilds = new ArrayList<>(), numbers = new ArrayList<>();
         for (CardPack.Entry e : pack.entries) {
@@ -1358,7 +1529,13 @@ public class GameSettingsScreen extends GuiScreen {
         return faces;
     }
 
-    private static List<CardFace> packPreview(TableConfig cfg) {
+    private List<CardFace> packPreview(TableConfig cfg) {
+        ConfigView view = configView(cfg);
+        if (view.preview == null) view.preview = buildPackPreview(cfg);
+        return view.preview;
+    }
+
+    private static List<CardFace> buildPackPreview(TableConfig cfg) {
         List<CardFace> faces = new ArrayList<>();
         for (String id : cfg.packs) {
             CardPack p = CardPack.get(id);
@@ -1395,9 +1572,10 @@ public class GameSettingsScreen extends GuiScreen {
         float minY = 0, maxY = 0;
         for (int i = 0; i < n; i++) {
             double a = Math.toRadians(fanAngle(i, n));
-            for (float[] c : new float[][] { { -cardW / 2, -cardH }, { cardW / 2, -cardH }, { -cardW / 2, 0 },
-                { cardW / 2, 0 } }) {
-                float y = (float) (c[0] * Math.sin(a) + c[1] * Math.cos(a));
+            double sin = Math.sin(a), cos = Math.cos(a);
+            for (int corner = 0; corner < 4; corner++) {
+                float x = corner % 2 == 0 ? -cardW / 2 : cardW / 2;
+                float y = (float) (x * sin + (corner < 2 ? -cardH : 0) * cos);
                 minY = Math.min(minY, y);
                 maxY = Math.max(maxY, y);
             }
@@ -1410,11 +1588,11 @@ public class GameSettingsScreen extends GuiScreen {
         UiDraw.panel(x1, y1, x2, y2);
         Tile t = infoTile;
         List<String> texts = new ArrayList<>();
-        List<Integer> textColors = new ArrayList<>();
+        IntList textColors = new IntArrayList();
         if (t == null) {
             texts.add(describePacks(te.config));
             textColors.add(0xFFFFFFFF);
-            texts.add(tr("gui.minopp.design.summary", te.config.countDeckSize(), te.seatCount()));
+            texts.add(tr("gui.minopp.design.summary", configView(te.config).deckSize, te.seatCount()));
             textColors.add(0xFFFFFFFF);
         } else {
             for (String d : t.desc) {
@@ -1453,8 +1631,7 @@ public class GameSettingsScreen extends GuiScreen {
                 }
                 case CARD -> {
                     CardPack.Entry entry = (CardPack.Entry) ((Object[]) t.payload)[1];
-                    List<CardFace> faces = new ArrayList<>();
-                    for (int i = 0; i < (entry.isWild() ? 1 : 4); i++) faces.add(sampleFace(entry, i));
+                    List<CardFace> faces = entrySamples(entry);
                     drawFanCentered(faces, ThemeManager.INSTANCE.selected(), cx, py, ph, 34);
                 }
                 case PACK -> drawFanCentered(
@@ -1466,17 +1643,7 @@ public class GameSettingsScreen extends GuiScreen {
                     32);
                 case THEME -> {
                     String id = ((ThemeManager.ThemeInfo) t.payload).id();
-                    drawFanCentered(
-                        List.of(
-                            new CardFace("number", CardColor.RED, 5),
-                            new CardFace("number", CardColor.BLUE, 3),
-                            new CardFace("skip", CardColor.GREEN, -1),
-                            new CardFace("wild", CardColor.WILD, -1)),
-                        id,
-                        cx - 8,
-                        py,
-                        ph,
-                        30);
+                    drawFanCentered(THEME_INFO_FACES, id, cx - 8, py, ph, 30);
                     CardRenderer.drawBack2D(id, false, x2 - 40, py + 8, 28, 44);
                 }
                 case SOUND_PACK, SOUND -> {
@@ -1545,12 +1712,12 @@ public class GameSettingsScreen extends GuiScreen {
                     cx,
                     ty + lineH * (1 - fit) / 2f,
                     textScale * fit,
-                    textColors.get(i));
+                    textColors.getInt(i));
                 ty += lineH;
             } else {
-                for (String o : fontRendererObj.listFormattedStringToWidth(text, wrapW)) {
+                for (String o : wrap(text, wrapW)) {
                     if (ty + lineH > y2 - 4) break;
-                    UiDraw.scaledCentered(fontRendererObj, o, cx, ty, textScale, textColors.get(i));
+                    UiDraw.scaledCentered(fontRendererObj, o, cx, ty, textScale, textColors.getInt(i));
                     ty += lineH;
                 }
             }
@@ -1571,9 +1738,7 @@ public class GameSettingsScreen extends GuiScreen {
         int w = (int) (width / scale);
         for (int i = 0; i < texts.size(); i++) {
             String t = texts.get(i);
-            lines += i >= controlStart && fitScale(t, w) > 0 ? 1
-                : fontRendererObj.listFormattedStringToWidth(t, w)
-                    .size();
+            lines += i >= controlStart && fitScale(t, w) > 0 ? 1 : wrap(t, w).size();
         }
         return (int) Math.ceil((lines * 10 + texts.size() * 3) * scale);
     }
@@ -2019,7 +2184,7 @@ public class GameSettingsScreen extends GuiScreen {
                 CardPack pack = (CardPack) p[0];
                 CardPack.Entry entry = (CardPack.Entry) p[1];
                 String key = TableConfig.countKey(pack, entry);
-                int c = effectiveCount(entry);
+                int c = effectiveCount(pack, entry);
                 int nv;
                 if (shift && button == 1) {
                     openEditor(t, c);

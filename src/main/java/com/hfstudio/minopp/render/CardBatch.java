@@ -3,7 +3,6 @@ package com.hfstudio.minopp.render;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,11 +21,12 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class CardBatch {
 
-    private static final int LEVELS = 5;
     private static final Map<String, Map<CardFace, ResourceLocation[]>> FACE_TEXTURES = new HashMap<>();
+    private static long cacheGeneration;
 
     public static void clearCache() {
         FACE_TEXTURES.clear();
+        cacheGeneration++;
     }
 
     static ResourceLocation[] textures(CardFace face, String theme) {
@@ -45,6 +45,7 @@ public class CardBatch {
 
         float[] data = new float[16 * 9];
         int size;
+        ResourceLocation texture;
 
         void add(float x, float y, float z, float u, float v, int color, int normal) {
             if (size + 7 > data.length) data = Arrays.copyOf(data, data.length * 2);
@@ -58,15 +59,18 @@ public class CardBatch {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private final Map<ResourceLocation, Quads>[] textured = new Map[LEVELS];
+    private final List<Map<ResourceLocation, Quads>> textured = new ArrayList<>();
     private final Quads plain = new Quads();
-    private final List<Quads> pool = new ArrayList<>();
+    private final List<List<Quads>> active = new ArrayList<>();
+    private long generation = cacheGeneration;
 
     private float ox, oy, oz, cos = 1, sin = 0;
 
     public CardBatch() {
-        for (int i = 0; i < LEVELS; i++) textured[i] = new LinkedHashMap<>();
+        for (int i = 0; i < 5; i++) {
+            textured.add(new HashMap<>());
+            active.add(new ArrayList<>());
+        }
     }
 
     public CardBatch at(float x, float y, float z, float angleDeg) {
@@ -84,12 +88,23 @@ public class CardBatch {
     }
 
     private Quads quadsFor(int level, ResourceLocation tex) {
-        Map<ResourceLocation, Quads> map = textured[Math.min(level, LEVELS - 1)];
+        if (generation != cacheGeneration) {
+            for (Map<ResourceLocation, Quads> map : textured) map.clear();
+            generation = cacheGeneration;
+        }
+        while (level >= textured.size()) {
+            textured.add(new HashMap<>());
+            active.add(new ArrayList<>());
+        }
+        Map<ResourceLocation, Quads> map = textured.get(level);
         Quads q = map.get(tex);
         if (q == null) {
-            q = pool.isEmpty() ? new Quads() : pool.remove(pool.size() - 1);
+            q = new Quads();
+            q.texture = tex;
             map.put(tex, q);
         }
+        if (q.size == 0) active.get(level)
+            .add(q);
         return q;
     }
 
@@ -185,14 +200,13 @@ public class CardBatch {
             plain.size = 0;
         }
         GL11.glColor4f(1, 1, 1, 1);
-        for (Map<ResourceLocation, Quads> level : textured) {
-            for (Map.Entry<ResourceLocation, Quads> e : level.entrySet()) {
+        for (List<Quads> level : active) {
+            for (Quads q : level) {
                 Minecraft.getMinecraft()
                     .getTextureManager()
-                    .bindTexture(e.getKey());
-                emit(e.getValue(), true);
-                e.getValue().size = 0;
-                pool.add(e.getValue());
+                    .bindTexture(q.texture);
+                emit(q, true);
+                q.size = 0;
             }
             level.clear();
         }

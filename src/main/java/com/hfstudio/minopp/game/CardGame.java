@@ -61,6 +61,28 @@ public class CardGame {
     public UUID challengeable;
     public boolean challengeableHadColor;
     public final List<PendingDecision> decisions = new ArrayList<>();
+    private NBTTagCompound extensionData = new NBTTagCompound();
+    private DecisionTypes.Continuation decisionContinuation = DecisionTypes.Continuation.ADVANCE_TURN;
+    private boolean decisionRepeatsTurn;
+    private int cutInTicks = -1;
+    private int hurryTicks = -1;
+    private ResumePoint resumePoint = ResumePoint.NONE;
+    private DrawProgress suspendedDraw;
+
+    private enum ResumePoint {
+        NONE,
+        INITIAL_TURN,
+        TURN_START,
+        TURN_READY,
+        PENALTY_NEXT,
+        TURN_NOTICE,
+        DRAW,
+        ADVANCE,
+        HOLD
+    }
+
+    private record DrawProgress(UUID player, int count, int lastUid, boolean toMatch) {}
+
     public final Map<UUID, UUID> links = new HashMap<>();
     public UUID danceOwner;
     public UUID balloonHolder;
@@ -166,22 +188,17 @@ public class CardGame {
         CardPlayer me = deAmputate(debugger);
         ActionReport report = ActionReport.builder(this, me);
         if (!debug || me == null) return report.fail(Chat.translatable("game.minopp.debug.not_debug"));
+        boolean hadDecisions = !decisions.isEmpty();
         int mine = players.indexOf(me);
         int next = nextActiveIndex(mine);
         switch (action) {
             case "turn" -> {
-                decisions.clear();
-                awaitingCutIn = false;
-                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
-                drawnCardUid = -1;
-                chainNumber = -1;
+                resetTurnWaits();
                 currentPlayerIndex = mine;
             }
             case "next" -> {
                 if (next == mine) return report.fail(Chat.translatable("game.minopp.debug.no_others"));
-                decisions.clear();
-                awaitingCutIn = false;
-                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+                resetTurnWaits();
                 currentPlayerIndex = next;
                 debugNext = -1;
             }
@@ -217,9 +234,7 @@ public class CardGame {
                 lastDrawValue = 0;
                 pendingDrawSource = null;
                 challengeable = null;
-                decisions.clear();
-                awaitingCutIn = false;
-                currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+                resetTurnWaits();
                 speedLevel = 1;
                 pendingSpeed = 0;
                 balloonHolder = null;
@@ -252,6 +267,8 @@ public class CardGame {
             }
         }
         restoreDebugHand();
+        if (report.shouldDestroyGame) return report;
+        if (!hadDecisions) pauseForDecision(ResumePoint.HOLD);
         return report
             .state(Chat.translatable("game.minopp.debug.applied", Chat.translatable("gui.minopp.debug.btn." + action)));
     }
@@ -289,7 +306,7 @@ public class CardGame {
         Set<CardFace> light = new LinkedHashSet<>(), dark = new LinkedHashSet<>();
         for (CardPack pack : CardPack.all()) {
             for (CardPack.Entry entry : pack.entries) {
-                (entry.dark() || pack.backSideOnly ? dark : light).addAll(TableConfig.entryFaces(entry));
+                (entry.dark() || pack.backSideOnly ? dark : light).addAll(pack.faces(entry.key()));
             }
         }
         List<CardFace> l = new ArrayList<>(light), d = new ArrayList<>(dark);
@@ -370,6 +387,21 @@ public class CardGame {
         return report;
     }
 
+    private void resetTurnWaits() {
+        decisions.clear();
+        decisionContinuation = DecisionTypes.Continuation.ADVANCE_TURN;
+        decisionRepeatsTurn = false;
+        resumePoint = ResumePoint.NONE;
+        suspendedDraw = null;
+        deferAdvance = false;
+        awaitingCutIn = false;
+        cutInTicks = -1;
+        hurryTicks = -1;
+        currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
+        drawnCardUid = -1;
+        chainNumber = -1;
+    }
+
     public ActionReport playCard(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
         return debugged(playCardInner(cardPlayer, cardUid, choices));
     }
@@ -379,7 +411,15 @@ public class CardGame {
     }
 
     public ActionReport answerDecision(CardPlayer player, int answer, UUID target) {
-        return debugged(answerDecisionInner(player, answer, target));
+        PendingDecision decision = decisionFor(player.uuid);
+        return answerDecision(player, decision == null ? null : decision.id, answer, target);
+    }
+
+    /**
+     * Answers exactly one pending request. Expired or stale replies leave the current decision unchanged.
+     */
+    public ActionReport answerDecision(CardPlayer player, UUID decisionId, int answer, UUID target) {
+        return debugged(answerDecisionInner(player, decisionId, answer, target));
     }
 
     public ActionReport tickDecisions(long now, Predicate<UUID> isHuman) {
@@ -387,6 +427,15 @@ public class CardGame {
     }
 
     public TableConfig detachedConfig;
+
+    /**
+     * Returns this game's persistent, synchronized data for an extension id. Mutate only on the game thread.
+     */
+    public NBTTagCompound extensionData(String id) {
+        if (id == null || id.isBlank()) throw new IllegalArgumentException("Extension id cannot be blank");
+        if (!extensionData.hasKey(id, 10)) extensionData.setTag(id, new NBTTagCompound());
+        return extensionData.getCompoundTag(id);
+    }
 
     public TableConfig config() {
         if (tableEntity != null) return tableEntity.config;
@@ -458,6 +507,11 @@ public class CardGame {
         }
 
         deck = config.buildDeck(players.size(), random);
+        long required = (long) players.size() * Math.max(0, initialCardCount) + 1;
+        if (deck.size() < required) {
+            return ActionReport.builder(this, cardPlayer)
+                .panic(Chat.translatable("game.minopp.play.deck_too_small", deck.size(), required));
+        }
         for (int i = 0; i < initialCardCount; i++) {
             for (CardPlayer player : players) {
                 if (deck.isEmpty()) break;
@@ -481,18 +535,30 @@ public class CardGame {
         GameSounds.deal(report, initialCardCount + 3);
         report.sound(GameSounds.PLAY, report.soundTail() + 250);
         GameSounds.turn(report, players.get(currentPlayerIndex), false, report.soundTail() + 500);
-        return report.gameStarted();
+        GameHooks.started(this, report);
+        if (!report.shouldDestroyGame && !pauseForDecision(ResumePoint.INITIAL_TURN)) {
+            GameHooks.turnStarted(this, currentPlayer(), report);
+            pauseForDecision(ResumePoint.HOLD);
+        }
+        return report.state == null ? report.gameStarted() : report;
     }
 
     private static boolean acceptableOpening(CardFace face, boolean official) {
         if (face.isNumber() && !face.isWild()) return true;
         if (!official) return false;
         CardType type = face.type();
-        return type == CardTypes.SKIP || type == CardTypes.REVERSE || type == CardTypes.DRAW2 || type == CardTypes.WILD;
+        return type.opening != null || type == CardTypes.SKIP
+            || type == CardTypes.REVERSE
+            || type == CardTypes.DRAW2
+            || type == CardTypes.WILD;
     }
 
     void applyOpening(CardFace face) {
         CardType type = face.type();
+        if (type.opening != null) {
+            type.opening.accept(this, face);
+            return;
+        }
         CardPlayer first = players.get(currentPlayerIndex);
         if (type == CardTypes.SKIP) {
             currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
@@ -509,6 +575,8 @@ public class CardGame {
 
     public String checkPlayable(CardPlayer player, Card card, boolean useFlex) {
         if (isDebugger(player)) return null;
+        String extensionReason = checkCardRestrictions(player, card, useFlex);
+        if (extensionReason != null) return extensionReason;
         CardFace face = face(card);
         CardType type = face.type();
         if (currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN && card.uid != drawnCardUid) {
@@ -528,9 +596,6 @@ public class CardGame {
             if (!rule(GameRules.FLEX_POWER) || !player.powerOn || (!type.hasFlex() && face.flexColor == null)) {
                 return "game.minopp.play.no_flex";
             }
-        }
-        if (type.condition != null && !type.condition.test(this, player, face)) {
-            return "game.minopp.play.invalid_card";
         }
         if (pendingDraw > 0) {
             if (type.answersDraw) return null;
@@ -571,6 +636,15 @@ public class CardGame {
         return "game.minopp.play.invalid_card";
     }
 
+    private String checkCardRestrictions(CardPlayer player, Card card, boolean useFlex) {
+        if (isDebugger(player)) return null;
+        String reason = GameHooks.checkPlayable(this, player, card, useFlex);
+        if (reason != null) return reason;
+        CardFace face = face(card);
+        CardType.Condition condition = face.type().condition;
+        return condition != null && !condition.test(this, player, face) ? "game.minopp.play.invalid_card" : null;
+    }
+
     /**
      * Every check {@link #playCard} makes before playing, without side effects: null when the card can be played
      * right now (on its turn or as a jump-in), else the lang key of the reason. Used by clients so they never open a
@@ -585,10 +659,10 @@ public class CardGame {
         if (!decisions.isEmpty()) return "game.minopp.play.waiting_decision";
         boolean identical = isIdenticalToTop(card);
         if (awaitingCutIn && !(identical && rule(GameRules.JUMP_IN))) return "game.minopp.play.not_match_cut";
-        if (awaitingCutIn && idx != currentPlayerIndex) return null;
+        if (awaitingCutIn && idx != currentPlayerIndex) return checkCardRestrictions(real, card, false);
         if (awaitingCutIn || idx != currentPlayerIndex) {
             boolean jumpIn = rule(GameRules.JUMP_IN) && pendingDraw == 0 && identical && idx != currentPlayerIndex;
-            return jumpIn ? null : "game.minopp.play.not_your_turn";
+            return jumpIn ? checkCardRestrictions(real, card, false) : "game.minopp.play.not_your_turn";
         }
         return checkPlayable(real, card, useFlex);
     }
@@ -606,15 +680,16 @@ public class CardGame {
         if (!rule(GameRules.JUMP_IN)) return false;
         for (int i = 0; i < players.size(); i++) {
             if (i == currentPlayerIndex || players.get(i).eliminated) continue;
-            if (players.get(i).hand.stream()
-                .anyMatch(this::isIdenticalToTop)) return true;
+            CardPlayer player = players.get(i);
+            for (Card card : player.hand) {
+                if (isIdenticalToTop(card) && checkCardRestrictions(player, card, false) == null) return true;
+            }
         }
         return false;
     }
 
     private ActionReport playCardInner(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
-        cardPlayer.coinLocked = true;
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
@@ -642,13 +717,14 @@ public class CardGame {
                 return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
             }
         }
-        if (!isCut) {
-            String reason = checkPlayable(cardPlayer, card, choices.useFlex);
-            if (reason != null) return report.fail(Chat.translatable(reason));
-        }
+        String reason = isCut ? checkCardRestrictions(cardPlayer, card, false)
+            : checkPlayable(cardPlayer, card, choices.useFlex);
+        if (reason != null) return report.fail(Chat.translatable(reason));
+        cardPlayer.coinLocked = true;
         if (isCut) {
             currentPlayerIndex = playerIndex;
             awaitingCutIn = false;
+            cutInTicks = -1;
             currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         }
 
@@ -665,9 +741,14 @@ public class CardGame {
         if (choice.targetCount() > 0) {
             List<CardPlayer> others = activePlayers();
             others.remove(cardPlayer);
+            Set<UUID> selected = new HashSet<>();
             choices.targets.removeIf(
-                u -> others.stream()
+                u -> !selected.add(u) || others.stream()
                     .noneMatch(p -> p.uuid.equals(u)));
+            if (choices.targets.size() > choice.targetCount()) {
+                choices.targets.subList(choice.targetCount(), choices.targets.size())
+                    .clear();
+            }
             while (choices.targets.size() < choice.targetCount() && !others.isEmpty()) {
                 CardPlayer pick = others.stream()
                     .filter(p -> !choices.targets.contains(p.uuid))
@@ -718,12 +799,17 @@ public class CardGame {
                 CardPlayer next = nextPlayer();
                 if (!next.equals(cardPlayer)) drawCards(next, pendingDraw + type.drawValue, report);
             }
+            GameHooks.played(new PlayContext(this, cardPlayer, card, face, choices, report));
+            if (report.shouldDestroyGame) return report;
             return win(cardPlayer, report);
         }
 
         PlayContext ctx = new PlayContext(this, cardPlayer, card, face, choices, report);
         CardType.Effect effect = useFlex ? type.flexEffect : type.effect;
         if (effect != null) effect.apply(ctx);
+        if (report.shouldDestroyGame) return report;
+        GameHooks.played(ctx);
+        if (report.shouldDestroyGame) return report;
         if (cardPlayer.coinArmed && type.isDraw() && !useFlex) {
             cardPlayer.coinArmed = false;
             pendingDraw += type.drawValue;
@@ -810,10 +896,13 @@ public class CardGame {
     }
 
     private ActionReport checkEndConditions(CardPlayer actor, ActionReport report) {
+        if (report.shouldDestroyGame) return report;
         for (CardPlayer p : players) {
             if (!p.eliminated && p.hand.isEmpty() && !isDebugger(p) && !relay(p, report)) return win(p, report);
+            if (report.shouldDestroyGame) return report;
         }
         applyMercy(report);
+        if (report.shouldDestroyGame) return report;
         List<CardPlayer> active = activePlayers();
         if (active.size() == 1 && !debug) return win(active.get(0), report);
         if (active.isEmpty()) return report.panic(Chat.translatable("game.minopp.play.deck_depleted"));
@@ -835,18 +924,20 @@ public class CardGame {
             for (int i = 0; i < 5; i++) report.effect(new PlayerFireworkEffectEvent(i * 1000 + 500, w.uuid));
         }
         report.sound(Mino.id("game.win"), 0);
-        return report.gameWon(winner, winners);
+        report.gameWon(winner, winners);
+        GameHooks.finished(this, winners, report);
+        return report;
     }
 
     private ActionReport playNoCardInner(CardPlayer cardPlayer) {
         ActionReport report = ActionReport.builder(this, cardPlayer);
-        cardPlayer.coinLocked = true;
         int playerIndex = players.indexOf(cardPlayer);
         if (playerIndex == -1 || cardPlayer.eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
         if (playerIndex != currentPlayerIndex || awaitingCutIn)
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
+        cardPlayer.coinLocked = true;
 
         if (currentPlayerPhase == PlayerActionPhase.SPEED
             || speedLevel > 1 && pendingDraw == 0 && currentPlayerPhase == PlayerActionPhase.DISCARD_HAND) {
@@ -880,20 +971,22 @@ public class CardGame {
             return report.drew(amount);
         }
 
-        int drawn = 0;
-        Card last = null;
-        if (rule(GameRules.DRAW_TO_MATCH)) {
-            while (drawn < 40) {
-                List<Card> got = drawCards(cardPlayer, 1, report);
-                if (got.isEmpty()) break;
-                drawn++;
-                last = got.get(0);
-                if (canPlay(cardPlayer, last)) break;
-            }
-        } else {
+        return continueDraw(cardPlayer, 0, null, rule(GameRules.DRAW_TO_MATCH), report);
+    }
+
+    private ActionReport continueDraw(CardPlayer cardPlayer, int drawn, Card last, boolean toMatch,
+        ActionReport report) {
+        int limit = toMatch ? 40 : 1;
+        while (drawn < limit && (drawn == 0 || last != null && !canPlay(cardPlayer, last))) {
             List<Card> got = drawCards(cardPlayer, 1, report);
-            drawn = got.size();
-            if (!got.isEmpty()) last = got.get(0);
+            if (report.shouldDestroyGame) return report;
+            if (got.isEmpty()) break;
+            drawn += toMatch ? 1 : got.size();
+            last = got.get(0);
+            if (pauseForDecision(ResumePoint.DRAW)) {
+                suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, last.uid, toMatch);
+                return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
+            }
         }
         if (drawn == 0 && deck.isEmpty() && discardDeck.isEmpty()) {
             report.messageAll(Chat.translatable("game.minopp.play.deck_empty"));
@@ -901,6 +994,10 @@ public class CardGame {
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
 
+        if (pauseForDecision(ResumePoint.DRAW)) {
+            suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, last == null ? -1 : last.uid, toMatch);
+            return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
+        }
         boolean playable = last != null && !isDebugger(cardPlayer) && canPlay(cardPlayer, last);
         if (playable && rule(GameRules.FORCED_PLAY)) {
             PlayContext.PlayChoices choices = AutoPlayer.defaultChoices(this, cardPlayer, last);
@@ -953,7 +1050,10 @@ public class CardGame {
         } else if (targetPlayer.hand.size() > 1) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_hand"));
         } else {
+            boolean hadDecisions = !decisions.isEmpty();
             drawCards(targetPlayer, config().getInt(GameRules.SHOUT_PENALTY), report);
+            if (report.shouldDestroyGame) return report;
+            if (!hadDecisions) pauseForDecision(ResumePoint.HOLD);
             targetPlayer.hasShoutedMino = true;
             report.sound(Mino.id("game.doubt_success"), 0);
             return report
@@ -961,28 +1061,45 @@ public class CardGame {
         }
     }
 
-    private ActionReport answerDecisionInner(CardPlayer player, int answer, UUID target) {
+    private ActionReport answerDecisionInner(CardPlayer player, UUID decisionId, int answer, UUID target) {
         ActionReport report = ActionReport.builder(this, player);
-        for (PendingDecision d : decisions) {
-            if (d.player.equals(player.uuid) && !d.isAnswered()) {
-                if (d.type == PendingDecision.Type.POINT_TAKEN) {
-                    if (target == null || target.equals(player.uuid) || deAmputate(target) == null) {
-                        return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
-                    }
-                    d.answerTarget = target;
-                } else if (d.type == PendingDecision.Type.ROULETTE_COLOR) {
-                    if (answer < 0 || answer >= CardColor.values().length
-                        || !CardColor.forSide(darkSide)
-                            .contains(CardColor.values()[answer]))
-                        return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
-                    d.answer = answer;
-                } else {
-                    d.answer = answer == 1 ? 1 : 0;
-                }
-                return resolveDecisionsIfDone(report);
-            }
+        PendingDecision d = decisionFor(player.uuid);
+        CardPlayer participant = deAmputate(player.uuid);
+        if (d == null || !d.id.equals(decisionId)
+            || participant == null
+            || participant.eliminated
+            || System.currentTimeMillis() >= d.deadline) {
+            return report.fail(Chat.translatable("game.minopp.play.no_decision"));
         }
-        return report.fail(Chat.translatable("game.minopp.play.no_decision"));
+        if (d.type == PendingDecision.Type.CUSTOM) {
+            int oldAnswer = d.answer;
+            UUID oldTarget = d.answerTarget;
+            boolean accepted = DecisionTypes.get(d.typeId)
+                .handler()
+                .answer(this, d, answer, target);
+            if (!accepted || !d.isAnswered()) {
+                d.answer = oldAnswer;
+                d.answerTarget = oldTarget;
+                return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+            }
+        } else if (d.type == PendingDecision.Type.POINT_TAKEN) {
+            CardPlayer selected = target == null ? null : deAmputate(target);
+            if (selected == null || selected.equals(participant) || selected.eliminated) {
+                return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+            }
+            d.answerTarget = target;
+        } else if (d.type == PendingDecision.Type.ROULETTE_COLOR) {
+            if (answer < 0 || answer >= CardColor.values().length
+                || !CardColor.forSide(darkSide)
+                    .contains(CardColor.values()[answer])) {
+                return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+            }
+            d.answer = answer;
+        } else {
+            if (answer != 0 && answer != 1) return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+            d.answer = answer;
+        }
+        return resolveDecisionsIfDone(report);
     }
 
     private ActionReport tickDecisionsInner(long now, Predicate<UUID> isHuman) {
@@ -1002,6 +1119,13 @@ public class CardGame {
     private void answerAutomatically(PendingDecision d) {
         CardPlayer p = deAmputate(d.player);
         switch (d.type) {
+            case CUSTOM -> {
+                DecisionTypes.get(d.typeId)
+                    .handler()
+                    .answerAutomatically(this, d);
+                if (!d.isAnswered())
+                    throw new IllegalStateException("Automatic answer did not complete decision: " + d.typeId);
+            }
             case CHALLENGE -> d.answer = p != null && p.hand.size() > 6 && random.nextFloat() < 0.35f ? 1 : 0;
             case ROULETTE_COLOR -> d.answer = (p != null ? mostCommonColor(p)
                 : CardColor.forSide(darkSide)
@@ -1018,13 +1142,26 @@ public class CardGame {
     }
 
     private ActionReport resolveDecisionsIfDone(ActionReport report) {
-        if (decisions.stream()
-            .anyMatch(d -> !d.isAnswered()))
-            return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
-        List<PendingDecision> done = new ArrayList<>(decisions);
+        for (PendingDecision decision : decisions) {
+            if (!decision.isAnswered()) return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
+        }
+        List<PendingDecision> done = List.copyOf(decisions);
+        DecisionTypes.Continuation continuation = decisionContinuation;
+        boolean again = decisionRepeatsTurn;
         decisions.clear();
         PendingDecision first = done.get(0);
         switch (first.type) {
+            case CUSTOM -> {
+                DecisionTypes.get(first.typeId)
+                    .handler()
+                    .resolve(this, done, report);
+                if (report.shouldDestroyGame) return report;
+                ActionReport end = checkEndConditions(currentPlayer(), report);
+                if (end != null) return end;
+                if (decisions.isEmpty()) {
+                    resumeAfterDecision(report, continuation, again);
+                }
+            }
             case CHALLENGE -> {
                 ActionReport end = resolveChallenge(first, report);
                 if (end != null) return end;
@@ -1075,11 +1212,16 @@ public class CardGame {
         if (d.answer == 1 && source != null) {
             if (challengeableHadColor) {
                 report.messageAll(Chat.translatable("game.minopp.play.challenge_success", victim.name, source.name));
-                drawCards(source, pendingDraw, report);
+                int amount = pendingDraw;
                 pendingDraw = 0;
                 lastDrawValue = 0;
+                pendingDrawSource = null;
                 currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
-                return checkEndConditions(victim, report);
+                drawCards(source, amount, report);
+                ActionReport end = checkEndConditions(victim, report);
+                if (end != null) return end;
+                pauseForDecision(ResumePoint.HOLD);
+                return null;
             } else {
                 report.messageAll(Chat.translatable("game.minopp.play.challenge_fail", victim.name));
                 pendingDraw += 2;
@@ -1093,7 +1235,11 @@ public class CardGame {
     }
 
     public void advanceTurn(ActionReport report) {
+        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.ADVANCE)) return;
         turnSerial++;
+        awaitingCutIn = false;
+        cutInTicks = -1;
+        hurryTicks = -1;
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         drawnCardUid = -1;
         chainNumber = -1;
@@ -1131,7 +1277,7 @@ public class CardGame {
         hiddenCounts.remove(current.uuid);
         if (hurryTurns > 0) {
             hurryTurns--;
-            scheduleHurry(current);
+            hurryTicks = HURRY_TICKS;
         }
         if (danceOwner != null && danceOwner.equals(current.uuid)) {
             danceOwner = null;
@@ -1149,23 +1295,78 @@ public class CardGame {
             }
         }
 
+        decisionRepeatsTurn = currentPlayerIndex == previousIndex;
+        if (pauseForDecision(ResumePoint.TURN_START)) return;
+        startTurnHooks(report, decisionRepeatsTurn);
+    }
+
+    private void startTurnHooks(ActionReport report, boolean again) {
+        if (report.shouldDestroyGame) return;
+        CardPlayer current = currentPlayer();
+        GameHooks.turnStarted(this, current, report);
+        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.TURN_READY)) return;
+        resumeTurn(report, again);
+    }
+
+    private boolean pauseForDecision(ResumePoint point) {
+        if (decisions.isEmpty()) return false;
+        resumePoint = point;
+        return true;
+    }
+
+    private void resumeAfterDecision(ActionReport report, DecisionTypes.Continuation continuation, boolean again) {
+        ResumePoint point = resumePoint;
+        resumePoint = ResumePoint.NONE;
+        switch (point) {
+            case INITIAL_TURN -> {
+                GameHooks.turnStarted(this, currentPlayer(), report);
+                pauseForDecision(ResumePoint.HOLD);
+            }
+            case TURN_START -> startTurnHooks(report, again);
+            case TURN_READY -> resumeTurn(report, again);
+            case PENALTY_NEXT -> finishPenaltyTurn(report);
+            case TURN_NOTICE -> announcePenaltyTurn(report);
+            case DRAW -> {
+                DrawProgress progress = suspendedDraw;
+                suspendedDraw = null;
+                CardPlayer player = progress == null ? null : deAmputate(progress.player);
+                if (player == null || player.eliminated || !player.equals(currentPlayer())) {
+                    startTurnHooks(report, false);
+                    return;
+                }
+                Card last = null;
+                for (Card held : player.hand) if (held.uid == progress.lastUid) {
+                    last = held;
+                    break;
+                }
+                continueDraw(player, progress.count, last, progress.toMatch, report);
+            }
+            case ADVANCE -> advanceTurn(report);
+            case HOLD -> {}
+            case NONE -> {
+                if (continuation == DecisionTypes.Continuation.RESUME_TURN) resumeTurn(report, again);
+                else advanceTurn(report);
+            }
+        }
+    }
+
+    private void resumeTurn(ActionReport report, boolean again) {
+        if (report.shouldDestroyGame) return;
+        CardPlayer current = currentPlayer();
         if (anyOtherPlayerCanCutIn()) {
             awaitingCutIn = true;
-            final CardGame self = this;
-            TaskScheduler.Holder.INSTANCE.schedule(config().getInt(GameRules.JUMP_IN_SECONDS) * 20, () -> {
-                if (tableEntity == null || tableEntity.game != self || !awaitingCutIn) return;
-                awaitingCutIn = false;
-                tableEntity.handleActionResult(resolveStuckPenalty(), null, null);
-            });
+            cutInTicks = config().getInt(GameRules.JUMP_IN_SECONDS) * 20;
             return;
         }
 
         current.hasShoutedMino = false;
-        GameSounds.turn(report, current, currentPlayerIndex == previousIndex, Math.max(450, report.soundTail() + 300));
+        GameSounds.turn(report, current, again, Math.max(450, report.soundTail() + 300));
         resolvePenaltyFor(current, report);
     }
 
     public ActionReport resolveStuckPenalty() {
+        awaitingCutIn = false;
+        cutInTicks = -1;
         ActionReport report = ActionReport.builder(this, currentPlayer());
         CardPlayer current = currentPlayer();
         current.hasShoutedMino = false;
@@ -1192,11 +1393,24 @@ public class CardGame {
         takePendingDraw(current, report);
         if (checkEndConditions(current, report) != null) return;
         report.state(Chat.translatable("game.minopp.play.drew", current.name, penalty));
+        finishPenaltyTurn(report);
+    }
+
+    private void finishPenaltyTurn(ActionReport report) {
+        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.PENALTY_NEXT)) return;
         currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
         currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
-        CardPlayer nextPlayer = players.get(currentPlayerIndex);
-        nextPlayer.hasShoutedMino = false;
-        GameSounds.turn(report, nextPlayer, false, Math.max(900, report.soundTail() + 300));
+        hurryTicks = -1;
+        decisionRepeatsTurn = false;
+        GameHooks.turnStarted(this, currentPlayer(), report);
+        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.TURN_NOTICE)) return;
+        announcePenaltyTurn(report);
+    }
+
+    private void announcePenaltyTurn(ActionReport report) {
+        CardPlayer current = currentPlayer();
+        current.hasShoutedMino = false;
+        GameSounds.turn(report, current, false, Math.max(900, report.soundTail() + 300));
     }
 
     private void takePendingDraw(CardPlayer victim, ActionReport report) {
@@ -1264,6 +1478,7 @@ public class CardGame {
 
     private ActionReport useCoinInner(CardPlayer player, boolean flip) {
         ActionReport report = ActionReport.builder(this, player);
+        if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
         if (!rule(GameRules.COINS)) return report.fail(Chat.translatable("game.minopp.coin.off"));
         if (player.coinUsed) return report.fail(Chat.translatable("game.minopp.coin.used"));
         if (flip) {
@@ -1285,6 +1500,8 @@ public class CardGame {
             report.messageAll(Chat.translatable("game.minopp.coin.no_mercy", player.name));
         } else {
             mercySwap(player, report);
+            if (report.shouldDestroyGame) return report;
+            pauseForDecision(ResumePoint.HOLD);
             report.messageAll(Chat.translatable("game.minopp.coin.mercy", player.name));
         }
         return report.state(Chat.translatable("game.minopp.coin.spent", player.name));
@@ -1937,6 +2154,7 @@ public class CardGame {
             List<Card> got = drawCards(victim, 1, report);
             if (got.isEmpty()) break;
             count++;
+            if (report.shouldDestroyGame) break;
             if (face(got.get(0)).color == color) break;
         }
         return count;
@@ -2285,30 +2503,31 @@ public class CardGame {
         discardDeck.clear();
     }
 
-    private void scheduleHurry(CardPlayer current) {
-        if (tableEntity == null) return;
-        final CardGame self = this;
-        final int serial = turnSerial;
-        final UUID who = current.uuid;
-        TaskScheduler.Holder.INSTANCE.schedule(HURRY_TICKS, () -> {
-            if (tableEntity == null || tableEntity.game != self
-                || turnSerial != serial
-                || awaitingCutIn
-                || !decisions.isEmpty()) return;
-            CardPlayer late = currentPlayer();
-            if (!late.uuid.equals(who)) return;
-            ActionReport report = ActionReport.builder(this, late);
-            drawCards(late, 1, report);
-            report.messageAll(Chat.translatable("game.minopp.play.too_slow", late.name));
-            ActionReport end = checkEndConditions(late, report);
-            if (end == null) advanceTurn(report);
-            tableEntity.handleActionResult(end != null ? end : report, late, null);
-        });
+    /**
+     * Advances persisted turn timers once per server tick. Decision time is excluded from turn timeouts.
+     */
+    public ActionReport tickTurnTimers() {
+        if (!decisions.isEmpty()) return null;
+        if ((awaitingCutIn || hurryTicks >= 0) && tableEntity != null) tableEntity.markDirty();
+        if (awaitingCutIn) {
+            if (cutInTicks < 0) cutInTicks = config().getInt(GameRules.JUMP_IN_SECONDS) * 20;
+            return --cutInTicks <= 0 ? resolveStuckPenalty() : null;
+        }
+        if (hurryTicks < 0 || --hurryTicks > 0) return null;
+        hurryTicks = -1;
+        CardPlayer late = currentPlayer();
+        ActionReport report = ActionReport.builder(this, late);
+        drawCards(late, 1, report);
+        report.messageAll(Chat.translatable("game.minopp.play.too_slow", late.name));
+        ActionReport end = checkEndConditions(late, report);
+        if (end == null) advanceTurn(report);
+        return end != null ? end : report;
     }
 
     public static final int HURRY_TICKS = 6 * 20;
 
     public List<Card> drawCards(CardPlayer cardPlayer, int count, ActionReport report) {
+        if (report != null && report.shouldDestroyGame) return List.of();
         if (trapArmed && count > 0) {
             trapArmed = false;
             count += 3;
@@ -2318,6 +2537,7 @@ public class CardGame {
             }
         }
         List<Card> drawn = drawCardsRaw(cardPlayer, count, report);
+        if (report != null && report.shouldDestroyGame) return drawn;
         UUID partner = links.get(cardPlayer.uuid);
         if (partner != null && !drawn.isEmpty()) {
             CardPlayer p = deAmputate(partner);
@@ -2346,6 +2566,7 @@ public class CardGame {
         }
         GameSounds.draws(report, drawn.size(), 0);
         if (!drawn.isEmpty() && cardPlayer.hand.size() > 1) cardPlayer.hasShoutedMino = false;
+        GameHooks.drawn(this, cardPlayer, drawn, report);
         return drawn;
     }
 
@@ -2357,6 +2578,7 @@ public class CardGame {
         if (!rule(GameRules.MERCY)) return;
         int limit = config().getInt(GameRules.MERCY_LIMIT);
         for (CardPlayer p : players) {
+            if (report.shouldDestroyGame) return;
             if (p.eliminated || p.hand.size() < limit || isDebugger(p)) continue;
             if (rule(GameRules.COINS) && !p.coinUsed && !p.coinNoMercy) {
                 // an unspent Mercy coin saves its holder from being knocked out
@@ -2389,6 +2611,39 @@ public class CardGame {
     public PendingDecision decisionFor(UUID uuid) {
         for (PendingDecision d : decisions) if (d.player.equals(uuid) && !d.isAnswered()) return d;
         return null;
+    }
+
+    /**
+     * Opens a batch of one custom decision type and defers advancement until every participant has answered.
+     */
+    public void openDecisions(List<PendingDecision> batch) {
+        openDecisions(batch, DecisionTypes.Continuation.ADVANCE_TURN);
+    }
+
+    /**
+     * Selects the continuation when the engine has no pending draw or turn stage to resume.
+     * Recorded engine stages take precedence and survive chained decisions and saves.
+     */
+    public void openDecisions(List<PendingDecision> batch, DecisionTypes.Continuation continuation) {
+        if (continuation == null) throw new IllegalArgumentException("Decision continuation cannot be null");
+        if (batch.isEmpty()) throw new IllegalArgumentException("Decision batch cannot be empty");
+        if (!decisions.isEmpty()) throw new IllegalStateException("Another decision batch is already pending");
+        String typeId = batch.get(0).typeId;
+        Set<UUID> participants = new HashSet<>();
+        for (PendingDecision decision : batch) {
+            CardPlayer player = deAmputate(decision.player);
+            if (decision.type != PendingDecision.Type.CUSTOM || !typeId.equals(decision.typeId)
+                || player == null
+                || player.eliminated
+                || decision.isAnswered()
+                || !participants.add(decision.player)) {
+                throw new IllegalArgumentException("Invalid custom decision batch");
+            }
+            DecisionTypes.get(typeId);
+        }
+        decisions.addAll(batch);
+        decisionContinuation = continuation;
+        deferAdvance = true;
     }
 
     public CardPlayer deAmputate(CardPlayer playerWithoutHand) {
@@ -2424,6 +2679,25 @@ public class CardGame {
     }
 
     public CardGame(NBTTagCompound tag) {
+        if (tag.hasKey("resumePoint")) resumePoint = ResumePoint.valueOf(tag.getString("resumePoint"));
+        if (tag.hasKey("suspendedDraw", 10)) {
+            NBTTagCompound draw = tag.getCompoundTag("suspendedDraw");
+            suspendedDraw = new DrawProgress(
+                NbtUtil.getUUID(draw, "player"),
+                draw.getInteger("count"),
+                draw.getInteger("lastUid"),
+                draw.getBoolean("toMatch"));
+        }
+        skipCount = tag.getInteger("skipCount");
+        extraTurn = tag.getBoolean("extraTurn");
+        cutInTicks = tag.hasKey("cutInTicks") ? tag.getInteger("cutInTicks") : -1;
+        hurryTicks = tag.hasKey("hurryTicks") ? tag.getInteger("hurryTicks") : -1;
+        decisionRepeatsTurn = tag.getBoolean("decisionRepeatsTurn");
+        extensionData = (NBTTagCompound) tag.getCompoundTag("extensions")
+            .copy();
+        if (tag.hasKey("decisionContinuation")) {
+            decisionContinuation = DecisionTypes.Continuation.valueOf(tag.getString("decisionContinuation"));
+        }
         currentPlayerIndex = tag.getInteger("currentPlayer");
         pendingDraw = tag.getInteger("pendingDraw");
         lastDrawValue = tag.getInteger("lastDrawValue");
@@ -2519,6 +2793,24 @@ public class CardGame {
 
     public NBTTagCompound toTag() {
         NBTTagCompound tag = new NBTTagCompound();
+        tag.setString("resumePoint", resumePoint.name());
+        if (suspendedDraw != null) {
+            NBTTagCompound draw = new NBTTagCompound();
+            NbtUtil.putUUID(draw, "player", suspendedDraw.player);
+            draw.setInteger("count", suspendedDraw.count);
+            draw.setInteger("lastUid", suspendedDraw.lastUid);
+            draw.setBoolean("toMatch", suspendedDraw.toMatch);
+            tag.setTag("suspendedDraw", draw);
+        }
+        tag.setInteger("skipCount", skipCount);
+        tag.setBoolean("extraTurn", extraTurn);
+        tag.setInteger("cutInTicks", cutInTicks);
+        tag.setInteger("hurryTicks", hurryTicks);
+        tag.setTag("extensions", extensionData.copy());
+        if (!decisions.isEmpty()) {
+            tag.setString("decisionContinuation", decisionContinuation.name());
+            tag.setBoolean("decisionRepeatsTurn", decisionRepeatsTurn);
+        }
         tag.setInteger("currentPlayer", currentPlayerIndex);
         tag.setInteger("pendingDraw", pendingDraw);
         tag.setInteger("lastDrawValue", lastDrawValue);

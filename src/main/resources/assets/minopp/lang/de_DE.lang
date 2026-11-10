@@ -23,6 +23,7 @@ game.minopp.play.seats_reset=%1$s hat die Plätze zurückgesetzt. Bitte setzt eu
 game.minopp.play.game_won=§6%1$s HAT GEWONNEN! Herzlichen Glückwunsch!
 game.minopp.play.game_nearly_won=%1$s hat noch %2$s Karte(n).
 game.minopp.play.deck_depleted=Irgendwie ist der ganze Stapel auf euren Händen gelandet. Das Spiel endet hier.
+game.minopp.play.deck_too_small=Das Deck enthält %s Karten, zum Austeilen und Aufdecken werden mindestens %s benötigt. Erhöhe die Kartenanzahl oder die Deckkopien.
 game.minopp.play.player_unavailable=Spieler %1$s ist nicht da. Bitte setzt euch neu hin.
 game.minopp.play.no_game=Der Tisch ist frei.
 game.minopp.play.mino_shout=%1$s: §6Mino!

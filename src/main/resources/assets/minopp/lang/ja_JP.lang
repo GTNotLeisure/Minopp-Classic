@@ -23,6 +23,7 @@ game.minopp.play.seats_reset=%1$s が席をリセットしました。席を選�
 game.minopp.play.game_won=§6%1$s の勝利！おめでとうございます！
 game.minopp.play.game_nearly_won=%1$s の残りは %2$s 枚です。
 game.minopp.play.deck_depleted=山札がすべて手札に入ってしまいました。ゲームはここで終了します。
+game.minopp.play.deck_too_small=山札は %s 枚ですが、配布と最初の場札には最低 %s 枚が必要です。カード枚数またはデッキ数を増やしてください。
 game.minopp.play.player_unavailable=プレイヤー %1$s がいません。席を選び直してください。
 game.minopp.play.no_game=テーブルは空いています。
 game.minopp.play.mino_shout=%1$s：§6ミノ！

@@ -24,16 +24,18 @@ public class CardRenderer {
     private CardRenderer() {}
 
     public static List<String> layers(CardFace face) {
+        List<String> custom = CardRenderRegistry.layers(face);
+        if (custom != null) return custom;
         List<String> layers = new ArrayList<>(4);
         layers.add("frame_" + face.color.id());
         if (face.flexColor != null) layers.add("flex_" + face.flexColor.id());
         CardType type = face.type();
         if (type.fast) layers.add("fast_overlay");
         if (type.numbered) {
-            layers.add("num_" + Math.max(0, Math.min(9, face.number)));
+            layers.add(symbolLayer(face));
             if (type == CardTypes.POWER_NUMBER) layers.add("mark_power");
         } else {
-            layers.add("symbol_" + type.symbol);
+            layers.add(symbolLayer(face));
         }
         return layers;
     }
@@ -45,6 +47,16 @@ public class CardRenderer {
             .getTextureManager()
             .bindTexture(tex);
         return true;
+    }
+
+    public static String symbolLayer(CardFace face) {
+        String custom = CardRenderRegistry.symbol(face);
+        if (custom != null) return custom;
+        CardType type = face.type();
+        if (type.numbered && !type.customSymbol) return "num_" + Math.max(0, face.number);
+        int colon = type.symbol.indexOf(':');
+        return colon < 0 ? "symbol_" + type.symbol
+            : type.symbol.substring(0, colon + 1) + "symbol_" + type.symbol.substring(colon + 1);
     }
 
     public static void drawFace2D(CardFace face, String theme, float x, float y, float w, float h) {
@@ -62,8 +74,7 @@ public class CardRenderer {
     }
 
     public static void drawCornerSymbol(CardFace face, String theme, float x, float y, float size) {
-        CardType type = face.type();
-        String layer = type.numbered ? "num_" + Math.max(0, Math.min(9, face.number)) : "symbol_" + type.symbol;
+        String layer = symbolLayer(face);
         if (!bind(theme, layer)) return;
         GL11.glColor4f(1, 1, 1, 1);
         GuiDraw.blitBound(x, y, size, size, 5, 14, 22, 22, 32, 50);

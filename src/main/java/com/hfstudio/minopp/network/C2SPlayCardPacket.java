@@ -3,17 +3,21 @@ package com.hfstudio.minopp.network;
 import java.util.Objects;
 import java.util.UUID;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayerMP;
 
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
 
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
 import io.netty.buffer.ByteBuf;
 
 public class C2SPlayCardPacket {
@@ -64,7 +68,8 @@ public class C2SPlayCardPacket {
             case ACTION_DECISION -> {
                 int answer = packet.readInt();
                 UUID target = packet.readBoolean() ? Buf.readUUID(packet) : null;
-                yield tableEntity.game.answerDecision(cardPlayer, answer, target);
+                UUID decisionId = packet.readableBytes() == 16 ? Buf.readUUID(packet) : null;
+                yield tableEntity.game.answerDecision(cardPlayer, decisionId, answer, target);
             }
             default -> null;
         };
@@ -86,10 +91,10 @@ public class C2SPlayCardPacket {
         tableEntity.choosingUuid = who;
         tableEntity.choosingRing = ring;
         tableEntity.choosingHover = hover;
-        tableEntity.markDirty();
-        S2CChoosingPacket.send(tableEntity);
+        tableEntity.syncChoosing();
     }
 
+    @SideOnly(Side.CLIENT)
     public static class Client {
 
         private static ByteBuf header(BlockPos gamePos, int action) {
@@ -139,11 +144,27 @@ public class C2SPlayCardPacket {
             MinoNetwork.sendPacketToServer(ID, packet);
         }
 
+        /**
+         * Uses the currently synchronized decision. Custom screens should pass their displayed decision explicitly.
+         */
         public static void sendDecisionC2S(BlockPos gamePos, int answer, UUID target) {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc.thePlayer == null || mc.theWorld == null) return;
+            BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, gamePos);
+            if (table == null || table.game == null) return;
+            PendingDecision decision = table.game.decisionFor(
+                mc.thePlayer.getGameProfile()
+                    .getId());
+            if (decision != null) sendDecisionC2S(gamePos, decision, answer, target);
+        }
+
+        public static void sendDecisionC2S(BlockPos gamePos, PendingDecision decision, int answer, UUID target) {
+            Objects.requireNonNull(decision, "decision");
             ByteBuf packet = header(gamePos, ACTION_DECISION);
             packet.writeInt(answer);
             packet.writeBoolean(target != null);
             if (target != null) Buf.writeUUID(packet, target);
+            Buf.writeUUID(packet, decision.id);
             MinoNetwork.sendPacketToServer(ID, packet);
         }
     }

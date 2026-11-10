@@ -228,13 +228,13 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         frame(t, cx0, cz0, cx1, cz1, w, y1 + 0.003, pulse);
         frame(t, cx0, cz0, cx1, cz1, w, y0 + 0.003, pulse * 0.7f);
         t.setColorRGBA_F(1f, 0.85f, 0.25f, pulse);
-        double[][] corners = { { cx0, cz0 }, { cx1, cz0 }, { cx1, cz1 }, { cx0, cz1 } };
-        for (double[] c : corners) {
-            double ox = c[0] < 0.5 ? -w : 0, oz = c[1] < 0.5 ? -w : 0;
-            t.addVertex(c[0] + ox, y0, c[1] + oz + w / 2);
-            t.addVertex(c[0] + ox + w, y0, c[1] + oz + w / 2);
-            t.addVertex(c[0] + ox + w, y1, c[1] + oz + w / 2);
-            t.addVertex(c[0] + ox, y1, c[1] + oz + w / 2);
+        for (int corner = 0; corner < 4; corner++) {
+            double cx = corner == 0 || corner == 3 ? cx0 : cx1, cz = corner < 2 ? cz0 : cz1;
+            double ox = cx < 0.5 ? -w : 0, oz = cz < 0.5 ? -w : 0;
+            t.addVertex(cx + ox, y0, cz + oz + w / 2);
+            t.addVertex(cx + ox + w, y0, cz + oz + w / 2);
+            t.addVertex(cx + ox + w, y1, cz + oz + w / 2);
+            t.addVertex(cx + ox, y1, cz + oz + w / 2);
         }
         t.draw();
         GL11.glDepthMask(true);
@@ -244,14 +244,17 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
 
     private static void frame(Tessellator t, double x0, double z0, double x1, double z1, double w, double y, float a) {
         t.setColorRGBA_F(1f, 0.85f, 0.25f, a);
-        double[][] bands = { { x0 - w, z0 - w, x1 + w, z0 }, { x0 - w, z1, x1 + w, z1 + w }, { x0 - w, z0, x0, z1 },
-            { x1, z0, x1 + w, z1 } };
-        for (double[] b : bands) {
-            t.addVertex(b[0], y, b[1]);
-            t.addVertex(b[0], y, b[3]);
-            t.addVertex(b[2], y, b[3]);
-            t.addVertex(b[2], y, b[1]);
-        }
+        frameBand(t, x0 - w, z0 - w, x1 + w, z0, y);
+        frameBand(t, x0 - w, z1, x1 + w, z1 + w, y);
+        frameBand(t, x0 - w, z0, x0, z1, y);
+        frameBand(t, x1, z0, x1 + w, z1, y);
+    }
+
+    private static void frameBand(Tessellator t, double x0, double z0, double x1, double z1, double y) {
+        t.addVertex(x0, y, z0);
+        t.addVertex(x0, y, z1);
+        t.addVertex(x1, y, z1);
+        t.addVertex(x1, y, z0);
     }
 
     private static final float[] JITTER = new float[512 * 3];

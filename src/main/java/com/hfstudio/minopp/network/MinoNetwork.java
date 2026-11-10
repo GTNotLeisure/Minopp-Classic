@@ -2,6 +2,7 @@ package com.hfstudio.minopp.network;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +31,9 @@ public class MinoNetwork {
     @FunctionalInterface
     public interface C2SPacketHandler {
 
+        /**
+         * Borrows the inbound buffer for this call; retain or copy it before deferring work.
+         */
         void handlePacket(EntityPlayerMP player, ByteBuf packet);
     }
 
@@ -41,21 +45,25 @@ public class MinoNetwork {
      * not pile up memory.
      */
     private static final int QUEUE_CAP = 4096;
+    private static final int PACKETS_PER_TICK = 256;
     private static final Queue<Runnable> SERVER_QUEUE = new ConcurrentLinkedQueue<>();
     private static final Queue<Runnable> CLIENT_QUEUE = new ConcurrentLinkedQueue<>();
     private static final AtomicInteger SERVER_PENDING = new AtomicInteger(), CLIENT_PENDING = new AtomicInteger();
 
-    private static void enqueue(Queue<Runnable> queue, AtomicInteger pending, Runnable task) {
+    private static boolean enqueue(Queue<Runnable> queue, AtomicInteger pending, Runnable task) {
         if (pending.incrementAndGet() > QUEUE_CAP) {
             pending.decrementAndGet();
-            return;
+            return false;
         }
         queue.add(task);
+        return true;
     }
 
     private static void drain(Queue<Runnable> queue, AtomicInteger pending) {
-        Runnable task;
-        while ((task = queue.poll()) != null) {
+        int budget = Math.min(PACKETS_PER_TICK, pending.get());
+        for (int i = 0; i < budget; i++) {
+            Runnable task = queue.poll();
+            if (task == null) break;
             pending.decrementAndGet();
             task.run();
         }
@@ -91,11 +99,20 @@ public class MinoNetwork {
     }
 
     public static void registerNetworkReceiver(String id, C2SPacketHandler handler) {
-        SERVER_HANDLERS.put(id, handler);
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(handler, "handler");
+        if (SERVER_HANDLERS.putIfAbsent(id, handler) != null)
+            throw new IllegalArgumentException("Server packet handler already registered: " + id);
     }
 
+    /**
+     * Registers a main-thread receiver. The inbound buffer is released after the callback returns.
+     */
     public static void registerClientReceiver(String id, Consumer<ByteBuf> handler) {
-        CLIENT_HANDLERS.put(id, handler);
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(handler, "handler");
+        if (CLIENT_HANDLERS.putIfAbsent(id, handler) != null)
+            throw new IllegalArgumentException("Client packet handler already registered: " + id);
     }
 
     public static ByteBuf buffer() {
@@ -125,7 +142,9 @@ public class MinoNetwork {
         @Override
         public void fromBytes(ByteBuf buf) {
             id = Buf.readString(buf);
-            data = Unpooled.copiedBuffer(buf.readBytes(buf.readableBytes()));
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            data = Unpooled.wrappedBuffer(bytes);
         }
 
         @Override
@@ -159,16 +178,21 @@ public class MinoNetwork {
         public IMessage onMessage(C2SMessage message, MessageContext ctx) {
             C2SPacketHandler handler = SERVER_HANDLERS.get(message.id);
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
-            if (handler == null || player == null) return null;
-            enqueue(SERVER_QUEUE, SERVER_PENDING, () -> {
-                if (player.isDead || player.playerNetServerHandler == null) return;
+            if (handler == null || player == null) {
+                message.data.release();
+                return null;
+            }
+            if (!enqueue(SERVER_QUEUE, SERVER_PENDING, () -> {
                 try {
+                    if (player.isDead || player.playerNetServerHandler == null) return;
                     handler.handlePacket(player, message.data);
                 } catch (Exception e) {
                     Mino.LOGGER
                         .warn("Bad {} packet from {}: {}", message.id, player.getCommandSenderName(), e.toString());
+                } finally {
+                    message.data.release();
                 }
-            });
+            })) message.data.release();
             return null;
         }
     }
@@ -178,14 +202,19 @@ public class MinoNetwork {
         @Override
         public IMessage onMessage(S2CMessage message, MessageContext ctx) {
             Consumer<ByteBuf> handler = CLIENT_HANDLERS.get(message.id);
-            if (handler == null) return null;
-            enqueue(CLIENT_QUEUE, CLIENT_PENDING, () -> {
+            if (handler == null) {
+                message.data.release();
+                return null;
+            }
+            if (!enqueue(CLIENT_QUEUE, CLIENT_PENDING, () -> {
                 try {
                     handler.accept(message.data);
                 } catch (Exception e) {
                     Mino.LOGGER.error("Error handling packet {}", message.id, e);
+                } finally {
+                    message.data.release();
                 }
-            });
+            })) message.data.release();
             return null;
         }
     }
