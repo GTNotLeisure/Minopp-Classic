@@ -44,6 +44,13 @@ public class TableConfig {
     // cards that need a rule to play well: heavy draws would otherwise let hands grow without end
     private static final Map<String, String[]> CARD_RULES = new LinkedHashMap<>(
         Map.ofEntries(
+            Map.entry("minus_one", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_minus_one", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_minus_two", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_halve", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_recycle", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_lucky_seven", new String[] { GameRules.DISCARD_PILE }),
+            Map.entry("wild_infinity", new String[] { GameRules.MERCY }),
             Map.entry("wild_draw6", new String[] { GameRules.MERCY }),
             Map.entry("wild_draw10", new String[] { GameRules.MERCY }),
             Map.entry("wild_color_roulette", new String[] { GameRules.MERCY }),
@@ -153,6 +160,7 @@ public class TableConfig {
         GameRules.Rule def = GameRules.get(rule);
         if (def == null) return;
         int v = def.clamp(value);
+        if (v == 0 && rule.equals(GameRules.DISCARD_PILE) && requiresDiscardPile()) v = 1;
         rules.put(rule, v);
         if (!def.bool()) return;
         Map<String, String[]> links = v == 0 ? ruleDependents : RULE_REQUIRES;
@@ -166,6 +174,14 @@ public class TableConfig {
             rules.put(next, v);
             pushReverse(pending, links.getOrDefault(next, NONE));
         }
+    }
+
+    private boolean requiresDiscardPile() {
+        for (CardPack pack : CardPack.all()) for (CardPack.Entry entry : pack.entries) {
+            if (getCount(pack, entry) > 0 && Arrays.asList(rulesForCard(entry.typeId()))
+                .contains(GameRules.DISCARD_PILE)) return true;
+        }
+        return false;
     }
 
     private static void pushReverse(ArrayDeque<String> pending, String[] values) {
@@ -431,5 +447,6 @@ public class TableConfig {
         for (String k : countsTag.func_150296_c()) {
             setCount(k, countsTag.getInteger(k), false);
         }
+        if (requiresDiscardPile()) set(GameRules.DISCARD_PILE, 1);
     }
 }

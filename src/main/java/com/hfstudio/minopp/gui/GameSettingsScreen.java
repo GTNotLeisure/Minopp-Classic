@@ -34,6 +34,7 @@ import com.hfstudio.minopp.config.Prefs;
 import com.hfstudio.minopp.effect.SoundBank;
 import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
+import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPack;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
@@ -655,7 +656,9 @@ public class GameSettingsScreen extends GuiScreen {
                 t.searchExtra = packName;
                 t.title = tr("game.minopp.card.type." + type.id);
                 t.desc.add(
-                    tr("gui.minopp.gallery.points", type.numbered ? tr("gui.minopp.gallery.face_value") : type.points));
+                    tr(
+                        "gui.minopp.gallery.points",
+                        type.numbered ? tr("gui.minopp.gallery.face_value") : CardGame.formatPoints(type.points)));
                 String descKey = "game.minopp.card.type." + type.id + ".desc";
                 if (hasTr(descKey)) t.desc.add(tr(descKey));
                 List<String> packs = new ArrayList<>();
@@ -1382,7 +1385,7 @@ public class GameSettingsScreen extends GuiScreen {
                 UiDraw.roundRect(x1, y1, x2, y2, 4, 0x80000000);
                 CardRenderer.drawFace2D(face, ThemeManager.INSTANCE.selected(), x1 + 2, y1 + 2, t.w - 4, t.h - 4);
                 CardType type = face.type();
-                count = type.numbered ? "0-9" : String.valueOf(type.points);
+                count = type.numbered ? "0-9" : CardGame.formatPoints(type.points);
             }
             case THEME -> {
                 ThemeManager.ThemeInfo theme = (ThemeManager.ThemeInfo) t.payload;

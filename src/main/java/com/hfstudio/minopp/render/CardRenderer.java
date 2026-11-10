@@ -75,9 +75,15 @@ public class CardRenderer {
 
     public static void drawCornerSymbol(CardFace face, String theme, float x, float y, float size) {
         String layer = symbolLayer(face);
-        if (!bind(theme, layer)) return;
+        int colon = layer.indexOf(':');
+        String corner = colon < 0 ? "corner_" + layer
+            : layer.substring(0, colon + 1) + "corner_" + layer.substring(colon + 1);
         GL11.glColor4f(1, 1, 1, 1);
-        GuiDraw.blitBound(x, y, size, size, 5, 14, 22, 22, 32, 50);
+        if (bind(theme, corner)) {
+            GuiDraw.blitBound(x, y, size, size, 0, 0, 1, 1, 1, 1);
+        } else if (bind(theme, layer)) {
+            GuiDraw.blitBound(x, y, size, size, 5, 14, 22, 22, 32, 50);
+        }
     }
 
     public static void drawBack2D(String theme, boolean dark, float x, float y, float w, float h) {

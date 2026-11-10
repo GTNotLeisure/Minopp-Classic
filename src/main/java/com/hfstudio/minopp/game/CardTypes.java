@@ -3,8 +3,11 @@ package com.hfstudio.minopp.game;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import net.minecraft.nbt.NBTTagCompound;
 
 import com.hfstudio.minopp.game.CardType.Choice;
 
@@ -51,7 +54,14 @@ public class CardTypes {
         CardType.builder("skip", CardPack.CLASSIC)
             .label("Ø")
             .sort(10)
-            .effect(ctx -> ctx.game.skipNext(1))
+            .effect(
+                ctx -> TargetedEffects.apply(
+                    ctx.game,
+                    ctx.player,
+                    List.of(ctx.game.nextPlayer()),
+                    "skip",
+                    new NBTTagCompound(),
+                    ctx.report))
             .build());
     public static final CardType REVERSE = register(
         CardType.builder("reverse", CardPack.CLASSIC)
@@ -75,6 +85,7 @@ public class CardTypes {
             .build());
     public static final CardType WILD_DRAW4 = register(
         CardType.builder("wild_draw4", CardPack.CLASSIC)
+            .matchAliases("draw4")
             .wild()
             .label("+4")
             .sort(41)
@@ -155,6 +166,7 @@ public class CardTypes {
             .build());
     public static final CardType WILD_DRAW2 = register(
         CardType.builder("wild_draw2", CardPack.FLIP)
+            .matchAliases("draw2")
             .wild()
             .label("+2")
             .sort(46)
@@ -266,6 +278,7 @@ public class CardTypes {
             .build());
     public static final CardType AW_SKIP_TWO = register(
         CardType.builder("aw_skip_two", CardPack.ALL_WILD)
+            .matchAliases("skip")
             .allWild()
             .label("Ø2")
             .sort(63)
@@ -303,7 +316,8 @@ public class CardTypes {
             .sort(67)
             .effect(ctx -> {
                 CardPlayer target = ctx.target(0);
-                if (target != null) ctx.game.swapHands(ctx.player, target, ctx.report);
+                if (target != null) TargetedEffects
+                    .apply(ctx.game, ctx.player, List.of(target), "swap", new NBTTagCompound(), ctx.report);
             })
             .build());
 
@@ -426,7 +440,8 @@ public class CardTypes {
             .sort(21)
             .effect(ctx -> {
                 CardPlayer target = ctx.target(0);
-                if (target != null) ctx.game.swapHands(ctx.player, target, ctx.report);
+                if (target != null) TargetedEffects
+                    .apply(ctx.game, ctx.player, List.of(target), "swap", new NBTTagCompound(), ctx.report);
             })
             .build());
     public static final CardType WILD_BLAST_ALL = register(
@@ -457,7 +472,8 @@ public class CardTypes {
             .sort(74)
             .effect(ctx -> {
                 CardPlayer target = ctx.target(0);
-                if (target != null) ctx.game.swapHands(ctx.player, target, ctx.report);
+                if (target != null) TargetedEffects
+                    .apply(ctx.game, ctx.player, List.of(target), "swap", new NBTTagCompound(), ctx.report);
             })
             .build());
 
@@ -643,6 +659,7 @@ public class CardTypes {
             .build());
     public static final CardType REVERSE_SKIP = register(
         CardType.builder("reverse_skip", CardPack.REVERSE_PACK)
+            .matchAliases("skip", "reverse")
             .match("skip")
             .label("⇆Ø")
             .sort(98)
@@ -886,13 +903,22 @@ public class CardTypes {
             .build());
     public static final CardType WILD_SKIP = register(
         CardType.builder("wild_skip", CardPack.INFINITY)
+            .matchAliases("skip")
             .wild()
             .label("WØ")
             .sort(132)
-            .effect(ctx -> ctx.game.skipNext(1))
+            .effect(
+                ctx -> TargetedEffects.apply(
+                    ctx.game,
+                    ctx.player,
+                    List.of(ctx.game.nextPlayer()),
+                    "skip",
+                    new NBTTagCompound(),
+                    ctx.report))
             .build());
     public static final CardType WILD_REVERSE = register(
         CardType.builder("wild_reverse", CardPack.INFINITY)
+            .matchAliases("reverse")
             .wild()
             .label("W⇆")
             .sort(133)
@@ -919,7 +945,16 @@ public class CardTypes {
             .choice(Choice.COLOR_AND_TARGET)
             .label("➶1")
             .sort(136)
-            .effect(ctx -> ctx.game.targetDraws(ctx.target(0), 1, ctx.report))
+            .effect(
+                ctx -> TargetedEffects.draw(
+                    ctx.game,
+                    ctx.player,
+                    ctx.choices.targets.stream()
+                        .map(ctx.game::deAmputate)
+                        .toList(),
+                    1,
+                    false,
+                    ctx.report))
             .build());
     public static final CardType WILD_TARGET_DRAW4 = register(
         CardType.builder("wild_target_draw4", CardPack.INFINITY)
@@ -927,21 +962,50 @@ public class CardTypes {
             .choice(Choice.COLOR_AND_TARGET)
             .label("➶4")
             .sort(137)
-            .effect(ctx -> ctx.game.targetDraws(ctx.target(0), 4, ctx.report))
+            .effect(
+                ctx -> TargetedEffects.draw(
+                    ctx.game,
+                    ctx.player,
+                    ctx.choices.targets.stream()
+                        .map(ctx.game::deAmputate)
+                        .toList(),
+                    4,
+                    false,
+                    ctx.report))
             .build());
     public static final CardType WILD_ALL_DRAW2 = register(
         CardType.builder("wild_all_draw2", CardPack.INFINITY)
             .wild()
             .label("2E")
             .sort(138)
-            .effect(ctx -> ctx.game.everyoneElseDraws(ctx.player, 2, ctx.report))
+            .effect(
+                ctx -> TargetedEffects.draw(
+                    ctx.game,
+                    ctx.player,
+                    ctx.game.activePlayers()
+                        .stream()
+                        .filter(p -> !p.equals(ctx.player))
+                        .toList(),
+                    2,
+                    false,
+                    ctx.report))
             .build());
     public static final CardType WILD_ALL_DRAW4 = register(
         CardType.builder("wild_all_draw4", CardPack.INFINITY)
             .wild()
             .label("4E")
             .sort(139)
-            .effect(ctx -> ctx.game.everyoneElseDraws(ctx.player, 4, ctx.report))
+            .effect(
+                ctx -> TargetedEffects.draw(
+                    ctx.game,
+                    ctx.player,
+                    ctx.game.activePlayers()
+                        .stream()
+                        .filter(p -> !p.equals(ctx.player))
+                        .toList(),
+                    4,
+                    false,
+                    ctx.report))
             .build());
     public static final CardType WILD_D4 = dice(4, 140);
     public static final CardType WILD_D6 = dice(6, 141);
@@ -958,6 +1022,7 @@ public class CardTypes {
             .build());
     public static final CardType WILD_MINUS_ONE = register(
         CardType.builder("wild_minus_one", CardPack.INFINITY)
+            .matchAliases("minus_one")
             .wild()
             .label("W-1")
             .sort(146)
@@ -978,7 +1043,16 @@ public class CardTypes {
             .choice(Choice.COLOR_AND_TARGET)
             .label("W◉")
             .sort(148)
-            .effect(ctx -> ctx.game.revealOne(ctx.player, ctx.target(0), ctx.report))
+            .effect(
+                ctx -> TargetedEffects.apply(
+                    ctx.game,
+                    ctx.player,
+                    ctx.choices.targets.stream()
+                        .map(ctx.game::deAmputate)
+                        .toList(),
+                    "reveal",
+                    new NBTTagCompound(),
+                    ctx.report))
             .build());
     public static final CardType JOKER = register(
         CardType.builder("joker", CardPack.INFINITY)
@@ -999,10 +1073,9 @@ public class CardTypes {
     public static final CardType WILD_RECYCLE = register(
         CardType.builder("wild_recycle", CardPack.INFINITY)
             .wild()
-            .choice(Choice.COLOR_AND_TARGET)
             .label("♻")
             .sort(151)
-            .effect(ctx -> ctx.game.recycle(ctx.player, ctx.target(0), ctx.report))
+            .effect(ctx -> ctx.game.recycle(ctx.player, null, ctx.report))
             .build());
     public static final CardType WILD_LUCKY_SEVEN = register(
         CardType.builder("wild_lucky_seven", CardPack.INFINITY)
@@ -1010,6 +1083,76 @@ public class CardTypes {
             .label("777")
             .sort(152)
             .effect(ctx -> ctx.game.luckySeven(ctx.player, ctx.report))
+            .build());
+
+    public static final CardType WILD_TARGET_DRAW2 = register(
+        CardType.builder("wild_target_draw2", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("➶2")
+            .sort(153)
+            .effect(
+                ctx -> TargetedEffects.draw(
+                    ctx.game,
+                    ctx.player,
+                    ctx.choices.targets.stream()
+                        .map(ctx.game::deAmputate)
+                        .toList(),
+                    2,
+                    false,
+                    ctx.report))
+            .build());
+    public static final CardType WILD_CARD_SWAP = register(
+        CardType.builder("wild_card_swap", CardPack.INFINITY)
+            .wild()
+            .choice(Choice.COLOR_AND_TARGET)
+            .label("⇄1")
+            .sort(154)
+            .effect(
+                ctx -> TargetedEffects.apply(
+                    ctx.game,
+                    ctx.player,
+                    ctx.choices.targets.stream()
+                        .map(ctx.game::deAmputate)
+                        .toList(),
+                    "card_swap",
+                    new NBTTagCompound(),
+                    ctx.report))
+            .build());
+
+    public static final CardType REPLAY = register(
+        CardType.builder("replay", CardPack.INFINITY)
+            .match("reverse")
+            .label("↻")
+            .sort(155)
+            .effect(ctx -> CardDecisions.replay(ctx.game, ctx.player))
+            .build());
+    public static final CardType WILD_REPLAY = register(
+        CardType.builder("wild_replay", CardPack.INFINITY)
+            .matchAliases("reverse")
+            .wild()
+            .match("reverse")
+            .label("W↻")
+            .sort(156)
+            .effect(ctx -> CardDecisions.replay(ctx.game, ctx.player))
+            .build());
+
+    public static final CardType WILD_INFINITY = register(
+        CardType.builder("wild_infinity", CardPack.INFINITY)
+            .wild()
+            .points(CardType.INFINITE_POINTS)
+            .label("∞")
+            .sort(157)
+            .effect(ctx -> ctx.game.nextDrawsUntilColor(ctx.choices.color, ctx.report))
+            .build());
+
+    public static final CardType WILD_INFINITY_NO_U = register(
+        CardType.builder("wild_infinity_no_u", CardPack.INFINITY)
+            .wild()
+            .label("NO U")
+            .sort(158)
+            .answersDraw()
+            .effect(ctx -> ctx.game.reflectDraw(ctx.player, ctx.report))
             .build());
 
     private static CardType dice(int sides, int sort) {

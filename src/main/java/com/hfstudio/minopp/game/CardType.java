@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.game;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 public class CardType {
@@ -58,6 +59,7 @@ public class CardType {
     public final boolean wild;
     public final boolean numbered;
     public final String matchKey;
+    public final Set<String> matchAliases;
     public final String shortLabel;
     public final String symbol;
     public final boolean customSymbol;
@@ -87,6 +89,7 @@ public class CardType {
     public final BiConsumer<CardGame, CardFace> opening;
 
     public static final int PICK_HALF = -1;
+    public static final int INFINITE_POINTS = Integer.MAX_VALUE;
 
     private CardType(Builder b) {
         this.id = b.id;
@@ -94,6 +97,7 @@ public class CardType {
         this.wild = b.wild;
         this.numbered = b.numbered;
         this.matchKey = b.matchKey == null ? b.id : b.matchKey;
+        this.matchAliases = b.matchAliases;
         this.shortLabel = b.shortLabel == null ? "" : b.shortLabel;
         this.symbol = b.symbol == null ? b.id : b.symbol;
         this.customSymbol = b.symbol != null;
@@ -122,6 +126,13 @@ public class CardType {
         return Math.max(0, Math.min(n, handAfter));
     }
 
+    public boolean sharesSymbol(CardType other) {
+        if (matchKey.equals(other.matchKey) || matchAliases.contains(other.matchKey)
+            || other.matchAliases.contains(matchKey)) return true;
+        for (String alias : matchAliases) if (other.matchAliases.contains(alias)) return true;
+        return false;
+    }
+
     public boolean isDraw() {
         return drawValue > 0;
     }
@@ -146,6 +157,7 @@ public class CardType {
         private int pick;
         private CardColor fixedColor;
         private String matchKey, shortLabel, symbol;
+        private Set<String> matchAliases = Set.of();
         private int sortOrder = 100, drawValue, points = 20;
         private Choice choice = Choice.NONE, flexChoice = Choice.NONE;
         private Effect effect = ctx -> {};
@@ -185,6 +197,13 @@ public class CardType {
 
         public Builder match(String matchKey) {
             this.matchKey = matchKey;
+            return this;
+        }
+
+        public Builder matchAliases(String... aliases) {
+            for (String alias : aliases) if (alias == null || alias.isBlank())
+                throw new IllegalArgumentException("Match aliases cannot be blank");
+            this.matchAliases = Set.of(aliases);
             return this;
         }
 

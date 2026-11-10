@@ -351,7 +351,8 @@ public class BlockEntityMinoTable extends TileEntity {
             : null;
 
         if (game != null && previousGame == null) {
-            lastDiscardSize = game.discardDeck.size();
+            lastDiscardSize = game.playedCards()
+                .size();
             lastHandMoveCounter = game.handMoveCounter;
             lastHandSizes.clear();
             for (CardPlayer p : game.players) lastHandSizes.put(p.uuid, p.hand.size());
@@ -426,7 +427,8 @@ public class BlockEntityMinoTable extends TileEntity {
             }
         }
 
-        lastDiscardSize = game.discardDeck.size();
+        lastDiscardSize = game.playedCards()
+            .size();
         lastHandSizes.clear();
         for (CardPlayer p : game.players) lastHandSizes.put(p.uuid, p.hand.size());
     }
@@ -734,13 +736,20 @@ public class BlockEntityMinoTable extends TileEntity {
         CardPlayer best = null;
         int bestScore = -1;
         for (CardPlayer w : winners) {
-            int total = target > 0 ? scores.merge(w.uuid, points, Integer::sum) : points;
+            int total = target > 0
+                ? scores.merge(w.uuid, points, (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b))
+                : points;
             if (target > 0) {
                 scoreNames.put(w.uuid, w.name);
                 sendMessageToAll(
                     new ActionMessage(
                         ActionMessage.Type.MESSAGE_ALL,
-                        Chat.translatable("game.minopp.play.points", w.name, points, total, target)));
+                        Chat.translatable(
+                            "game.minopp.play.points",
+                            w.name,
+                            CardGame.formatPoints(points),
+                            CardGame.formatPoints(total),
+                            target)));
             }
             settlement.add(new Settlement(w.name, w.hand.size(), 0, points, total, true));
             if (total > bestScore) {

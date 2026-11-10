@@ -171,15 +171,24 @@ public class GameOverlayLayer {
             for (BlockEntityMinoTable.Settlement s : tableEntity.settlement) {
                 String line;
                 if (s.winner()) {
-                    line = "\u00a76\u2605 \u00a7f" + Chat.translatable("gui.minopp.settle.winner", s.name(), s.gained())
-                        .getFormattedText();
-                    if (tableEntity.settleTarget > 0) line += "\u00a77"
-                        + Chat.translatable("gui.minopp.settle.total", s.total(), tableEntity.settleTarget)
+                    line = "\u00a76\u2605 \u00a7f"
+                        + Chat.translatable("gui.minopp.settle.winner", s.name(), CardGame.formatPoints(s.gained()))
                             .getFormattedText();
+                    if (tableEntity.settleTarget > 0) line += "\u00a77" + Chat
+                        .translatable(
+                            "gui.minopp.settle.total",
+                            CardGame.formatPoints(s.total()),
+                            tableEntity.settleTarget)
+                        .getFormattedText();
                 } else {
                     line = "\u00a77" + (++rank)
                         + ". \u00a7f"
-                        + Chat.translatable("gui.minopp.settle.loser", s.name(), s.cards(), s.points())
+                        + Chat
+                            .translatable(
+                                "gui.minopp.settle.loser",
+                                s.name(),
+                                s.cards(),
+                                CardGame.formatPoints(s.points()))
                             .getFormattedText();
                 }
                 drawStringWithBackdrop(font, line, x, y, 0xFFFFFFFF);

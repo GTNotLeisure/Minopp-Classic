@@ -22,7 +22,11 @@ public class CardGrid {
     }
 
     public void layout(int width, int height, int minimumWidth) {
-        if (width <= 0 || height <= 0 || minimumWidth < 1 || minimumWidth > 30)
+        layout(width, height, minimumWidth, 34, 34);
+    }
+
+    public void layout(int width, int height, int minimumWidth, int topInset, int bottomInset) {
+        if (width <= 0 || height <= 0 || minimumWidth < 1 || minimumWidth > 30 || topInset < 0 || bottomInset < 0)
             throw new IllegalArgumentException("Invalid card grid dimensions");
         this.width = width;
         cardWidth = 30;
@@ -32,13 +36,13 @@ public class CardGrid {
             columns = Math.max(1, (available + gap) / (cardWidth + gap));
             cardHeight = Math.round(cardWidth * 8.9f / 5.6f);
             rows = Math.max(1, (cards.size() + columns - 1) / columns);
-            if (rows * (cardHeight + gap) <= height - 68 || cardWidth <= minimumWidth) break;
+            if (rows * (cardHeight + gap) <= height - topInset - bottomInset || cardWidth <= minimumWidth) break;
             cardWidth--;
             if (cardWidth < 18) gap = 2;
         }
-        rows = Math.min(rows, Math.max(1, (height - 68) / (cardHeight + gap)));
+        rows = Math.min(rows, Math.max(1, (height - topInset - bottomInset) / (cardHeight + gap)));
         page = Math.min(page, pages() - 1);
-        top = height - 34 - (rows * (cardHeight + gap) - gap);
+        top = height - bottomInset - (rows * (cardHeight + gap) - gap);
     }
 
     public int top() {

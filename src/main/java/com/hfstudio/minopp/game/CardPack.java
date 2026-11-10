@@ -527,7 +527,17 @@ public class CardPack {
         .players(2, 6)
         .register();
 
-    public static final CardPack PACK_INFINITY = new Builder(INFINITY)
+    public static final CardPack PACK_INFINITY = new Builder(INFINITY).entry("replay", 1)
+        .entry("draw4", 1)
+        .entry("wild_draw2", 1)
+        .entry("wild_draw4", 1)
+        .entry("wild_draw6", 1)
+        .entry("wild_draw10", 1)
+        .entry("wild_infinity", 1)
+        .entry("wild_swap_hands", 1)
+        .entry("wild_shield", 1)
+        .entry("wild_infinity_no_u", 1)
+        .entry("wild_replay", 1)
         .entry("fast", "fast_number", ONE_TO_NINE, 2, false, false)
         .entry("colorless", "colorless_number", ZERO_TO_NINE, 1, false, false)
         .entry("draw1", 1)
@@ -538,6 +548,8 @@ public class CardPack {
         .entry("wild_draw8", 1)
         .entry("wild_times_two", 1)
         .entry("wild_target_draw1", 1)
+        .entry("wild_target_draw2", 1)
+        .entry("wild_card_swap", 1)
         .entry("wild_target_draw4", 1)
         .entry("wild_all_draw2", 1)
         .entry("wild_all_draw4", 1)
@@ -561,5 +573,7 @@ public class CardPack {
 
     public static void init() {
         CardTypes.init();
+        CardDecisions.init();
+        TargetedEffects.init();
     }
 }

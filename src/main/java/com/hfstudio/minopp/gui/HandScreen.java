@@ -11,7 +11,6 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.StatCollector;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -575,17 +574,8 @@ public class HandScreen extends GuiScreen {
 
     private void drawCardInfo(Context ctx, Card card) {
         CardFace face = ctx.game.face(card);
-        String title = Chat.translatable(
-            "gui.minopp.hand.card_points",
-            face.getDisplayName()
-                .getFormattedText(),
-            ctx.game.cardPoints(card))
-            .getFormattedText();
-        String key = "game.minopp.card.type." + face.type().id + ".desc";
-        String desc = StatCollector.canTranslate(key) ? Chat.translatable(key)
-            .getFormattedText()
-            : Chat.translatable("gui.minopp.hand.card_number")
-                .getFormattedText();
+        String title = CardTooltips.title(ctx.game, card);
+        String desc = CardTooltips.description(face);
         int maxW = Math.min(380, width - 40);
         List<?> lines = fontRendererObj.listFormattedStringToWidth(desc, maxW);
         int bandH = 24 + lines.size() * 11;

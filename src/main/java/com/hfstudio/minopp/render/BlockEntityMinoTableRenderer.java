@@ -73,7 +73,8 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(1.5, 0.94, 1.5);
         GL11.glScalef(0.3f, 0.3f, 0.3f);
         GL11.glRotatef(-90, 1, 0, 0);
-        int discardSize = game.discardDeck.size();
+        int discardSize = game.playedCards()
+            .size();
         int startIndex = Math.max(0, discardSize - 20);
         for (int ci = startIndex; ci <= discardSize; ci++) {
             int visualIndex = ci - startIndex;
@@ -87,7 +88,9 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
                     visualIndex * (1f / 56f),
                     (float) Math.toDegrees(jitter(ci, 2) * 0.8f - 0.4f));
             }
-            Card card = isTop ? game.topCard : game.discardDeck.get(ci);
+            Card card = isTop ? game.topCard
+                : game.playedCards()
+                    .get(ci);
             BATCH.face(
                 card.face(game.darkSide),
                 ThemeManager.INSTANCE.themeFor(card.owner),
@@ -99,6 +102,21 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         }
         BATCH.flush();
         GL11.glPopMatrix();
+
+        if (game.hasSeparateDiscardPile() && !game.discardDeck.isEmpty()) {
+            GL11.glPushMatrix();
+            GL11.glTranslated(2.5, 0.94, 0.5);
+            GL11.glScalef(0.3f, 0.3f, 0.3f);
+            GL11.glRotatef(-90, 1, 0, 0);
+            int first = Math.max(0, game.discardDeck.size() - 20);
+            for (int i = first; i < game.discardDeck.size(); i++) {
+                Card discarded = game.discardDeck.get(i);
+                BATCH.at(0, 0, (i - first) / 56f, 0);
+                BATCH.face(discarded.face(game.darkSide), viewerTheme, 0.52f, 0.8f, 0, 0xFFFFFF, false);
+            }
+            BATCH.flush();
+            GL11.glPopMatrix();
+        }
 
         EntityLivingBase viewer = Minecraft.getMinecraft().renderViewEntity;
         BlockPos pos = blockEntity.getBlockPos();

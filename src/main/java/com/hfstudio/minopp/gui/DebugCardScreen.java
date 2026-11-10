@@ -125,16 +125,11 @@ public class DebugCardScreen extends GuiScreen {
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
         Card hover = grid.hit(mouseX, mouseY, uid -> false);
-        if (hover != null) UiDraw.tooltip(
-            fontRendererObj,
-            List.of(
-                hover.face(shownGame.darkSide)
-                    .getDisplayName()
-                    .getFormattedText()),
+        if (hover != null) drawHoveringText(
+            CardTooltips.lines(fontRendererObj, shownGame, hover, width),
             mouseX,
             mouseY,
-            width,
-            height);
+            fontRendererObj);
     }
 
     @Override

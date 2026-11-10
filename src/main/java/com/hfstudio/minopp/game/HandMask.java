@@ -1,5 +1,7 @@
 package com.hfstudio.minopp.game;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.nbt.NBTTagCompound;
@@ -41,11 +43,19 @@ public class HandMask {
         UUID revealed = game.getInteger("revealOneTurns") > 0 && NbtUtil.hasUUID(game, "revealedOne")
             ? NbtUtil.getUUID(game, "revealedOne")
             : null;
+        Set<UUID> shown = new HashSet<>();
+        NBTTagList decisions = game.getTagList("decisions", 10);
+        for (int i = 0; i < decisions.tagCount(); i++) {
+            NBTTagCompound decision = decisions.getCompoundTagAt(i);
+            if (CardDecisions.SWAP.equals(decision.getString("typeId")))
+                shown.add(NbtUtil.getUUID(decision.getCompoundTag("data"), "target"));
+        }
         NBTTagList players = game.getTagList("players", 10);
         for (int i = 0; i < players.tagCount(); i++) {
             NBTTagCompound player = players.getCompoundTagAt(i);
             UUID holder = NbtUtil.hasUUID(player, "uuid") ? NbtUtil.getUUID(player, "uuid") : null;
-            if (holder != null && (holder.equals(viewer) || holder.equals(revealed))) continue;
+            if (holder != null && (holder.equals(viewer) || holder.equals(revealed) || shown.contains(holder)))
+                continue;
             maskCards(player.getTagList("hand", 10), darkSide, showBacks);
         }
         maskCards(game.getTagList("deck", 10), darkSide, showBacks);

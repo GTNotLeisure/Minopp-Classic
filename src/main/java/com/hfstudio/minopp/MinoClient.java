@@ -24,6 +24,8 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
+import com.hfstudio.minopp.gui.CardDecisionScreen;
+import com.hfstudio.minopp.gui.DebugCardScreen;
 import com.hfstudio.minopp.gui.DecisionScreens;
 import com.hfstudio.minopp.gui.GameSettingsScreen;
 import com.hfstudio.minopp.gui.HandScreen;
@@ -62,6 +64,7 @@ public class MinoClient {
     private static boolean worldPreviewLaunched = false;
 
     public static void init() {
+        CardDecisionScreen.register();
         KEY_SHOUT_MODIFIER = new KeyBinding(
             "key.minopp.shout_modifier",
             Keyboard.KEY_LCONTROL,
@@ -180,7 +183,8 @@ public class MinoClient {
             return;
         }
         boolean same = lastOpenedDecision != null && lastOpenedDecision.id.equals(decision.id);
-        if (!same && mc.currentScreen == null) {
+        if (!same && (mc.currentScreen == null || mc.currentScreen instanceof HandScreen
+            || mc.currentScreen instanceof DebugCardScreen)) {
             lastOpenedDecision = decision;
             mc.displayGuiScreen(DecisionScreens.create(gamePos, self, decision));
         }

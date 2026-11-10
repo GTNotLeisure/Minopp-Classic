@@ -64,6 +64,7 @@ public class Conflicts {
                 "wild_block",
                 "wild_shield",
                 "wild_no_u",
+                "wild_infinity_no_u",
                 "wild_rebound",
                 "wild_block_rebound",
                 "wild_block_deflect",
@@ -71,7 +72,15 @@ public class Conflicts {
         // Skip and Reverse already send penalties on; these cards do the same
         link(
             rule(GameRules.DEFLECT_DRAW),
-            cards("wild_no_u", "wild_rebound", "wild_block_rebound", "wild_block_deflect", "wild_redirect"));
+            cards(
+                "wild_no_u",
+                "wild_infinity_no_u",
+                "wild_rebound",
+                "wild_block_rebound",
+                "wild_block_deflect",
+                "wild_redirect"));
+        // Both NO U variants return draw penalties to their source.
+        link(card("wild_no_u"), card("wild_infinity_no_u"));
         // 7-0 swaps hands on every 7 and 0; these cards already trade hands
         link(
             rule(GameRules.SEVEN_ZERO),

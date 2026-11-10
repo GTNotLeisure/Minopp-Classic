@@ -533,6 +533,13 @@ public class PlayChoiceScreen extends GuiScreen {
                 .getFormattedText();
         GuiDraw.drawCenteredString(fontRendererObj, title, width / 2, pickGrid.top() - 18, 0xFFFFE070);
         pickGrid.draw(theme, darkSide, mouseX, mouseY, picked::contains);
+        Card hover = pickGrid.hit(mouseX, mouseY, picked::contains);
+        BlockEntityMinoTable table = table();
+        if (hover != null && table != null && table.game != null) drawHoveringText(
+            CardTooltips.lines(fontRendererObj, table.game, hover, width),
+            mouseX,
+            mouseY,
+            fontRendererObj);
     }
 
     @Override

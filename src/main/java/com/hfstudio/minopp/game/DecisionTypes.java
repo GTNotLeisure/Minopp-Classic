@@ -43,7 +43,8 @@ public class DecisionTypes {
         List<Option> options(CardGame game, PendingDecision decision);
 
         /**
-         * Validates an answer on the server and stores it on the decision only when accepted.
+         * Validates an answer on the server. Accepted intermediate steps may update data without completing the
+         * decision.
          */
         default boolean answer(CardGame game, PendingDecision decision, int answer, UUID target) {
             if (target != null) return false;

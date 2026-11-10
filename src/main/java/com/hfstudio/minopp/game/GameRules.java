@@ -80,6 +80,7 @@ public class GameRules {
     public static final String TEAM_COUNT = integer("teamCount", Category.MODES, 2, 2, Teams.MAX_TEAMS);
     public static final String TEAM_RELAY = bool("teamRelay", Category.MODES, false);
     public static final String PLAY_DRAWN = bool("playDrawnCard", Category.BASIC, true);
+    public static final String DISCARD_PILE = bool("separateDiscardPile", Category.BASIC, false);
     public static final String OFFICIAL_START = bool("officialStart", Category.BASIC, true);
     public static final String STACK_DRAW4_ON_DRAW2 = bool("stackDraw4OnDraw2", Category.HOUSE, false);
     public static final String DEFLECT_DRAW = bool("deflectDraw", Category.HOUSE, false);

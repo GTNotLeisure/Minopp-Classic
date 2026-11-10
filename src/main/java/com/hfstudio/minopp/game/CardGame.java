@@ -54,6 +54,17 @@ public class CardGame {
 
     public List<Card> deck = new ArrayList<>();
     public List<Card> discardDeck = new ArrayList<>();
+    public final List<Card> playedDeck = new ArrayList<>();
+    private boolean separateDiscardPile;
+
+    public boolean hasSeparateDiscardPile() {
+        return separateDiscardPile;
+    }
+
+    public List<Card> playedCards() {
+        return separateDiscardPile ? playedDeck : discardDeck;
+    }
+
     public Card topCard;
     public CardColor currentColor = CardColor.WILD;
     public boolean darkSide;
@@ -291,6 +302,7 @@ public class CardGame {
         };
         deck.replaceAll(fix);
         discardDeck.replaceAll(fix);
+        playedDeck.replaceAll(fix);
         topCard = fix.apply(topCard);
         for (CardPlayer p : players) p.hand.replaceAll(fix);
         CardPlayer me = deAmputate(debugger);
@@ -389,6 +401,7 @@ public class CardGame {
 
     private void resetTurnWaits() {
         decisions.clear();
+        extensionData("minopp:targeted_effects").removeTag("pending");
         decisionContinuation = DecisionTypes.Continuation.ADVANCE_TURN;
         decisionRepeatsTurn = false;
         resumePoint = ResumePoint.NONE;
@@ -506,6 +519,7 @@ public class CardGame {
             Teams.normalize(players, Teams.count(config));
         }
 
+        separateDiscardPile = config.getBool(GameRules.DISCARD_PILE);
         deck = config.buildDeck(players.size(), random);
         long required = (long) players.size() * Math.max(0, initialCardCount) + 1;
         if (deck.size() < required) {
@@ -518,13 +532,15 @@ public class CardGame {
                 player.hand.add(deck.remove(deck.size() - 1));
             }
         }
-        boolean official = config.getBool(GameRules.OFFICIAL_START);
+        boolean official = !separateDiscardPile && config.getBool(GameRules.OFFICIAL_START);
         boolean hasNumber = deck.stream()
             .anyMatch(c -> c.light.isNumber() && !c.light.isWild());
         Card tobeTopCard = deck.remove(deck.size() - 1);
         int guard = 0;
-        while (hasNumber && !acceptableOpening(tobeTopCard.light, official) && guard++ < 500) {
-            deck.add(0, tobeTopCard);
+        while (hasNumber && !acceptableOpening(tobeTopCard.light, official)
+            && guard++ < deck.size() + discardDeck.size()) {
+            if (separateDiscardPile) discardDeck.add(tobeTopCard);
+            else deck.add(0, tobeTopCard);
             tobeTopCard = deck.remove(deck.size() - 1);
         }
         topCard = tobeTopCard;
@@ -629,9 +645,9 @@ public class CardGame {
         CardColor matchColor = useFlex && face.flexColor != null ? face.flexColor : face.color;
         if (currentColor == CardColor.WILD || matchColor == currentColor) return null;
         CardFace top = topFace();
-        if (!top.isWild() || top.type().keepsColor || signNumber >= 0) {
+        if (!top.isWild() || top.type().keepsColor || !top.type().matchAliases.isEmpty() || signNumber >= 0) {
             if (face.symbolKey()
-                .equals(topSymbolKey())) return null;
+                .equals(topSymbolKey()) || signNumber < 0 && type.sharesSymbol(top.type())) return null;
         }
         return "game.minopp.play.invalid_card";
     }
@@ -988,7 +1004,7 @@ public class CardGame {
                 return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
             }
         }
-        if (drawn == 0 && deck.isEmpty() && discardDeck.isEmpty()) {
+        if (drawn == 0 && deck.isEmpty() && discardDeck.isEmpty() && playedDeck.isEmpty()) {
             report.messageAll(Chat.translatable("game.minopp.play.deck_empty"));
         }
         ActionReport end = checkEndConditions(cardPlayer, report);
@@ -1077,7 +1093,7 @@ public class CardGame {
             boolean accepted = DecisionTypes.get(d.typeId)
                 .handler()
                 .answer(this, d, answer, target);
-            if (!accepted || !d.isAnswered()) {
+            if (!accepted) {
                 d.answer = oldAnswer;
                 d.answerTarget = oldTarget;
                 return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
@@ -1155,6 +1171,7 @@ public class CardGame {
                 DecisionTypes.get(first.typeId)
                     .handler()
                     .resolve(this, done, report);
+                TargetedEffects.resume(this, report);
                 if (report.shouldDestroyGame) return report;
                 ActionReport end = checkEndConditions(currentPlayer(), report);
                 if (end != null) return end;
@@ -1591,8 +1608,9 @@ public class CardGame {
     }
 
     public void echo(PlayContext ctx) {
-        if (discardDeck.isEmpty()) return;
-        Card below = discardDeck.get(discardDeck.size() - 1);
+        List<Card> played = playedCards();
+        if (played.isEmpty()) return;
+        Card below = played.get(played.size() - 1);
         CardFace face = face(below);
         CardType type = face.type();
         if (type == CardTypes.WILD_ECHO || type.effect == null) return;
@@ -1697,6 +1715,7 @@ public class CardGame {
         lastDrawValue = 0;
         pendingDrawSource = null;
         challengeable = null;
+        giveExtraTurn();
         report.messageAll(Chat.translatable("game.minopp.play.shield", player.name, blocked));
     }
 
@@ -1928,6 +1947,15 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.no_u", player.name, source.name, amount));
     }
 
+    public void reflectDraw(CardPlayer player, ActionReport report) {
+        CardPlayer source = drawSource(player);
+        if (source == null) return;
+        int amount = pendingDraw;
+        takePendingDraw(source, report);
+        giveExtraTurn();
+        report.messageAll(Chat.translatable("game.minopp.play.no_u", player.name, source.name, amount));
+    }
+
     public void block(CardPlayer player, ActionReport report) {
         if (pendingDraw <= 0) return;
         int amount = pendingDraw;
@@ -2085,9 +2113,15 @@ public class CardGame {
         return f.isNumber() && !f.isWild() ? Math.max(0, f.number) : f.type().points;
     }
 
+    public static String formatPoints(int points) {
+        return points == CardType.INFINITE_POINTS ? "∞" : Integer.toString(points);
+    }
+
     public int handPoints(Collection<CardPlayer> losers) {
         int total = 0;
-        for (CardPlayer p : losers) for (Card c : p.hand) total += cardPoints(c);
+        for (CardPlayer p : losers) for (Card c : p.hand) {
+            total = (int) Math.min(CardType.INFINITE_POINTS, (long) total + cardPoints(c));
+        }
         return total;
     }
 
@@ -2149,17 +2183,15 @@ public class CardGame {
     }
 
     public void nextDrawsUntilColor(CardColor color, ActionReport report) {
-        CardPlayer victim = nextPlayer();
-        if (color == null || color.isWild()) color = currentColor;
-        int count = drawUntilColor(victim, color, report);
-        report.messageAll(
-            Chat.translatable("game.minopp.play.roulette", victim.name, Chat.translatable(color.langKey()), count));
-        skipNext(1);
+        NBTTagCompound data = new NBTTagCompound();
+        data.setString("color", color.id());
+        TargetedEffects.apply(this, currentPlayer(), List.of(nextPlayer()), "draw_color", data, report);
     }
 
-    private int drawUntilColor(CardPlayer victim, CardColor color, ActionReport report) {
+    public int drawUntilColor(CardPlayer victim, CardColor color, ActionReport report) {
         int count = 0;
-        while (count < 40) {
+        long available = (long) deck.size() + playedDeck.size() + discardDeck.size();
+        while (count < available && !victim.eliminated) {
             List<Card> got = drawCards(victim, 1, report);
             if (got.isEmpty()) break;
             count++;
@@ -2387,8 +2419,7 @@ public class CardGame {
         CardPlayer victim = nextPlayer();
         if (victim.equals(player)) return;
         int n = Math.max(1, victim.hand.size());
-        drawCards(victim, n, report);
-        skipNext(1);
+        TargetedEffects.draw(this, player, List.of(victim), n, true, report);
         report.messageAll(Chat.translatable("game.minopp.play.times_two", victim.name, n));
     }
 
@@ -2400,8 +2431,7 @@ public class CardGame {
         diceRoller = victim.uuid;
         diceSeq++;
         if (!victim.equals(player)) {
-            drawCards(victim, roll, report);
-            skipNext(1);
+            TargetedEffects.draw(this, player, List.of(victim), roll, true, report);
         }
         report.messageAll(Chat.translatable("game.minopp.play.dice", victim.name, sides, roll));
     }
@@ -2413,23 +2443,12 @@ public class CardGame {
         report.messageAll(Chat.translatable("game.minopp.play.reveal_one", player.name, target.name));
     }
 
-    /**
-     * The highest-scoring card of the discard pile goes to a player of the player's choice.
-     */
     public void recycle(CardPlayer player, CardPlayer target, ActionReport report) {
-        if (target == null) target = player;
-        Card best = null;
-        for (Card c : discardDeck) if (best == null || cardPoints(c) > cardPoints(best)) best = c;
-        if (best == null) return;
-        discardDeck.remove(best);
-        target.hand.add(best);
-        target.hasShoutedMino = false;
-        report.messageAll(Chat.translatable("game.minopp.play.recycle", player.name, target.name));
+        CardDecisions.recycle(this, player, target);
     }
 
     /**
-     * Three sevens in hand: discard seven. Otherwise a coin: heads discards the seven highest-scoring cards, tails
-     * draws seven.
+     * Three sevens guarantee a discard choice; otherwise the coin decides between discarding and drawing seven.
      */
     public void luckySeven(CardPlayer player, ActionReport report) {
         long sevens = player.hand.stream()
@@ -2442,13 +2461,7 @@ public class CardGame {
         luckySeq++;
         if (sevens >= 3 || random.nextBoolean()) {
             luckyResult = sevens >= 3 ? LUCKY_SEVENS : LUCKY_HEADS;
-            player.hand.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
-            int n = Math.min(7, player.hand.size());
-            List<Card> discarded = player.hand.subList(0, n);
-            discardDeck.addAll(discarded);
-            discarded.clear();
-            if (player.hand.size() == 1) player.hasShoutedMino = true;
-            report.messageAll(Chat.translatable("game.minopp.play.lucky_win", player.name, n));
+            CardDecisions.discard(this, player, 7);
         } else {
             luckyResult = LUCKY_TAILS;
             drawCards(player, 7, report);
@@ -2498,7 +2511,7 @@ public class CardGame {
 
     public void doDiscardCard(CardPlayer player, Card card, ActionReport report) {
         signNumber = -1;
-        discardDeck.add(topCard);
+        playedCards().add(topCard);
         topCard = card;
         card.owner = player.uuid;
         player.hand.remove(card);
@@ -2506,10 +2519,11 @@ public class CardGame {
     }
 
     private void reshuffle() {
-        if (discardDeck.isEmpty()) return;
-        Collections.shuffle(discardDeck, random);
-        deck.addAll(0, discardDeck);
-        discardDeck.clear();
+        List<Card> available = separateDiscardPile && !playedDeck.isEmpty() ? playedDeck : discardDeck;
+        if (available.isEmpty()) return;
+        Collections.shuffle(available, random);
+        deck.addAll(0, available);
+        available.clear();
     }
 
     /**
@@ -2774,6 +2788,8 @@ public class CardGame {
         isAntiClockwise = tag.getBoolean("isAntiClockwise");
         deck = readCards(tag.getTagList("deck", 10));
         discardDeck = readCards(tag.getTagList("discardDeck", 10));
+        playedDeck.addAll(readCards(tag.getTagList("playedDeck", 10)));
+        separateDiscardPile = tag.getBoolean("separateDiscardPile");
         topCard = Card.fromTag(tag.getCompoundTag("topCard"));
         CardColor color = CardColor.byId(tag.getString("color"));
         currentColor = color == null ? CardColor.WILD : color;
@@ -2882,6 +2898,8 @@ public class CardGame {
         tag.setBoolean("isAntiClockwise", isAntiClockwise);
         tag.setTag("deck", writeCards(deck));
         tag.setTag("discardDeck", writeCards(discardDeck));
+        tag.setTag("playedDeck", writeCards(playedDeck));
+        tag.setBoolean("separateDiscardPile", separateDiscardPile);
         tag.setTag("topCard", topCard.toTag());
         tag.setString("color", currentColor.id());
         tag.setBoolean("darkSide", darkSide);
