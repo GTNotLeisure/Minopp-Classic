@@ -49,6 +49,11 @@ public class UiButton extends GuiButton {
         }
         UiDraw.roundFrame(xPosition, y, xPosition + width, y + height, Math.min(8, height / 2), 2, border, top, bottom);
         int color = enabled ? 0xFFFFFFFF : 0xFF777777;
+        drawLabel(mc, y, color);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    protected void drawLabel(Minecraft mc, int y, int color) {
         int room = width - 10;
         int lw = mc.fontRenderer.getStringWidth(displayString);
         UiDraw.marquee(
@@ -59,6 +64,5 @@ public class UiButton extends GuiButton {
             room,
             1f,
             color);
-        GL11.glColor4f(1, 1, 1, 1);
     }
 }

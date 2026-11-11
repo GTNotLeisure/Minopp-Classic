@@ -14,7 +14,7 @@ import cpw.mods.fml.relauncher.SideOnly;
 public class CardGrid {
 
     private List<Card> cards = List.of();
-    private int width, cardWidth, cardHeight, columns, rows, gap, top, page;
+    private int width, cardWidth, cardHeight, columns, rows, gap, top, page, left;
 
     public void setCards(List<Card> cards) {
         this.cards = List.copyOf(cards);
@@ -30,6 +30,7 @@ public class CardGrid {
     }
 
     public void layout(int width, int height, int minimumWidth, int topInset, int bottomInset) {
+        left = 0;
         if (width <= 0 || height <= 0 || minimumWidth < 1 || minimumWidth > 30 || topInset < 0 || bottomInset < 0)
             throw new IllegalArgumentException("Invalid card grid dimensions");
         this.width = width;
@@ -51,6 +52,16 @@ public class CardGrid {
 
     public void layoutFromTop(int width, int height, int minimumWidth, int topInset, int bottomInset) {
         layout(width, height, minimumWidth, topInset, bottomInset);
+        top = topInset;
+    }
+
+    public void layoutIn(int left, int width, int height, int minimumWidth, int topInset, int bottomInset) {
+        layout(width, height, minimumWidth, topInset, bottomInset);
+        this.left = left;
+    }
+
+    public void layoutFromTopIn(int left, int width, int height, int minimumWidth, int topInset, int bottomInset) {
+        layoutIn(left, width, height, minimumWidth, topInset, bottomInset);
         top = topInset;
     }
 
@@ -77,7 +88,7 @@ public class CardGrid {
     private int x(int index) {
         int count = Math.min(capacity(), cards.size() - page * capacity());
         int inRow = Math.min(columns, count - index / columns * columns);
-        return width / 2 - (inRow * (cardWidth + gap) - gap) / 2 + index % columns * (cardWidth + gap);
+        return left + width / 2 - (inRow * (cardWidth + gap) - gap) / 2 + index % columns * (cardWidth + gap);
     }
 
     public Card hit(int mouseX, int mouseY, IntPredicate selected) {

@@ -10,6 +10,7 @@ import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.input.Keyboard;
@@ -25,6 +26,8 @@ import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.gui.ui.ChoiceButton;
+import com.hfstudio.minopp.gui.ui.SideColumnLayout;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemDataUtils;
@@ -43,13 +46,14 @@ public class HandScreen extends GuiScreen {
 
     private static boolean resumeAfterChoice;
 
-    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_CARD_JUMP = 3, BTN_REVEAL = 4, BTN_DEBUG_TOGGLE = 99,
+    private static final int BTN_DRAW = 1, BTN_SHOUT = 2, BTN_OVERVIEW = 3, BTN_REVEAL = 4, BTN_DEBUG_TOGGLE = 99,
         BTN_DEBUG = 100, BTN_RULE = 200;
 
     private static String query = "";
     private static final Set<String> PLAIN = Set.of("number", "draw2", "reverse", "skip", "wild", "wild_draw4");
     private static boolean debugOpen = true;
     private GuiTextField search;
+    private SideColumnLayout controlColumn;
     private int hintBottom;
     private int revealHudHeight;
     private int edgeDir;
@@ -94,7 +98,7 @@ public class HandScreen extends GuiScreen {
     }
 
     private int lastMouseX = Integer.MIN_VALUE, lastMouseY = Integer.MIN_VALUE;
-    private UiButton drawButton, shoutButton, revealButton;
+    private UiButton drawButton, shoutButton, revealButton, overviewButton;
 
     private static String noticeText;
     private static long noticeUntil;
@@ -123,45 +127,54 @@ public class HandScreen extends GuiScreen {
     public void initGui() {
         buttonList.clear();
         Keyboard.enableRepeatEvents(true);
-        boolean classic = ClientConfig.display.classicInteraction;
-        int bw = 64, bh = 18;
-        int bx = classic ? width - 10 - 100 - 12 - bw : width / 2 - 150 - bw;
-        int by = classic ? height - 52 : height - 50;
-        bx = Math.max(4, bx);
-        drawButton = new UiButton(BTN_DRAW, bx, by, bw, bh, "", 0xFF2A7FD4);
-        shoutButton = new UiButton(BTN_SHOUT, bx, by + bh + 4, bw, bh, "", 0xFFE0A21A);
+        controlColumn = SideColumnLayout.of(width, height, fontRendererObj.FONT_HEIGHT, 0.18f);
+        int bx = controlColumn.left(), bw = controlColumn.width(), bh = controlColumn.controlHeight();
+        drawButton = new ChoiceButton(BTN_DRAW, bx, controlColumn.buttonTop(1), bw, bh, "", 0xFF2A7FD4);
+        shoutButton = new ChoiceButton(BTN_SHOUT, bx, controlColumn.buttonTop(0), bw, bh, "", 0xFFE0A21A);
         buttonList.add(drawButton);
         buttonList.add(shoutButton);
-        int sw = classic ? 110 : Mth.clamp(width / 2 - (int) (width * 0.31f) - 10 - bx, bw, 140);
-        search = new GuiTextField(fontRendererObj, bx, by - 32, sw, 13);
+        int searchHeight = Math.max(fontRendererObj.FONT_HEIGHT + 5, bh * 3 / 4);
+        search = new GuiTextField(fontRendererObj, bx, 0, bw, searchHeight);
         search.setMaxStringLength(40);
         search.setText(query);
         Context context = Context.resolve(mc);
-        if (context != null && context.game.isDebugger(context.me)) buttonList.add(
-            new UiButton(
-                BTN_CARD_JUMP,
+        overviewButton = context == null ? null
+            : new ChoiceButton(
+                BTN_OVERVIEW,
                 bx,
-                by - 56,
-                Math.max(sw, 84),
+                0,
+                bw,
                 bh,
-                Chat.translatable("gui.minopp.debug.card_jump")
+                Chat.translatable("gui.minopp.hand.overview")
                     .getFormattedText(),
-                0xFF8A2FB0));
-        revealButton = new UiButton(
+                0xFF8A2FB0);
+        if (overviewButton != null) buttonList.add(overviewButton);
+        revealButton = new ChoiceButton(
             BTN_REVEAL,
             bx,
-            by - (context != null && context.game.isDebugger(context.me) ? 80 : 56),
-            Math.max(sw, 84),
+            controlColumn.buttonTop(2),
+            bw,
             bh,
             Chat.translatable("gui.minopp.reveal.open")
                 .getFormattedText(),
             0xFF2A7FD4);
         revealButton.visible = context != null && RevealedHandsScreen.available(context.game, context.me.uuid);
         buttonList.add(revealButton);
+        layoutControls();
         hintBottom = 6 + hintLines(hintText(), width - 24).size() * 12;
         revealHudHeight = context == null ? 0 : RevealedHandTargets.hudHeight(context.table, width);
         addDebugButtons();
         updateButtons();
+    }
+
+    private void layoutControls() {
+        int overviewTop = controlColumn.buttonTop(revealButton.visible ? 3 : 2);
+        if (overviewButton != null) overviewButton.yPosition = overviewTop;
+        search.yPosition = overviewTop - controlColumn.gap() - search.height;
+    }
+
+    public int controlsTop() {
+        return search.yPosition - controlColumn.gap() - fontRendererObj.FONT_HEIGHT - 4;
     }
 
     private static final int DEBUG_ROWS = 8;
@@ -285,7 +298,17 @@ public class HandScreen extends GuiScreen {
 
     private String hintText() {
         boolean classic = ClientConfig.display.classicInteraction;
-        return Chat.translatable(classic ? "gui.minopp.hand.hint_classic" : "gui.minopp.hand.hint")
+        return Chat
+            .translatable(
+                classic ? "gui.minopp.hand.hint_classic" : "gui.minopp.hand.hint",
+                GameControls.display(GameControls.Action.PREVIOUS),
+                GameControls.display(GameControls.Action.NEXT),
+                GameControls.display(GameControls.Action.PLAY),
+                GameControls.display(GameControls.Action.DRAW),
+                GameControls.display(GameControls.Action.SHOUT),
+                GameControls.display(GameControls.Action.DOUBT),
+                GameControls.display(GameControls.Action.STACK),
+                MinoClient.KEY_HAND == null ? "R" : GameSettings.getKeyDisplayString(MinoClient.KEY_HAND.getKeyCode()))
             .getFormattedText();
     }
 
@@ -333,7 +356,11 @@ public class HandScreen extends GuiScreen {
             revealHudHeight = newRevealHeight;
             rebuildDebugButtons();
         }
-        revealButton.visible = RevealedHandsScreen.available(live.game, live.me.uuid);
+        boolean revealAvailable = RevealedHandsScreen.available(live.game, live.me.uuid);
+        if (revealAvailable != revealButton.visible) {
+            revealButton.visible = revealAvailable;
+            layoutControls();
+        }
         for (Object o : buttonList) {
             if (o instanceof UiButton b && b.id >= BTN_RULE && b.id - BTN_RULE < CardGame.DEBUG_RULES.size()) {
                 String r = CardGame.DEBUG_RULES.get(b.id - BTN_RULE);
@@ -365,10 +392,7 @@ public class HandScreen extends GuiScreen {
 
         int ty = 6;
         for (String line : hintLines(hintText(), width - 24)) {
-            int tw = fontRendererObj.getStringWidth(line);
-            int tx = width / 2 - tw / 2;
-            UiDraw.roundRect(tx - 4, ty - 2, tx + tw + 3, ty + 9, 3, 0x90000000);
-            fontRendererObj.drawStringWithShadow(line, tx, ty, 0xFFE8E8E8);
+            UiDraw.centeredHint(fontRendererObj, line, width / 2, ty, width - 24, 0xFFE8E8E8);
             ty += 12;
         }
         boolean found = query.isEmpty()
@@ -381,19 +405,23 @@ public class HandScreen extends GuiScreen {
                 Chat.translatable("gui.minopp.hand.search")
                     .getFormattedText(),
                 search.xPosition + 4,
-                search.yPosition + 3,
+                search.yPosition + (search.height - fontRendererObj.FONT_HEIGHT) / 2,
                 0xFF808080);
         }
         int total = ctx.hand.size();
-        if (total > GameOverlayLayer.pageSize() || !query.isEmpty()) {
-            String page = Chat
-                .translatable(
-                    "gui.minopp.hand.page",
-                    Mth.clamp(ItemHandCards.getClientHandIndex(mc.thePlayer), 0, total - 1) + 1,
-                    total)
-                .getFormattedText();
-            fontRendererObj.drawStringWithShadow(page, search.xPosition + 1, search.yPosition + 17, 0xFFFFE070);
-        }
+        String count = Chat
+            .translatable(
+                "gui.minopp.hand.count",
+                Mth.clamp(ItemHandCards.getClientHandIndex(mc.thePlayer), 0, total - 1) + 1,
+                total)
+            .getFormattedText();
+        UiDraw.centeredHint(
+            fontRendererObj,
+            count,
+            controlColumn.centerX(),
+            search.yPosition - controlColumn.gap() - fontRendererObj.FONT_HEIGHT,
+            controlColumn.width(),
+            0xFFFFE070);
         int[] coin = GameOverlayLayer.coinRect();
         if (coin != null && mouseX >= coin[0]
             && mouseX < coin[0] + coin[2]
@@ -486,33 +514,32 @@ public class HandScreen extends GuiScreen {
                 }
             return;
         }
-        if (keyCode == Keyboard.KEY_F) {
-            search.setFocused(true);
-            return;
-        }
-        boolean classic = ClientConfig.display.classicInteraction;
-        int prev = classic ? Keyboard.KEY_W : Keyboard.KEY_A;
-        int next = classic ? Keyboard.KEY_S : Keyboard.KEY_D;
         if (keyCode == Keyboard.KEY_ESCAPE || keyCode == mc.gameSettings.keyBindInventory.getKeyCode()
             || keyCode == MinoClient.KEY_HAND.getKeyCode()) {
             mc.displayGuiScreen(null);
-        } else if (ctx == null) {
             return;
-        } else if (keyCode == Keyboard.KEY_PRIOR
-            || (keyCode == prev || keyCode == Keyboard.KEY_LEFT) && isShiftKeyDown()) {
-                select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - GameOverlayLayer.pageSize());
-            } else if (keyCode == Keyboard.KEY_NEXT
-                || (keyCode == next || keyCode == Keyboard.KEY_RIGHT) && isShiftKeyDown()) {
-                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + GameOverlayLayer.pageSize());
-                } else if (keyCode == prev || keyCode == Keyboard.KEY_LEFT || keyCode == Keyboard.KEY_UP) {
-                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) - 1);
-                } else if (keyCode == next || keyCode == Keyboard.KEY_RIGHT || keyCode == Keyboard.KEY_DOWN) {
-                    select(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer) + 1);
-                } else if (keyCode == Keyboard.KEY_SPACE || keyCode == Keyboard.KEY_RETURN) {
-                    play(ctx, ItemHandCards.getClientHandIndex(mc.thePlayer));
-                } else if (keyCode == Keyboard.KEY_Q) {
-                    draw(ctx);
-                }
+        }
+        if (ctx == null) return;
+        boolean classic = ClientConfig.display.classicInteraction;
+        int prev = classic ? Keyboard.KEY_W : Keyboard.KEY_A;
+        int next = classic ? Keyboard.KEY_S : Keyboard.KEY_D;
+        GameControls.Action action = GameControls.actionFor(keyCode);
+        int index = ItemHandCards.getClientHandIndex(mc.thePlayer);
+        if (keyCode == Keyboard.KEY_PRIOR
+            || isShiftKeyDown() && (keyCode == prev || action == GameControls.Action.PREVIOUS)) {
+            select(ctx, index - GameOverlayLayer.pageSize());
+            return;
+        }
+        if (keyCode == Keyboard.KEY_NEXT
+            || isShiftKeyDown() && (keyCode == next || action == GameControls.Action.NEXT)) {
+            select(ctx, index + GameOverlayLayer.pageSize());
+            return;
+        }
+        if (GameControls.handle(keyCode)) return;
+        if (keyCode == Keyboard.KEY_F && action == null) search.setFocused(true);
+        else if (keyCode == prev || keyCode == Keyboard.KEY_UP) select(ctx, index - 1);
+        else if (keyCode == next || keyCode == Keyboard.KEY_DOWN) select(ctx, index + 1);
+        else if (keyCode == Keyboard.KEY_Q && action == null && !Keyboard.isRepeatEvent()) draw(ctx);
     }
 
     @Override
@@ -573,6 +600,7 @@ public class HandScreen extends GuiScreen {
             return;
         }
         if (button == 1) {
+            if (!search.isFocused() && GameControls.handle(button - 100)) return;
             mc.displayGuiScreen(null);
             return;
         }
@@ -587,6 +615,12 @@ public class HandScreen extends GuiScreen {
                 && mouseX < control.xPosition + control.width
                 && mouseY >= control.yPosition
                 && mouseY < control.yPosition + control.height) return;
+        }
+        if (!search.isFocused() && GameControls.actionFor(button - 100) != null) {
+            Context context = Context.resolve(mc);
+            int index = GameOverlayLayer.hitTest(mouseX, mouseY);
+            if (context != null && index >= 0) select(context, index);
+            if (GameControls.handle(button - 100)) return;
         }
         if (button != 0) return;
         Context ctx = Context.resolve(mc);
@@ -637,19 +671,8 @@ public class HandScreen extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) {
-        if (button.id == BTN_CARD_JUMP) {
-            Context ctx = Context.resolve(mc);
-            if (ctx != null && ctx.game.isDebugger(ctx.me))
-                mc.displayGuiScreen(new DebugCardScreen(this, ctx.pos, ctx.game.id, ctx.me.uuid, card -> {
-                    query = "";
-                    mc.displayGuiScreen(this);
-                    Context current = Context.resolve(mc);
-                    if (current == null) return;
-                    for (int i = 0; i < current.hand.size(); i++) if (current.hand.get(i).uid == card.uid) {
-                        select(current, i);
-                        break;
-                    }
-                }));
+        if (button.id == BTN_OVERVIEW) {
+            openOverview(this);
             return;
         }
         Context ctx = Context.resolve(mc);
@@ -668,7 +691,25 @@ public class HandScreen extends GuiScreen {
         }
     }
 
-    private void select(Context ctx, int index) {
+    public static void openOverview(GuiScreen parent) {
+        Minecraft mc = Minecraft.getMinecraft();
+        Context ctx = Context.resolve(mc);
+        if (ctx == null) return;
+        mc.displayGuiScreen(new HandOverviewScreen(parent, ctx.pos, ctx.game.id, ctx.me.uuid, card -> {
+            query = "";
+            HandScreen screen = parent instanceof HandScreen handScreen ? handScreen : new HandScreen();
+            mc.displayGuiScreen(screen);
+            Context current = Context.resolve(mc);
+            if (current == null) return;
+            for (int i = 0; i < current.hand.size(); i++) if (current.hand.get(i).uid == card.uid) {
+                select(current, i);
+                break;
+            }
+        }));
+    }
+
+    public static void select(Context ctx, int index) {
+        Minecraft mc = Minecraft.getMinecraft();
         int clamped = Math.floorMod(index, ctx.hand.size());
         if (clamped != ItemHandCards.getClientHandIndex(mc.thePlayer)) {
             ItemDataUtils.setHandIndex(mc.thePlayer.getHeldItem(), clamped);
@@ -678,22 +719,26 @@ public class HandScreen extends GuiScreen {
         }
     }
 
-    private void play(Context ctx, int index) {
+    public static void play(Context ctx, int index) {
+        Minecraft mc = Minecraft.getMinecraft();
         if (index < 0 || index >= ctx.hand.size()) return;
         select(ctx, index);
         TurnDeadMan.pedal();
         Card card = ctx.hand.get(index);
-        resumeAfterChoice = true;
+        GuiScreen previous = mc.currentScreen;
+        resumeAfterChoice = previous instanceof HandScreen;
         BlockMinoTable.Client.playCard(ctx.pos, ctx.table, ctx.me, card);
-        if (mc.currentScreen == this) resumeAfterChoice = false;
+        if (mc.currentScreen == previous) resumeAfterChoice = false;
     }
 
-    private void shout(Context ctx) {
-        if (!ctx.isMyTurn() || ctx.me.hasShoutedMino || ctx.hand.size() > 2) return;
+    public static void shout(Context ctx) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!ctx.isMyTurn() || ctx.me.hasShoutedMino || ctx.me.hand.size() > 2) return;
         mc.thePlayer.sendChatMessage("/minopp shout");
     }
 
-    private void draw(Context ctx) {
+    public static void draw(Context ctx) {
+        Minecraft mc = Minecraft.getMinecraft();
         if (!ctx.isMyTurn()) return;
         TurnDeadMan.pedal();
         C2SPlayCardPacket.Client.sendPlayNoCardC2S(ctx.pos, ItemHandCards.getCardPlayer(mc.thePlayer));
@@ -716,7 +761,8 @@ public class HandScreen extends GuiScreen {
         }
 
         public boolean isMyTurn() {
-            return game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn;
+            return game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn
+                && !game.isTurnTransitioning();
         }
 
         public static Context resolve(Minecraft mc) {
@@ -727,7 +773,7 @@ public class HandScreen extends GuiScreen {
             CardPlayer me = table.game.deAmputate(
                 mc.thePlayer.getGameProfile()
                     .getId());
-            if (me == null || me.hand.isEmpty()) return null;
+            if (me == null || me.eliminated || me.hand.isEmpty()) return null;
             return new Context(pos, table, me);
         }
     }

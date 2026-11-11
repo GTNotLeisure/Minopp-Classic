@@ -36,6 +36,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.CardType;
 import com.hfstudio.minopp.game.GameRules;
 import com.hfstudio.minopp.game.PlayContext;
+import com.hfstudio.minopp.gui.GameControls;
 import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayChoiceScreen;
 import com.hfstudio.minopp.gui.SeatControlScreen;
@@ -195,7 +196,8 @@ public class BlockMinoTable extends Block {
         }
 
         public static boolean isShoutModifierHeld() {
-            return isKeyHeld(MinoClient.KEY_SHOUT_MODIFIER.getKeyCode());
+            return isKeyHeld(MinoClient.KEY_SHOUT_MODIFIER.getKeyCode())
+                || GameControls.Action.SHOUT.binding.getIsKeyPressed();
         }
 
         public static boolean isFlexModifierHeld() {

@@ -10,6 +10,7 @@ import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.GuiButton;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
@@ -44,7 +45,11 @@ public class PlayerPicker {
     private final List<Integer> handSizes;
     private final int maxSelected;
     public final List<UUID> selected = new ArrayList<>();
-    private int x0, y0, cols;
+    private int x0, y0, cols, visibleRows, page;
+    private final List<GuiButton> radialTiles = new ArrayList<>();
+    private RadialChoiceLayout radialLayout;
+    private int radialCapacity;
+    private int[] radialBounds;
 
     public PlayerPicker(List<CardPlayer> players, List<Integer> handSizes, int maxSelected) {
         this.players = players;
@@ -53,26 +58,94 @@ public class PlayerPicker {
     }
 
     public void layout(int cx, int top, int maxWidth) {
+        layout(cx, top, maxWidth, Integer.MAX_VALUE);
+    }
+
+    public void layout(int cx, int top, int maxWidth, int maxHeight) {
+        radialBounds = null;
+        radialLayout = null;
         cols = Math.max(1, Math.min(players.size(), (maxWidth + GAP) / (TILE_W + GAP)));
+        visibleRows = Math.max(
+            1,
+            Math.min(
+                (players.size() + cols - 1) / cols,
+                (int) Math.min(Integer.MAX_VALUE, ((long) maxHeight + GAP) / (TILE_H + GAP))));
+        page = Math.min(page, pages() - 1);
         int totalW = cols * TILE_W + (cols - 1) * GAP;
         x0 = cx - totalW / 2;
         y0 = top;
     }
 
+    public void layoutRadial(int centerX, int centerY, int left, int top, int right, int bottom) {
+        radialBounds = new int[] { centerX, centerY, left, top, right, bottom };
+        int requestedPage = page;
+        for (int count = Math.min(8, Math.max(1, players.size())); count >= 1; count--) {
+            radialCapacity = count;
+            page = Math.min(requestedPage, pages() - 1);
+            radialTiles.clear();
+            int start = page * count;
+            for (int i = start; i < start + count; i++) radialTiles.add(new GuiButton(i, 0, 0, TILE_W, TILE_H, ""));
+            radialLayout = RadialChoiceLayout.arrangeFixed(radialTiles, centerX, centerY, left, top, right, bottom);
+            if (radialLayout != null) {
+                int shown = Math.min(count, players.size() - start);
+                if (shown < count) {
+                    radialTiles.subList(Math.max(0, shown), count)
+                        .clear();
+                    radialLayout = RadialChoiceLayout
+                        .arrangeFixed(radialTiles, centerX, centerY, left, top, right, bottom);
+                }
+                return;
+            }
+        }
+    }
+
     public int top() {
+        if (radialLayout != null) return radialTiles.stream()
+            .mapToInt(button -> button.yPosition)
+            .min()
+            .orElse(0);
         return y0;
     }
 
     public int height() {
-        int rows = (players.size() + cols - 1) / Math.max(1, cols);
-        return rows * TILE_H + Math.max(0, rows - 1) * GAP;
+        if (radialLayout != null) return radialTiles.stream()
+            .mapToInt(button -> button.yPosition + button.height)
+            .max()
+            .orElse(0) - top();
+        return visibleRows * TILE_H + Math.max(0, visibleRows - 1) * GAP;
+    }
+
+    public int page() {
+        return page;
+    }
+
+    public int pages() {
+        return Math.max(1, (players.size() + capacity() - 1) / capacity());
+    }
+
+    public void scroll(int direction) {
+        page = Math.max(0, Math.min(pages() - 1, page + direction));
+        if (radialBounds != null) layoutRadial(
+            radialBounds[0],
+            radialBounds[1],
+            radialBounds[2],
+            radialBounds[3],
+            radialBounds[4],
+            radialBounds[5]);
+    }
+
+    private int capacity() {
+        if (radialBounds != null) return Math.max(1, radialCapacity);
+        return Math.max(1, cols * visibleRows);
     }
 
     private int tileX(int i) {
+        if (radialLayout != null) return radialTiles.get(i).xPosition;
         return x0 + (i % cols) * (TILE_W + GAP);
     }
 
     private int tileY(int i) {
+        if (radialLayout != null) return radialTiles.get(i).yPosition;
         return y0 + (i / cols) * (TILE_H + GAP);
     }
 
@@ -105,8 +178,10 @@ public class PlayerPicker {
     }
 
     public void draw(FontRenderer font, int mouseX, int mouseY) {
-        for (int i = 0; i < players.size(); i++) {
-            CardPlayer p = players.get(i);
+        if (radialLayout != null) radialLayout.draw();
+        int start = page * capacity();
+        for (int i = 0; i < capacity() && start + i < players.size(); i++) {
+            CardPlayer p = players.get(start + i);
             boolean sel = selected.contains(p.uuid);
             int x = tileX(i), y = tileY(i);
             boolean hover = mouseX >= x && mouseX < x + TILE_W && mouseY >= y && mouseY < y + TILE_H;
@@ -121,7 +196,7 @@ public class PlayerPicker {
             GL11.glScalef(0.75f, 0.75f, 1);
             GuiDraw.drawCenteredString(font, name, 0, 0, 0xFFCCCCCC);
             GL11.glPopMatrix();
-            int hand = i < handSizes.size() ? handSizes.get(i) : 0;
+            int hand = start + i < handSizes.size() ? handSizes.get(start + i) : 0;
             int pips = Math.min(hand, 8);
             for (int k = 0; k < pips; k++) {
                 int px = x + 6 + (k % 4) * 10, py = y + HEAD + 18 + (k / 4) * 9;
@@ -132,10 +207,11 @@ public class PlayerPicker {
     }
 
     public boolean click(int mouseX, int mouseY) {
-        for (int i = 0; i < players.size(); i++) {
+        int start = page * capacity();
+        for (int i = 0; i < capacity() && start + i < players.size(); i++) {
             int x = tileX(i), y = tileY(i);
             if (mouseX >= x && mouseX < x + TILE_W && mouseY >= y - 4 && mouseY < y + TILE_H) {
-                UUID id = players.get(i).uuid;
+                UUID id = players.get(start + i).uuid;
                 if (selected.contains(id)) {
                     selected.remove(id);
                 } else {

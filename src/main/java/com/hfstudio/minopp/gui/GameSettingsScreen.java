@@ -335,6 +335,11 @@ public class GameSettingsScreen extends GuiScreen {
             .displayGuiScreen(new GameSettingsScreen(gamePos, parent));
     }
 
+    public static void openEncyclopedia(BlockPos gamePos, GuiScreen parent) {
+        query = "";
+        open(gamePos, parent, Tab.GALLERY);
+    }
+
     private BlockEntityMinoTable table() {
         if (previewTable != null) return previewTable;
         return mc.theWorld == null ? null : ItemHandCards.getTable(mc.theWorld, gamePos);
@@ -1093,7 +1098,7 @@ public class GameSettingsScreen extends GuiScreen {
         UiDraw.background(width, height);
         UiDraw.outlinedText(
             fontRendererObj,
-            tr("gui.minopp.settings.title"),
+            tr(tab == Tab.GALLERY ? "gui.minopp.hand.encyclopedia" : "gui.minopp.settings.title"),
             10,
             8,
             2f,
@@ -1106,6 +1111,13 @@ public class GameSettingsScreen extends GuiScreen {
                     .size(),
                 te.seatCount());
         fontRendererObj.drawStringWithShadow(sub, width - 10 - fontRendererObj.getStringWidth(sub), 14, 0xFFFFFFFF);
+        if (te.game != null && mc.thePlayer != null) TableScreenPanel.drawCountdown(
+            te.game,
+            mc.thePlayer.getGameProfile()
+                .getId(),
+            width * 3 / 4,
+            22,
+            width / 2 - 20);
 
         drawTabs(mouseX, mouseY, dt);
 

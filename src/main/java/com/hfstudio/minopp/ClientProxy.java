@@ -2,13 +2,17 @@ package com.hfstudio.minopp;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
+import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraftforge.client.event.FOVUpdateEvent;
 import net.minecraftforge.client.event.MouseEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
+
+import org.lwjgl.input.Keyboard;
 
 import com.gtnewhorizon.gtnhlib.client.model.loading.ModelRegistry;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
@@ -16,6 +20,7 @@ import com.hfstudio.minopp.block.BlockMinoTable;
 import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.gui.GameControls;
 import com.hfstudio.minopp.gui.GameOverlayLayer;
 import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayerPicker;
@@ -28,6 +33,7 @@ import com.hfstudio.minopp.render.EntityAutoPlayerRenderer;
 import com.hfstudio.minopp.render.HandCardsItemRenderer;
 import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.TableItemRenderer;
+import com.hfstudio.minopp.render.TurnIndicator;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Mth;
 
@@ -38,6 +44,7 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 
 public class ClientProxy extends CommonProxy {
@@ -87,6 +94,11 @@ public class ClientProxy extends CommonProxy {
         }
 
         @SubscribeEvent
+        public void onRenderWorldLast(RenderWorldLastEvent event) {
+            TurnIndicator.renderPlayerMarkers(event.partialTicks);
+        }
+
+        @SubscribeEvent
         public void onFovUpdate(FOVUpdateEvent event) {
             event.newfov = event.newfov * (float) MinoClient.globalFovModifier;
         }
@@ -113,6 +125,12 @@ public class ClientProxy extends CommonProxy {
 
         @SubscribeEvent(priority = EventPriority.HIGH)
         public void onMouse(MouseEvent event) {
+            if (event.button >= 0 && event.buttonstate
+                && Minecraft.getMinecraft().currentScreen == null
+                && GameControls.handle(event.button - 100)) {
+                event.setCanceled(true);
+                return;
+            }
             if (event.button == 1 && event.buttonstate) {
                 onRightClick(event);
                 return;
@@ -149,6 +167,21 @@ public class ClientProxy extends CommonProxy {
             if (ClientConfig.display.classicInteraction && BlockMinoTable.Client.getCursorPickedGame() != null) return;
             mc.displayGuiScreen(new HandScreen());
             event.setCanceled(true);
+        }
+
+        @SubscribeEvent
+        public void onKeyInput(InputEvent.KeyInputEvent event) {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc.currentScreen != null || !mc.inGameHasFocus || !Keyboard.getEventKeyState()) return;
+            int key = Keyboard.getEventKey() == 0 ? Keyboard.getEventCharacter() + 256 : Keyboard.getEventKey();
+            if (GameControls.handle(key)) {
+                KeyBinding.setKeyBindState(key, false);
+                for (KeyBinding binding : mc.gameSettings.keyBindings) if (binding.getKeyCode() == key) {
+                    while (binding.isPressed()) {
+                        // Consume queued vanilla actions only when the game takes this input.
+                    }
+                }
+            }
         }
     }
 }

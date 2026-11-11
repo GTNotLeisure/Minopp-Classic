@@ -35,6 +35,7 @@ import com.hfstudio.minopp.effect.EffectEvents;
 import com.hfstudio.minopp.effect.SeatActionTakenEffectEvent;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.ActionMessage;
+import com.hfstudio.minopp.game.ActionMessageHistory;
 import com.hfstudio.minopp.game.ActionReport;
 import com.hfstudio.minopp.game.AutoPlayer;
 import com.hfstudio.minopp.game.Card;
@@ -71,6 +72,18 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public ActionMessage state = ActionMessage.NO_GAME;
     public List<Pair<ActionMessage, Long>> clientMessageList = new ArrayList<>();
+    private final ActionMessageHistory clientMessageHistory = new ActionMessageHistory();
+    private long stateRevision;
+
+    public ActionMessageHistory clientMessageHistory() {
+        return clientMessageHistory;
+    }
+
+    private void setState(ActionMessage message) {
+        state = message;
+        stateRevision++;
+    }
+
     public static final Map<UUID, Long> hideHandUntil = new HashMap<>();
     public ItemStack award = null;
     public boolean demo = false;
@@ -243,6 +256,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (game != null) compoundTag.setTag("game", game.toTag());
         compoundTag.setTag("handAccess", handCardAccess.toTag());
         compoundTag.setTag("state", state.toTag());
+        compoundTag.setLong("stateRevision", stateRevision);
         if (award != null) compoundTag.setTag("award", award.writeToNBT(new NBTTagCompound()));
         compoundTag.setBoolean("demo", demo);
         compoundTag.setTag("config", config.toTag());
@@ -312,6 +326,17 @@ public class BlockEntityMinoTable extends TileEntity {
             game = null;
         }
         ActionMessage newState = new ActionMessage(compoundTag.getCompoundTag("state"));
+        long newStateRevision = compoundTag.getLong("stateRevision");
+        boolean newGame = game != null && (previousGame == null || previousGame.id != game.id);
+        boolean stateChanged = newStateRevision != stateRevision || !newState.equals(state);
+        if (worldObj != null && worldObj.isRemote) {
+            if (newGame) clientMessageHistory.clear();
+            if (stateChanged || !newGame && game != null
+                && clientMessageHistory.entries()
+                    .isEmpty())
+                clientMessageHistory.add(newState);
+        }
+        stateRevision = newStateRevision;
         if (!newState.equals(state)) {
             if (previousGame == null && game != null) {
                 clientMessageList.clear();
@@ -582,8 +607,9 @@ public class BlockEntityMinoTable extends TileEntity {
         if (playerList.size() < (debugger != null ? 1 : 2)) return;
         IChatComponent teamProblem = debugger != null ? null : startProblem();
         if (teamProblem != null) {
-            state = ActionReport.builder(initiator)
-                .panic(teamProblem).state;
+            setState(
+                ActionReport.builder(initiator)
+                    .panic(teamProblem).state);
             sync();
             return;
         }
@@ -616,8 +642,9 @@ public class BlockEntityMinoTable extends TileEntity {
             }
             if (!playerFound) {
                 destroyGame(initiator);
-                state = ActionReport.builder(initiator)
-                    .panic(Chat.translatable("game.minopp.play.player_unavailable", cardPlayer.name)).state;
+                setState(
+                    ActionReport.builder(initiator)
+                        .panic(Chat.translatable("game.minopp.play.player_unavailable", cardPlayer.name)).state);
                 return;
             }
         }
@@ -679,8 +706,9 @@ public class BlockEntityMinoTable extends TileEntity {
             cardPlayer.hand.clear();
             cardPlayer.hasShoutedMino = false;
         }
-        if (initiator != null) state = ActionReport.builder(initiator)
-            .gameDestroyed().state;
+        if (initiator != null) setState(
+            ActionReport.builder(initiator)
+                .gameDestroyed().state);
         sync();
     }
 
@@ -689,8 +717,9 @@ public class BlockEntityMinoTable extends TileEntity {
         scores.clear();
         scoreNames.clear();
         for (int i = 0; i < MAX_SEATS; i++) seats[i] = null;
-        state = ActionReport.builder(initiator)
-            .panic(Chat.translatable("game.minopp.play.seats_reset", initiator.name)).state;
+        setState(
+            ActionReport.builder(initiator)
+                .panic(Chat.translatable("game.minopp.play.seats_reset", initiator.name)).state);
         sync();
     }
 
@@ -781,7 +810,7 @@ public class BlockEntityMinoTable extends TileEntity {
             scoreRound(result.winners, result);
             destroyGame(cardPlayer);
         }
-        if (result.state != null) state = result.state;
+        if (result.state != null) setState(result.state);
         for (ActionMessage message : result.messages) {
             switch (message.type()) {
                 case FAIL -> {
@@ -824,6 +853,11 @@ public class BlockEntityMinoTable extends TileEntity {
         long time = worldObj.getTotalWorldTime();
         if (time % 10 != 0) return;
         MinecraftServer server = MinecraftServer.getServer();
+        if (choosingUuid != null && !present(choosingUuid)) {
+            choosingUuid = null;
+            choosingHover = -1;
+            syncChoosing();
+        }
         if (!game.decisions.isEmpty()) {
             ActionReport report = game
                 .tickDecisions(System.currentTimeMillis(), uuid -> AutoPlayer.isOnlinePlayer(server, uuid));
@@ -849,7 +883,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     // Cover unavailable seats until their players can use the table again.
     private void tickAbsent(MinecraftServer server) {
-        if (game.awaitingCutIn) return;
+        if (game.awaitingCutIn || game.isTurnTransitioning()) return;
         CardPlayer current = game.currentPlayer();
         if (current == null || present(current.uuid)) {
             if (current != null) standingIn.remove(current.uuid);

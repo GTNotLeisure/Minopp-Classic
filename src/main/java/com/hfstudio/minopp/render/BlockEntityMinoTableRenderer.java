@@ -139,6 +139,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         RevealedHandTargets.renderWorld(blockEntity, partialTick);
         renderLabel(topLabel(blockEntity, game), 1.5, 0.94 + 0.17, 1.5, 0.009f);
         TableFx.render(blockEntity, game, partialTick);
+        TurnIndicator.renderWorld(blockEntity, game, partialTick);
 
         for (BlockEntityMinoTable.HandSwapAnimation anim : blockEntity.activeAnimations) {
             int stackSize = Math.max(1, Math.min(anim.cardCount, 10));
@@ -228,7 +229,8 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         double deckH = layers * layerH * 0.4, x0 = 0.24, x1 = 0.76, z0 = 0.24, z1 = 0.76, y0 = 0.94,
             y1 = 0.94 + deckH + 0.03;
         deckBounds = ColorPicker3D.projectBoxNow(x0, y0, z0, x1, y1, z1);
-        boolean myTurn = game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn;
+        boolean myTurn = game.players.indexOf(me) == game.currentPlayerIndex && !game.awaitingCutIn
+            && !game.isTurnTransitioning();
         BlockPos aimed = BlockMinoTable.Client.getCursorPickedGame();
         boolean pointed = deckHot || mc.currentScreen == null && aimed != null
             && aimed.equals(table.getBlockPos())

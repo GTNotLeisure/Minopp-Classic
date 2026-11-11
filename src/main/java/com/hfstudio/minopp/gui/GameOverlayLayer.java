@@ -36,6 +36,7 @@ import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.GameRules;
+import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.Teams;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemHandCards;
@@ -44,6 +45,7 @@ import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.Dice;
 import com.hfstudio.minopp.render.TableFx;
 import com.hfstudio.minopp.render.ThemeManager;
+import com.hfstudio.minopp.render.TurnIndicator;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
@@ -81,8 +83,9 @@ public class GameOverlayLayer {
             playableFor = game;
         }
         if (!playableCache.containsKey(card.uid)) {
-            boolean ownTurn = !game.awaitingCutIn && game.currentPlayer()
-                .equals(player);
+            boolean ownTurn = !game.awaitingCutIn && !game.isTurnTransitioning()
+                && game.currentPlayer()
+                    .equals(player);
             boolean allowed = game.decisions.isEmpty()
                 && (ownTurn ? game.canPlay(player, card) : game.whyCannotPlay(player, card, false) == null);
             playableCache.put(card.uid, allowed);
@@ -129,6 +132,15 @@ public class GameOverlayLayer {
             }
         }
         performZoomAnimation(partialTicks);
+        if (tableEntity.game != null && handCardGamePos != null
+            && (mc.currentScreen == null || mc.currentScreen instanceof HandScreen)) {
+            ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+            TurnIndicator.drawHud(
+                tableEntity,
+                res.getScaledWidth() / 2,
+                Math.max(28, rowExtent == null ? res.getScaledHeight() - 72 : Math.round(rowExtent[2]) - 28),
+                res.getScaledWidth() - 32);
+        }
         if (!mc.gameSettings.hideGUI && mc.currentScreen == null
             && tableEntity.game != null
             && handCardGamePos != null
@@ -226,7 +238,7 @@ public class GameOverlayLayer {
         CardGame game = tableEntity.game;
         CardPlayer currentPlayer = game.currentPlayer();
         CardPlayer me = game.deAmputate(cardPlayer);
-        if (currentPlayer.equals(cardPlayer) && !game.awaitingCutIn) {
+        if (currentPlayer.equals(cardPlayer) && !game.awaitingCutIn && !game.isTurnTransitioning()) {
             if (game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_HAND) {
                 zoomAnimationTarget = 1;
             } else {
@@ -241,7 +253,10 @@ public class GameOverlayLayer {
         }
 
         if (mc.gameSettings.hideGUI || !ClientConfig.display.enableGameHistoryGUI
-            || mc.currentScreen instanceof PlayChoiceScreen) return;
+            || mc.currentScreen instanceof PlayChoiceScreen
+            || mc.currentScreen instanceof DecisionScreen
+            || mc.currentScreen instanceof CardDecisionScreen
+            || mc.currentScreen instanceof HandOverviewScreen) return;
 
         FontRenderer font = mc.fontRenderer;
         int lh = font.FONT_HEIGHT;
@@ -255,12 +270,66 @@ public class GameOverlayLayer {
             : mc.currentScreen == null ? RevealedHandTargets.hudHeight(tableEntity, res.getScaledWidth()) : 0;
         if (revealBottom > 0) y = Math.max(y, Math.round((revealBottom + 12) / hs));
         int wrapAt = Math.max(120, (int) (res.getScaledWidth() / hs) / 2 - x - 8);
-        int seconds = game.turnSecondsRemaining();
-        if (infoGame != game || infoState != tableEntity.state || wrapAt != infoWrap || seconds != infoSeconds) {
+        refreshInfo(tableEntity, game, cardPlayer, currentPlayer, me, font, wrapAt);
+        int infoBottom = Math.round(
+            (mc.currentScreen instanceof HandScreen screen ? screen.controlsTop() : res.getScaledHeight() - 40) / hs);
+        for (int i = 0; i < wrappedLines.size(); i++) {
+            if (y + lh > infoBottom) break;
+            String text = wrappedLines.get(i);
+            if (text != null) {
+                int color = wrappedColors.get(i);
+                drawStringWithBackdrop(
+                    font,
+                    text,
+                    x,
+                    y,
+                    color == PULSE ? UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()) : color);
+            }
+            y += lh;
+        }
+        for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList
+            .listIterator(tableEntity.clientMessageList.size()); it.hasPrevious();) {
+            if (y + lh > infoBottom) break;
+            Pair<ActionMessage, Long> entry = it.previous();
+            long currentTime = System.currentTimeMillis();
+            if (entry.getSecond() - 200 < currentTime) {
+                it.remove();
+            } else {
+                int color = entry.getFirst()
+                    .type()
+                    .isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
+                int alpha = Mth.clamp((int) (0xFF * (entry.getSecond() - currentTime) / 1000), 0x05, 0xFF);
+                for (String part : wrapMessage(font, entry.getFirst(), wrapAt)) {
+                    if (y + lh > infoBottom) break;
+                    drawStringWithBackdrop(font, part, x, y, alpha << 24 | color);
+                    y += lh;
+                }
+            }
+        }
+        GL11.glPopMatrix();
+
+        renderCursor(tableEntity, game, cardPlayer, me, currentPlayer, mc, font, lh, res);
+    }
+
+    private void refreshInfo(BlockEntityMinoTable tableEntity, CardGame game, CardPlayer cardPlayer,
+        CardPlayer currentPlayer, CardPlayer me, FontRenderer font, int wrapAt) {
+        refreshInfo(tableEntity, game, cardPlayer, currentPlayer, me, font, wrapAt, false);
+    }
+
+    private void refreshInfo(BlockEntityMinoTable tableEntity, CardGame game, CardPlayer cardPlayer,
+        CardPlayer currentPlayer, CardPlayer me, FontRenderer font, int wrapAt, boolean compact) {
+        PendingDecision decision = game.decisionFor(cardPlayer.uuid);
+        int seconds = decision == null ? game.turnSecondsRemaining()
+            : (int) Math.max(0, (decision.deadline - System.currentTimeMillis() + 999) / 1000);
+        if (infoGame != game || infoState != tableEntity.state
+            || wrapAt != infoWrap
+            || seconds != infoSeconds
+            || compact != infoCompact) {
             infoGame = game;
             infoState = tableEntity.state;
             infoWrap = wrapAt;
             infoSeconds = seconds;
+            infoCompact = compact;
             infoLines.clear();
             infoColors.clear();
             buildInfo(tableEntity, game, cardPlayer, currentPlayer, me, font);
@@ -279,39 +348,52 @@ public class GameOverlayLayer {
                 }
             }
         }
-        for (int i = 0; i < wrappedLines.size(); i++) {
+    }
+
+    public void renderStatus(BlockEntityMinoTable table, UUID playerId, int x, int y, int width, int height) {
+        renderStatus(table, playerId, x, y, width, height, false);
+    }
+
+    public int renderFixedStatus(BlockEntityMinoTable table, UUID playerId, int x, int y, int width, int maxHeight) {
+        return renderStatus(table, playerId, x, y, width, maxHeight, true);
+    }
+
+    private int renderStatus(BlockEntityMinoTable table, UUID playerId, int x, int y, int width, int height,
+        boolean compact) {
+        if (table == null || table.game == null || width <= 0 || height <= 0) return 0;
+        Minecraft mc = Minecraft.getMinecraft();
+        CardGame game = table.game;
+        CardPlayer me = game.deAmputate(playerId);
+        if (me == null) return 0;
+        float scale = compact ? 0.9f : 1f;
+        refreshInfo(table, game, me, game.currentPlayer(), me, mc.fontRenderer, (int) (width / scale), compact);
+        int fullHeight = wrappedLines.size() * mc.fontRenderer.FONT_HEIGHT;
+        if (compact && fullHeight > 0) scale = Math.min(scale, height / (float) fullHeight);
+        UiDraw.scissor(x - 2, y, width + 4, height);
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y, 0);
+        GL11.glScalef(scale, scale, 1);
+        int lineY = 0;
+        for (int i = 0; i < wrappedLines.size() && (lineY + mc.fontRenderer.FONT_HEIGHT) * scale <= height; i++) {
             String text = wrappedLines.get(i);
             if (text != null) {
                 int color = wrappedColors.get(i);
                 drawStringWithBackdrop(
-                    font,
+                    mc.fontRenderer,
                     text,
-                    x,
-                    y,
+                    0,
+                    lineY,
                     color == PULSE ? UiDraw.lerpColor(0xFFFFFFFF, 0xFFFFE15A, slowPulse()) : color);
             }
-            y += lh;
-        }
-        for (ListIterator<Pair<ActionMessage, Long>> it = tableEntity.clientMessageList
-            .listIterator(tableEntity.clientMessageList.size()); it.hasPrevious();) {
-            if (y > res.getScaledHeight() / hs - lh - (HandScreen.isOpen() ? 100 : 40) / hs) break;
-            Pair<ActionMessage, Long> entry = it.previous();
-            long currentTime = System.currentTimeMillis();
-            if (entry.getSecond() - 200 < currentTime) {
-                it.remove();
-            } else {
-                int color = entry.getFirst()
-                    .type()
-                    .isEphemeral() ? 0x00FF0000 : 0x00AAAAAA;
-                int alpha = Mth.clamp((int) (0xFF * (entry.getSecond() - currentTime) / 1000), 0x05, 0xFF);
-                for (String part : wrapMessage(font, entry.getFirst(), wrapAt)) {
-                    drawStringWithBackdrop(font, part, x, y, alpha << 24 | color);
-                    y += lh;
-                }
-            }
+            lineY += mc.fontRenderer.FONT_HEIGHT;
         }
         GL11.glPopMatrix();
+        UiDraw.endScissor();
+        return Math.min(height, (int) Math.ceil(fullHeight * scale));
+    }
 
+    private void renderCursor(BlockEntityMinoTable tableEntity, CardGame game, CardPlayer cardPlayer, CardPlayer me,
+        CardPlayer currentPlayer, Minecraft mc, FontRenderer font, int lh, ScaledResolution res) {
         int width = res.getScaledWidth();
         int height = res.getScaledHeight();
         MovingObjectPosition hit = mc.objectMouseOver;
@@ -392,6 +474,7 @@ public class GameOverlayLayer {
 
     private int infoWrap;
     private int infoSeconds = -1;
+    private boolean infoCompact;
     private final List<String> wrappedLines = new ArrayList<>();
     private final List<Integer> wrappedColors = new ArrayList<>();
     private final Map<ActionMessage, List<String>> wrappedMessages = new WeakHashMap<>();
@@ -413,6 +496,31 @@ public class GameOverlayLayer {
      */
     public static int cardWidth(int screenWidth) {
         return Math.round(Mth.clamp(screenWidth / 9, 40, 60) * Math.max(0.7f, ClientConfig.display.handScale / 100f));
+    }
+
+    /**
+     * Draws the held hand above a choice screen, with hit coordinates relative to its content area.
+     */
+    public void renderHandPreview(int left, int width, int height) {
+        Minecraft mc = Minecraft.getMinecraft();
+        HandScreen.Context context = HandScreen.Context.resolve(mc);
+        cardRectCount = 0;
+        if (context == null) return;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(left, 0, 0);
+        renderHandRow(
+            mc.fontRenderer,
+            context.game,
+            context.me,
+            context.hand,
+            ItemHandCards.getClientHandIndex(mc.thePlayer),
+            false,
+            context.game.players.indexOf(context.me),
+            ThemeManager.INSTANCE.selected(),
+            width,
+            height,
+            true);
+        GL11.glPopMatrix();
     }
 
     private void line(String text, int color) {
@@ -439,7 +547,10 @@ public class GameOverlayLayer {
         }
         if (infoSeconds >= 0) {
             line(
-                Chat.translatable("gui.minopp.play.turn_time", infoSeconds)
+                Chat.translatable(
+                    game.decisionFor(cardPlayer.uuid) == null ? "gui.minopp.play.turn_time"
+                        : "gui.minopp.decision.time",
+                    infoSeconds)
                     .getFormattedText(),
                 infoSeconds <= 5 ? 0xFFFF7050 : 0xFFFFE070);
         }
@@ -448,6 +559,11 @@ public class GameOverlayLayer {
                 Chat.translatable("gui.minopp.play.eliminated")
                     .getFormattedText(),
                 0xFFFF5555);
+        } else if (game.isTurnTransitioning()) {
+            line(
+                Chat.translatable("gui.minopp.play.turn_handoff", currentPlayer.name)
+                    .getFormattedText(),
+                0xFFFFD85A);
         } else if (currentPlayer.equals(cardPlayer)) {
             String key = game.pendingDraw > 0 ? "gui.minopp.play.must_answer"
                 : "gui.minopp.play." + game.currentPlayerPhase.name()
@@ -504,13 +620,19 @@ public class GameOverlayLayer {
                     .getFormattedText(),
                 0xFFFFAA00);
         }
-        if (me != null && RevealedHandsScreen.available(game, me.uuid)) line(
+        if (!infoCompact && me != null && RevealedHandsScreen.available(game, me.uuid)) line(
             Chat.translatable(
                 "gui.minopp.reveal.hint",
                 GameSettings.getKeyDisplayString(MinoClient.KEY_HAND.getKeyCode()))
                 .getFormattedText(),
             0xFF88CCFF);
-        spacer();
+        if (!infoCompact && me != null) line(
+            Chat.translatable(
+                "gui.minopp.hand.overview_hint",
+                GameSettings.getKeyDisplayString(MinoClient.KEY_HAND.getKeyCode()))
+                .getFormattedText(),
+            0xFF88CCFF);
+        if (!infoCompact) spacer();
 
         CardFace top = game.topFace();
         IChatComponent topCardInfo = Chat.translatable(
@@ -548,6 +670,7 @@ public class GameOverlayLayer {
         for (String line : font.listFormattedStringToWidth(counts.toString(), 260)) {
             line(line, 0xFFAAAAAA);
         }
+        if (infoCompact) return;
         spacer();
 
         for (String part : tableEntity.state.message()
@@ -558,13 +681,17 @@ public class GameOverlayLayer {
     }
 
     private static void drawStringWithBackdrop(FontRenderer font, String text, int x, int y, int color) {
-        int a = (int) (((color >>> 24) & 0xFF) * 0.4f);
-        GuiDraw.fill(x - 2, y, x + font.getStringWidth(text) + 2, y + font.FONT_HEIGHT, a << 24);
-        GuiDraw.drawString(font, text, x, y, color);
+        UiDraw.drawStringWithBackdrop(font, text, x, y, color);
     }
 
     private boolean renderHandCards(float partialTicks) {
         Minecraft mc = Minecraft.getMinecraft();
+        if (mc.currentScreen instanceof PlayChoiceScreen || mc.currentScreen instanceof DecisionScreen
+            || mc.currentScreen instanceof CardDecisionScreen
+            || mc.currentScreen instanceof HandOverviewScreen) {
+            cardRectCount = 0;
+            return false;
+        }
         cardRectCount = 0;
         if (mc.gameSettings.hideGUI) return false;
 
@@ -582,7 +709,8 @@ public class GameOverlayLayer {
         if (realPlayer == null || realPlayer.hand.isEmpty()) return false;
 
         int myPlayerIndex = game.players.indexOf(realPlayer);
-        boolean isMyTurn = myPlayerIndex == game.currentPlayerIndex && !game.awaitingCutIn;
+        boolean isMyTurn = myPlayerIndex == game.currentPlayerIndex && !game.awaitingCutIn
+            && !game.isTurnTransitioning();
         final int CARD_V_SPACING = realPlayer.hand.size() > 20 ? 12 : 20;
         final int CARD_WIDTH = (int) (100.0 * Mth.lerp(zoomAnimationProgress, 0.93, 1.0));
         final int CARD_HEIGHT = (int) (CARD_WIDTH * 8.9 / 5.6);
@@ -597,7 +725,18 @@ public class GameOverlayLayer {
         int height = res.getScaledHeight();
         cardRectCount = 0;
         if (!ClientConfig.display.classicInteraction) {
-            renderHandRow(font, game, realPlayer, hand, clientHandIndex, isMyTurn, myPlayerIndex, theme, width, height);
+            renderHandRow(
+                font,
+                game,
+                realPlayer,
+                hand,
+                clientHandIndex,
+                isMyTurn,
+                myPlayerIndex,
+                theme,
+                width,
+                height,
+                false);
             drawDebugDraws(game, realPlayer, theme, width, height);
             drawCallouts(font, game, realPlayer, width, height);
             drawTray(font, game, realPlayer, tableEntity.config.getBool(GameRules.COINS), width, height);
@@ -1057,7 +1196,7 @@ public class GameOverlayLayer {
     }
 
     private void renderHandRow(FontRenderer font, CardGame game, CardPlayer me, List<Card> fullHand, int selectedFull,
-        boolean isMyTurn, int myPlayerIndex, String theme, int width, int height) {
+        boolean isMyTurn, int myPlayerIndex, String theme, int width, int height, boolean preview) {
         if (!Objects.equals(rowGame, game.id) || !Objects.equals(rowPlayer, me.uuid)) {
             clearHand();
             rowGame = game.id;
@@ -1065,7 +1204,7 @@ public class GameOverlayLayer {
             for (Card card : fullHand) rowKnown.add(card.uid);
         }
         int cwFit = cardWidth(width);
-        int rowFit = Math.max(cwFit, Math.min(width - 150, (int) (width * 0.62)));
+        int rowFit = Math.max(cwFit, Math.min(width - (preview ? 24 : 150), (int) (width * (preview ? 0.9 : 0.62))));
         int fit = Math.max(3, (int) ((rowFit - cwFit) / (cwFit * 0.34f)) + 1);
         int[] shownIdx = window(fullHand.size(), selectedFull, fit, true);
         lastPage = shownIdx.length;
@@ -1080,7 +1219,8 @@ public class GameOverlayLayer {
         float dt = Math.min(0.1f, (now - lastRowNanos) / 1e9f);
         lastRowNanos = now;
         float ease = 1 - (float) Math.exp(-dt * 14);
-        boolean interactive = HandScreen.isOpen();
+        boolean interactive = !preview && HandScreen.isOpen();
+        if (preview) rowRaise = 0;
         rowRaise += ((interactive ? 1 : 0) - rowRaise) * ease;
         keepOnly(rowLift.keySet(), hand);
 
@@ -1088,7 +1228,7 @@ public class GameOverlayLayer {
         int cw = cardWidth(width);
         int ch = Math.round(cw * 8.9f / 5.6f);
         int corner = Math.max(1, cw * 3 / 32);
-        int maxRow = Math.max(cw, Math.min(width - 150, (int) (width * 0.62)));
+        int maxRow = rowFit;
         float step = n <= 1 ? 0 : Math.min(cw * 0.62f, (maxRow - cw) / (float) (n - 1));
         float radius = ch * 4.2f;
         float anglePer = n <= 1 ? 0 : Math.min(step / radius, (float) Math.toRadians(40) / (n - 1));

@@ -170,31 +170,22 @@ public class EntityAutoPlayer extends EntityLiving {
                             .create(tableEntity, member.uuid));
                     tableEntity.sync();
                 }
-                if (game.awaitingCutIn || !game.decisions.isEmpty()) {
+                if (game.awaitingCutIn || !game.decisions.isEmpty() || game.isTurnTransitioning()) {
                     isThinking = false;
                     return;
                 }
                 if (game.players.get(game.currentPlayerIndex)
                     .equals(cardPlayer)) {
-                    if (autoPlayer.aiNoDelay > 0) {
-                        isThinking = false;
-                    } else {
-                        if (!isThinking) {
-                            if (game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_DRAWN) {
-                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + rand.nextInt(10);
-                            } else {
-                                thinkingFinishTime = worldObj.getTotalWorldTime() + 10 + rand.nextInt(40);
-                            }
-                            isThinking = true;
-                            return;
-                        } else {
-                            if (worldObj.getTotalWorldTime() >= thinkingFinishTime) {
-                                isThinking = false;
-                            } else {
-                                return;
-                            }
-                        }
+                    if (!isThinking) {
+                        int delay = autoPlayer.aiNoDelay > 0 ? AutoPlayer.MIN_REACTION_TICKS
+                            : 10 + rand
+                                .nextInt(game.currentPlayerPhase == CardGame.PlayerActionPhase.DISCARD_DRAWN ? 10 : 40);
+                        thinkingFinishTime = worldObj.getTotalWorldTime() + delay;
+                        isThinking = true;
+                        return;
                     }
+                    if (worldObj.getTotalWorldTime() < thinkingFinishTime) return;
+                    isThinking = false;
                     CardPlayer realPlayer = game.deAmputate(cardPlayer);
                     ActionReport result = autoPlayer.playAtGame(game, realPlayer, MinecraftServer.getServer());
                     tableEntity.handleActionResult(result, realPlayer, null);

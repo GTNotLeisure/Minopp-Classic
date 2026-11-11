@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.IReloadableResourceManager;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
@@ -26,9 +27,10 @@ import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.gui.CardDecisionScreen;
 import com.hfstudio.minopp.gui.CardTooltips;
-import com.hfstudio.minopp.gui.DebugCardScreen;
 import com.hfstudio.minopp.gui.DecisionScreens;
+import com.hfstudio.minopp.gui.GameControls;
 import com.hfstudio.minopp.gui.GameSettingsScreen;
+import com.hfstudio.minopp.gui.HandOverviewScreen;
 import com.hfstudio.minopp.gui.HandScreen;
 import com.hfstudio.minopp.gui.PlayChoiceScreen;
 import com.hfstudio.minopp.gui.RevealedHandsScreen;
@@ -67,9 +69,10 @@ public class MinoClient {
 
     public static void init() {
         CardDecisionScreen.register();
+        GameControls.register();
         KEY_SHOUT_MODIFIER = new KeyBinding(
             "key.minopp.shout_modifier",
-            Keyboard.KEY_LCONTROL,
+            Keyboard.KEY_RCONTROL,
             "key.categories.minopp");
         KEY_FLEX_MODIFIER = new KeyBinding("key.minopp.flex_modifier", Keyboard.KEY_LMENU, "key.categories.minopp");
         ClientRegistry.registerKeyBinding(KEY_SHOUT_MODIFIER);
@@ -126,7 +129,8 @@ public class MinoClient {
         }
         while (KEY_HAND.isPressed()) {
             if (mc.currentScreen == null && HandScreen.Context.resolve(mc) != null) {
-                mc.displayGuiScreen(new HandScreen());
+                if (GuiScreen.isShiftKeyDown()) HandScreen.openOverview(null);
+                else mc.displayGuiScreen(new HandScreen());
             }
         }
         if (System.getProperty("minopp.previewHandScreen") != null && mc.currentScreen == null
@@ -187,7 +191,8 @@ public class MinoClient {
         }
         boolean same = lastOpenedDecision != null && lastOpenedDecision.id.equals(decision.id);
         if (!same && (mc.currentScreen == null || mc.currentScreen instanceof HandScreen
-            || mc.currentScreen instanceof DebugCardScreen
+            || mc.currentScreen instanceof HandOverviewScreen
+            || mc.currentScreen instanceof GameSettingsScreen
             || mc.currentScreen instanceof RevealedHandsScreen)) {
             lastOpenedDecision = decision;
             mc.displayGuiScreen(DecisionScreens.create(gamePos, self, decision));

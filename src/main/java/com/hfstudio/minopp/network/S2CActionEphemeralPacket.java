@@ -31,6 +31,8 @@ public class S2CActionEphemeralPacket {
             BlockEntityMinoTable tableEntity = ItemHandCards.getTable(Minecraft.getMinecraft().theWorld, gamePos);
             if (tableEntity != null) {
                 tableEntity.clientMessageList.add(new Pair<>(message, System.currentTimeMillis() + 8000));
+                tableEntity.clientMessageHistory()
+                    .add(message);
             }
         }
     }

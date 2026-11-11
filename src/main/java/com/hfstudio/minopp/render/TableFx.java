@@ -134,6 +134,7 @@ public class TableFx {
     }
 
     public static void clear(World world) {
+        TurnIndicator.clear(world);
         STATES.keySet()
             .removeIf(table -> table.getWorldObj() == world);
         HOLDERS.clear();
@@ -141,6 +142,7 @@ public class TableFx {
     }
 
     public static void tick() {
+        TurnIndicator.tick();
         World world = Minecraft.getMinecraft().theWorld;
         long now = System.currentTimeMillis();
         STATES.entrySet()

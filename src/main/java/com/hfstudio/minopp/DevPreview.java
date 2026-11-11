@@ -147,7 +147,9 @@ public class DevPreview {
                     }
                     return;
                 }
-                if (ticks % 30 != 0 || table.game.awaitingCutIn || !table.game.decisions.isEmpty()) {
+                if (ticks % 30 != 0 || table.game.awaitingCutIn
+                    || table.game.isTurnTransitioning()
+                    || !table.game.decisions.isEmpty()) {
                     if (!table.game.decisions.isEmpty() && ticks % 30 == 0) {
                         ActionReport r = table.game.tickDecisions(Long.MAX_VALUE, u -> false);
                         if (r != null)

@@ -38,6 +38,12 @@ public class UiDraw {
     public static final int TILE_BOTTOM = 0xFFD9472C;
     public static final int GLOW = 0xFFFFC21E;
 
+    public static void drawStringWithBackdrop(FontRenderer font, String text, int x, int y, int color) {
+        int alpha = (int) (((color >>> 24) & 0xFF) * 0.4f);
+        GuiDraw.fill(x - 2, y, x + font.getStringWidth(text) + 2, y + font.FONT_HEIGHT, alpha << 24);
+        GuiDraw.drawString(font, text, x, y, color);
+    }
+
     public static ResourceLocation ui(String name) {
         int colon = name.indexOf(':');
         return colon < 0 ? Mino.id("textures/gui/ui/" + name + ".png")
@@ -204,6 +210,20 @@ public class UiDraw {
         } else {
             marquee(font, text, cx - maxWidth / 2f, y, maxWidth, scale, color);
         }
+    }
+
+    public static void centeredHint(FontRenderer font, String text, int centerX, int top, int maxWidth, int color) {
+        if (maxWidth <= 0) return;
+        int width = Math.min(maxWidth, font.getStringWidth(text));
+        int backgroundAlpha = (int) ((color >>> 24) * (144f / 255));
+        roundRect(
+            centerX - width / 2 - 4,
+            top - 2,
+            centerX + width / 2 + 3,
+            top + font.FONT_HEIGHT + 2,
+            3,
+            backgroundAlpha << 24);
+        fittedCentered(font, text, centerX, top, maxWidth, color);
     }
 
     private static final IntBuffer SCISSOR_BOX = BufferUtils.createIntBuffer(16);

@@ -48,6 +48,15 @@ public class SmoothScroll {
         return current;
     }
 
+    public float target() {
+        return target;
+    }
+
+    public void jumpTo(float value) {
+        scrollTo(value);
+        current = target;
+    }
+
     public void scrollBy(float amount) {
         target += amount;
         clamp();
@@ -64,7 +73,7 @@ public class SmoothScroll {
 
     public int thumbHeight(int trackHeight) {
         if (contentHeight <= 0) return trackHeight;
-        return Math.max(16, trackHeight * viewHeight / Math.max(viewHeight, contentHeight));
+        return Math.min(trackHeight, Math.max(16, trackHeight * viewHeight / Math.max(viewHeight, contentHeight)));
     }
 
     public int thumbY(int trackY, int trackHeight) {
@@ -84,7 +93,7 @@ public class SmoothScroll {
         if (!hasBar() || mouseX < x - 3 || mouseX > x + 7 || mouseY < y || mouseY > y + height) return false;
         int th = thumbHeight(height), ty = thumbY(y, height);
         if (mouseY < ty || mouseY > ty + th) {
-            target = (mouseY - y - th / 2f) / (height - th) * max();
+            target = (mouseY - y - th / 2f) / Math.max(1f, height - th) * max();
             clamp();
             current = target;
             ty = thumbY(y, height);

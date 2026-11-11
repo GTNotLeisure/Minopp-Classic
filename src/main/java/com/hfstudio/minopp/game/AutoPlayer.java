@@ -12,6 +12,8 @@ import net.minecraft.server.MinecraftServer;
 
 public class AutoPlayer {
 
+    public static final int MIN_REACTION_TICKS = 5;
+
     public boolean aiNoWin = false;
     public boolean aiNoPlayerDraw = false;
     public float aiForgetChance = 0.2f;

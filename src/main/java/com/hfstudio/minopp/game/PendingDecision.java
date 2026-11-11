@@ -33,11 +33,12 @@ public class PendingDecision {
     public final UUID player;
     public final UUID source;
     public final long deadline;
+    private final long automaticAnswerAfter;
     public int answer = -1;
     public UUID answerTarget;
 
     public PendingDecision(Type type, UUID player, UUID source, long deadline) {
-        this(UUID.randomUUID(), type, type.name(), player, source, deadline, null);
+        this(UUID.randomUUID(), type, type.name(), player, source, deadline, automaticAnswerTime(), null);
         if (type == Type.CUSTOM) throw new IllegalArgumentException("Custom decisions require a registered type id");
     }
 
@@ -50,11 +51,12 @@ public class PendingDecision {
             player,
             source,
             deadline,
+            automaticAnswerTime(),
             Objects.requireNonNull(data, "data"));
     }
 
     private PendingDecision(UUID id, Type type, String typeId, UUID player, UUID source, long deadline,
-        NBTTagCompound data) {
+        long automaticAnswerAfter, NBTTagCompound data) {
         this.id = Objects.requireNonNull(id, "id");
         this.type = type;
         this.typeId = typeId;
@@ -62,6 +64,15 @@ public class PendingDecision {
         this.player = Objects.requireNonNull(player, "player");
         this.source = source;
         this.deadline = deadline;
+        this.automaticAnswerAfter = automaticAnswerAfter;
+    }
+
+    private static long automaticAnswerTime() {
+        return System.currentTimeMillis() + AutoPlayer.MIN_REACTION_TICKS * 50L;
+    }
+
+    public boolean canAnswerAutomatically(long now) {
+        return now >= automaticAnswerAfter;
     }
 
     public boolean isAnswered() {
@@ -79,6 +90,7 @@ public class PendingDecision {
         NbtUtil.putUUID(tag, "player", player);
         if (source != null) NbtUtil.putUUID(tag, "source", source);
         tag.setLong("deadline", deadline);
+        tag.setLong("automaticAnswerAfter", automaticAnswerAfter);
         tag.setInteger("answer", answer);
         if (answerTarget != null) NbtUtil.putUUID(tag, "answerTarget", answerTarget);
         return tag;
@@ -101,6 +113,7 @@ public class PendingDecision {
             player,
             source,
             deadline,
+            tag.hasKey("automaticAnswerAfter") ? tag.getLong("automaticAnswerAfter") : automaticAnswerTime(),
             type == Type.CUSTOM ? tag.getCompoundTag("data") : null);
         d.answer = tag.hasKey("answer") ? tag.getInteger("answer") : -1;
         if (NbtUtil.hasUUID(tag, "answerTarget")) d.answerTarget = NbtUtil.getUUID(tag, "answerTarget");

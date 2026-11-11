@@ -90,6 +90,34 @@ public class CardGame {
     private static final AutoPlayer TIMEOUT_PLAYER = timeoutPlayer();
     private ResumePoint resumePoint = ResumePoint.NONE;
     private DrawProgress suspendedDraw;
+    private TurnTransition turnTransition;
+    private ResumePoint transitionResume = ResumePoint.NONE;
+
+    public TurnTransition turnTransition() {
+        return turnTransition;
+    }
+
+    public boolean isTurnTransitioning() {
+        return transitionResume != ResumePoint.NONE;
+    }
+
+    public float turnTransitionProgress() {
+        if (turnTransition == null) return 1;
+        float elapsed = tableEntity != null && tableEntity.getWorldObj() != null
+            && tableEntity.getWorldObj().isRemote
+            && decisions.isEmpty() ? Math.max(0, (System.nanoTime() - turnTimeSnapshot) / 50_000_000f) : 0;
+        return turnTransition.progress(elapsed);
+    }
+
+    private void beginTurnTransition(int fromSeat, ResumePoint continuation) {
+        turnTransition = new TurnTransition(
+            fromSeat,
+            currentPlayer().seat,
+            isAntiClockwise,
+            TurnTransition.DURATION_TICKS);
+        transitionResume = continuation;
+        turnTimeSnapshot = System.nanoTime();
+    }
 
     private enum ResumePoint {
         NONE,
@@ -484,6 +512,8 @@ public class CardGame {
     }
 
     private void resetTurnWaits() {
+        turnTransition = null;
+        transitionResume = ResumePoint.NONE;
         resetTurnTimer();
         decisions.clear();
         extensionData("minopp:targeted_effects").removeTag("pending");
@@ -657,7 +687,7 @@ public class CardGame {
         GameSounds.turn(report, players.get(currentPlayerIndex), false, report.soundTail() + 500);
         GameHooks.started(this, report);
         if (!report.shouldDestroyGame && !pauseForDecision(ResumePoint.INITIAL_TURN)) {
-            startInitialTurn(report);
+            beginTurnTransition(-1, ResumePoint.INITIAL_TURN);
         }
         return report.state == null ? report.gameStarted() : report;
     }
@@ -827,6 +857,7 @@ public class CardGame {
     }
 
     private String checkPlayTurn(CardPlayer player, Card card, boolean useFlex, int playerIndex) {
+        if (isTurnTransitioning()) return "game.minopp.play.turn_transition";
         if (!decisions.isEmpty()) return "game.minopp.play.waiting_decision";
         boolean identical = isIdenticalToTop(card);
         if (awaitingCutIn && !(identical && rule(GameRules.JUMP_IN))) return "game.minopp.play.not_match_cut";
@@ -874,6 +905,8 @@ public class CardGame {
         boolean isCut = playerIndex != currentPlayerIndex;
         cardPlayer.coinLocked = true;
         if (isCut) {
+            turnTransition = null;
+            transitionResume = ResumePoint.NONE;
             currentPlayerIndex = playerIndex;
             awaitingCutIn = false;
             cutInTicks = -1;
@@ -1087,6 +1120,7 @@ public class CardGame {
 
     private ActionReport playNoCardInner(CardPlayer requestedPlayer) {
         ActionReport report = ActionReport.builder(this, requestedPlayer);
+        if (isTurnTransitioning()) return report.fail(Chat.translatable("game.minopp.play.turn_transition"));
         int playerIndex = players.indexOf(requestedPlayer);
         if (playerIndex == -1 || players.get(playerIndex).eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
@@ -1185,6 +1219,7 @@ public class CardGame {
 
     public ActionReport shoutMino(CardPlayer player) {
         ActionReport report = ActionReport.builder(this, player);
+        if (isTurnTransitioning()) return report.fail(Chat.translatable("game.minopp.play.turn_transition"));
         CardPlayer realPlayer = deAmputate(player);
         if (realPlayer == null || realPlayer.eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
@@ -1278,7 +1313,7 @@ public class CardGame {
         boolean changed = false;
         for (PendingDecision d : decisions) {
             if (d.isAnswered()) continue;
-            if (!isHuman.test(d.player) || now >= d.deadline) {
+            if (now >= d.deadline || !isHuman.test(d.player) && d.canAnswerAutomatically(now)) {
                 answerAutomatically(d);
                 changed = true;
             }
@@ -1473,8 +1508,8 @@ public class CardGame {
         }
 
         decisionRepeatsTurn = currentPlayerIndex == previousIndex;
+        beginTurnTransition(players.get(previousIndex).seat, ResumePoint.TURN_START);
         if (pauseForDecision(ResumePoint.TURN_START)) return;
-        startTurnHooks(report, decisionRepeatsTurn);
     }
 
     private void startTurnHooks(ActionReport report, boolean again) {
@@ -1505,8 +1540,10 @@ public class CardGame {
             return;
         }
         switch (point) {
-            case INITIAL_TURN -> startInitialTurn(report);
-            case TURN_START -> startTurnHooks(report, again);
+            case INITIAL_TURN -> beginTurnTransition(-1, ResumePoint.INITIAL_TURN);
+            case TURN_START -> {
+                if (!isTurnTransitioning()) startTurnHooks(report, again);
+            }
             case TURN_READY -> resumeTurn(report, again);
             case PENALTY_NEXT -> finishPenaltyTurn(report);
             case TURN_NOTICE -> announcePenaltyTurn(report);
@@ -1668,6 +1705,7 @@ public class CardGame {
 
     private ActionReport useCoinInner(CardPlayer player, boolean flip) {
         ActionReport report = ActionReport.builder(this, player);
+        if (!flip && isTurnTransitioning()) return report.fail(Chat.translatable("game.minopp.play.turn_transition"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
         if (!rule(GameRules.COINS)) return report.fail(Chat.translatable("game.minopp.coin.off"));
         boolean preview = isDebugger(player);
@@ -2806,7 +2844,7 @@ public class CardGame {
      */
     public int turnSecondsRemaining() {
         int limit = turnTimeLimitTicks();
-        if (limit == 0 || awaitingCutIn || !decisions.isEmpty()) return -1;
+        if (limit == 0 || awaitingCutIn || !decisions.isEmpty() || isTurnTransitioning()) return -1;
         int remaining = turnTimeTicks < 0 ? limit : Math.min(turnTimeTicks, limit);
         if (tableEntity != null && tableEntity.getWorldObj() != null && tableEntity.getWorldObj().isRemote) {
             long elapsed = Math.max(0, (System.nanoTime() - turnTimeSnapshot) / 50_000_000L);
@@ -2848,6 +2886,18 @@ public class CardGame {
 
     private ActionReport tickActionTimers() {
         if (!decisions.isEmpty()) return null;
+        if (isTurnTransitioning()) {
+            turnTransition = turnTransition.advance();
+            if (tableEntity != null) tableEntity.markDirty();
+            if (turnTransition.remainingTicks() > 0) return null;
+            ResumePoint continuation = transitionResume;
+            transitionResume = ResumePoint.NONE;
+            resetTurnTimer();
+            ActionReport report = ActionReport.builder(this, currentPlayer());
+            if (continuation == ResumePoint.INITIAL_TURN) startInitialTurn(report);
+            else startTurnHooks(report, decisionRepeatsTurn);
+            return report;
+        }
         int limit = turnTimeLimitTicks();
         if ((awaitingCutIn || hurryTicks >= 0 || limit > 0) && tableEntity != null) tableEntity.markDirty();
         if (awaitingCutIn) {
@@ -3098,6 +3148,10 @@ public class CardGame {
             }
         }
         if (tag.hasKey("resumePoint")) resumePoint = ResumePoint.valueOf(tag.getString("resumePoint"));
+        if (tag.hasKey("turnTransition", 10))
+            turnTransition = TurnTransition.fromTag(tag.getCompoundTag("turnTransition"));
+        if (turnTransition != null && tag.hasKey("transitionResume"))
+            transitionResume = ResumePoint.valueOf(tag.getString("transitionResume"));
         if (tag.hasKey("suspendedDraw", 10)) {
             NBTTagCompound draw = tag.getCompoundTag("suspendedDraw");
             suspendedDraw = new DrawProgress(
@@ -3232,11 +3286,13 @@ public class CardGame {
         tag.setInteger("cutInTicks", cutInTicks);
         tag.setInteger("hurryTicks", hurryTicks);
         tag.setInteger("turnTimeTicks", turnTimeTicks);
+        if (turnTransition != null) tag.setTag("turnTransition", turnTransition.toTag());
+        if (isTurnTransitioning()) tag.setString("transitionResume", transitionResume.name());
+        tag.setBoolean("decisionRepeatsTurn", decisionRepeatsTurn);
         if (automaticDrawPlayer != null) NbtUtil.putUUID(tag, "automaticDrawPlayer", automaticDrawPlayer);
         tag.setTag("extensions", extensionData.copy());
         if (!decisions.isEmpty()) {
             tag.setString("decisionContinuation", decisionContinuation.name());
-            tag.setBoolean("decisionRepeatsTurn", decisionRepeatsTurn);
         }
         tag.setInteger("currentPlayer", currentPlayerIndex);
         tag.setInteger("pendingDraw", pendingDraw);

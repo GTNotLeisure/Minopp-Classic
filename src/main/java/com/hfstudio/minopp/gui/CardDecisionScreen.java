@@ -10,7 +10,6 @@ import net.minecraft.client.gui.GuiScreen;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
-import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardDecisions;
 import com.hfstudio.minopp.game.CardGame;
@@ -18,7 +17,6 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.gui.ui.UiButton;
 import com.hfstudio.minopp.gui.ui.UiDraw;
-import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
@@ -34,6 +32,7 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 public class CardDecisionScreen extends GuiScreen {
 
     private final BlockPos tablePos;
+    private final TableScreenPanel panel;
     private final UUID playerId, decisionId;
     private final CardGrid grid = new CardGrid();
     private final IntSet selected = new IntLinkedOpenHashSet();
@@ -47,6 +46,7 @@ public class CardDecisionScreen extends GuiScreen {
 
     public CardDecisionScreen(BlockPos tablePos, CardPlayer player, PendingDecision decision) {
         this.tablePos = tablePos;
+        panel = new TableScreenPanel(tablePos, player.uuid);
         playerId = player.uuid;
         decisionId = decision.id;
         this.decision = decision;
@@ -57,36 +57,54 @@ public class CardDecisionScreen extends GuiScreen {
             DecisionScreens.register(id, CardDecisionScreen::new);
     }
 
+    private int choiceBottom() {
+        return height - panel.handPreviewHeight(width);
+    }
+
     @Override
     public void initGui() {
         selection.release();
         buttonList.clear();
+        panel.addHandButton(buttonList, width, height);
         buttonList.add(
             new UiButton(
                 0,
-                width / 2 - 40,
-                height - 26,
+                panel.centerX(width) - 40,
+                choiceBottom() - 26,
                 80,
                 20,
                 Chat.translatable("gui.minopp.choice.confirm")
                     .getFormattedText()));
-        buttonList.add(new UiButton(1, 6, height - 26, 30, 20, "<"));
-        buttonList.add(new UiButton(2, 42, height - 26, 30, 20, ">"));
-        if (CardDecisions.RECYCLE.equals(decision.typeId))
-            buttonList.add(new UiButton(3, width / 2 - 100, 20, 200, 18, ""));
+        buttonList
+            .add(new UiButton(1, panel.contentLeft(width) + 6, choiceBottom() - gridBottomInset() + 8, 30, 20, "<"));
+        buttonList.add(new UiButton(2, width - 36, choiceBottom() - gridBottomInset() + 8, 30, 20, ">"));
+        if (CardDecisions.RECYCLE.equals(decision.typeId)) buttonList.add(
+            new UiButton(
+                3,
+                panel.centerX(width) - Math.min(200, panel.contentWidth(width) - 24) / 2,
+                38,
+                Math.min(200, panel.contentWidth(width) - 24),
+                18,
+                ""));
         if (CardDecisions.DISCARD.equals(decision.typeId)) {
             String randomLabel = Chat.translatable("gui.minopp.choice.random")
                 .getFormattedText();
             int randomWidth = Math.max(80, fontRendererObj.getStringWidth(randomLabel) + 12);
-            buttonList.add(new UiButton(4, (width - randomWidth) / 2, height - 50, randomWidth, 20, randomLabel));
+            buttonList.add(
+                new UiButton(
+                    4,
+                    panel.centerX(width) - randomWidth / 2,
+                    choiceBottom() - 50,
+                    randomWidth,
+                    20,
+                    randomLabel));
         }
         updateScreen();
     }
 
     @Override
     public void updateScreen() {
-        BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, tablePos);
-        CardGame game = table == null ? null : table.game;
+        CardGame game = panel.game();
         PendingDecision current = game == null ? null : game.decisionFor(playerId);
         if (current == null || !current.id.equals(decisionId)) {
             mc.displayGuiScreen(null);
@@ -120,7 +138,13 @@ public class CardDecisionScreen extends GuiScreen {
             }
             targetIndex = Math.min(targetIndex, Math.max(0, targets.size() - 1));
         }
-        grid.layout(width, height, 24, 46, gridBottomInset());
+        grid.layoutIn(
+            panel.contentLeft(width),
+            panel.contentWidth(width),
+            height,
+            24,
+            64,
+            gridBottomInset() + panel.handPreviewHeight(width));
         for (GuiButton button : buttonList) {
             if (button.id == 0) {
                 button.enabled = !waiting && needed > 0 && selected.size() == needed;
@@ -132,7 +156,7 @@ public class CardDecisionScreen extends GuiScreen {
                         Chat.translatable("gui.minopp.choice.confirm_count", needed, needed)
                             .getFormattedText())
                         + 12);
-                button.xPosition = (width - button.width) / 2;
+                button.xPosition = panel.centerX(width) - button.width / 2;
             }
             if (button.id == 1) button.enabled = grid.page() > 0;
             if (button.id == 2) button.enabled = grid.page() + 1 < grid.pages();
@@ -146,7 +170,7 @@ public class CardDecisionScreen extends GuiScreen {
     }
 
     private int gridBottomInset() {
-        return CardDecisions.DISCARD.equals(decision.typeId) ? 70 : 46;
+        return CardDecisions.DISCARD.equals(decision.typeId) ? 94 : 70;
     }
 
     @Override
@@ -154,7 +178,7 @@ public class CardDecisionScreen extends GuiScreen {
         if (shownGame == null) return;
         if (waiting || !Mouse.isButtonDown(0)) selection.release();
         else if (selection.drag(mouseX, mouseY, Minecraft.getSystemTime())) updateScreen();
-        UiDraw.gradient(0, 0, width, height, 0xB0200404, 0xE0200404);
+        UiDraw.gradient(panel.contentLeft(width), 20, width, height, 0xB0200404, 0xE0200404);
         String key = CardDecisions.SWAP.equals(decision.typeId)
             ? offered ? "gui.minopp.decision.swap_take" : "gui.minopp.decision.swap_give"
             : "gui.minopp.decision." + decision.typeId.substring(7);
@@ -162,27 +186,20 @@ public class CardDecisionScreen extends GuiScreen {
             fontRendererObj,
             Chat.translatable(key)
                 .getFormattedText(),
-            width / 2,
-            7,
+            panel.centerX(width),
+            22,
             0xFFFFE070);
         grid.draw(ThemeManager.INSTANCE.selected(), shownGame.darkSide, mouseX, mouseY, selected::contains);
         GuiDraw.drawCenteredString(
             fontRendererObj,
             Chat.translatable("gui.minopp.hand.page", grid.page() + 1, grid.pages())
                 .getFormattedText(),
-            width / 2,
-            height - gridBottomInset() + 7,
+            panel.centerX(width),
+            choiceBottom() - gridBottomInset() + 14,
             0xFFE8E8E8);
-        fontRendererObj.drawStringWithShadow(
-            selected.size() + "/"
-                + needed
-                + "  "
-                + Math.max(0, (decision.deadline - System.currentTimeMillis()) / 1000)
-                + "s",
-            width - 76,
-            height - 20,
-            0xFFE8E8E8);
+        panel.draw(width, height);
         super.drawScreen(mouseX, mouseY, partialTicks);
+        panel.drawHandPreview(width, height, mouseX, mouseY);
         Card hover = grid.hit(mouseX, mouseY, selected::contains);
         if (hover != null && !selection.isDragging()) UiDraw.tooltip(
             fontRendererObj,
@@ -195,6 +212,20 @@ public class CardDecisionScreen extends GuiScreen {
 
     @Override
     protected void mouseClicked(int x, int y, int button) {
+        if (button == 0 && panel.browseHandPreview(width, height, x, y, 0)) return;
+        if (button == 0) for (GuiButton control : buttonList) {
+            if (control.visible && x >= control.xPosition
+                && x < control.xPosition + control.width
+                && y >= control.yPosition
+                && y < control.yPosition + control.height) {
+                super.mouseClicked(x, y, button);
+                return;
+            }
+        }
+        if (GameControls.actionFor(button - 100) != null) {
+            keyTyped('\0', button - 100);
+            return;
+        }
         if (!waiting && button == 0 && selection.press(x, y, needed, Minecraft.getSystemTime())) {
             updateScreen();
             return;
@@ -218,6 +249,11 @@ public class CardDecisionScreen extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (button.id == TableScreenPanel.HAND_BUTTON) {
+            panel.openHand(this, this::choiceActive);
+            return;
+        }
+        if (!choiceActive()) return;
         if (button.id == 0 && selected.size() == needed && !waiting) {
             selection.release();
             waiting = true;
@@ -236,12 +272,37 @@ public class CardDecisionScreen extends GuiScreen {
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
+        if (wheel != 0 && panel.browseHandPreview(
+            width,
+            height,
+            Mouse.getEventX() * width / mc.displayWidth,
+            height - Mouse.getEventY() * height / mc.displayHeight - 1,
+            -Integer.signum(wheel))) return;
         if (wheel != 0) grid.scroll(-Integer.signum(wheel));
     }
 
     @Override
     protected void keyTyped(char character, int key) {
-        if (key == Keyboard.KEY_PRIOR || key == Keyboard.KEY_NEXT) grid.scroll(key == Keyboard.KEY_PRIOR ? -1 : 1);
+        if (!choiceActive()) return;
+        GameControls.Action action = GameControls.actionFor(key);
+        if (key > 0 && Keyboard.isRepeatEvent()
+            && action != GameControls.Action.PREVIOUS
+            && action != GameControls.Action.NEXT) return;
+        if (GameControls.handleUtility(key)) return;
+        if (action == GameControls.Action.CONFIRM || action == GameControls.Action.PLAY) {
+            for (GuiButton button : buttonList) if (button.id == 0 && button.enabled) {
+                actionPerformed(button);
+                break;
+            }
+        } else if (action == GameControls.Action.PREVIOUS || action == GameControls.Action.NEXT)
+            grid.scroll(action == GameControls.Action.PREVIOUS ? -1 : 1);
+        else if (key == Keyboard.KEY_PRIOR || key == Keyboard.KEY_NEXT) grid.scroll(key == Keyboard.KEY_PRIOR ? -1 : 1);
+    }
+
+    private boolean choiceActive() {
+        CardGame game = panel.game();
+        PendingDecision current = game == null ? null : game.decisionFor(playerId);
+        return current != null && current.id.equals(decisionId) && System.currentTimeMillis() < current.deadline;
     }
 
     @Override
