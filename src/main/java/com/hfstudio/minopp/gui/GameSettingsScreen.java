@@ -194,7 +194,7 @@ public class GameSettingsScreen extends GuiScreen {
             rules = new HashMap<>(config.rules);
             counts = new HashMap<>(config.counts);
             packs = new ArrayList<>(config.packs);
-            deckSize = config.countDeckSize();
+            deckSize = config.effectiveDeckSize();
         }
 
         private boolean matches(TableConfig config) {
@@ -1010,12 +1010,15 @@ public class GameSettingsScreen extends GuiScreen {
                         sb.append(ruleValue(r, p));
                     }
                     t.desc.add(tr("gui.minopp.rule.presets", sb.toString()));
-                    t.controls.add(tr("gui.minopp.controls.rule_preset"));
+                    t.controls.add(
+                        tr(
+                            GameRules.isChoice(r.id()) ? "gui.minopp.controls.rule_choice"
+                                : "gui.minopp.controls.rule_preset"));
                 } else {
                     t.desc.add(tr("gui.minopp.rule.range", r.min(), r.max()));
                     t.controls.add(tr("gui.minopp.controls.rule_int"));
                 }
-                t.controls.add(tr("gui.minopp.controls.rule_input"));
+                if (!GameRules.isChoice(r.id())) t.controls.add(tr("gui.minopp.controls.rule_input"));
             }
             list.add(t);
         }
@@ -1023,6 +1026,8 @@ public class GameSettingsScreen extends GuiScreen {
     }
 
     private String ruleValue(GameRules.Rule rule, int value) {
+        String label = GameRules.valueLangKey(rule.id(), value);
+        if (label != null) return tr(label);
         if (rule.id()
             .equals(GameRules.TURN_TIME_LIMIT)) {
             return value == 0 ? tr("gui.minopp.rule.turnTimeLimit.unlimited")
@@ -2198,7 +2203,7 @@ public class GameSettingsScreen extends GuiScreen {
                 int nv;
                 if (r.bool()) {
                     nv = v == 0 ? 1 : 0;
-                } else if (shift && button == 1) {
+                } else if (shift && button == 1 && !GameRules.isChoice(r.id())) {
                     openEditor(t, v);
                     return;
                 } else if (ctrl) {

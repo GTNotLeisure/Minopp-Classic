@@ -544,8 +544,7 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public IChatComponent startProblem() {
         int players = getPlayersList().size();
-        int deckSize = config.countDeckSize();
-        if (deckSize == 0) deckSize = new TableConfig().countDeckSize();
+        int deckSize = config.effectiveDeckSize();
         long available = (long) deckSize * config.effectiveCopies(players, deckSize);
         long required = (long) players * config.getInt(GameRules.INITIAL_HAND) + 1;
         if (available < required) return Chat.translatable("game.minopp.play.deck_too_small", available, required);
@@ -607,9 +606,11 @@ public class BlockEntityMinoTable extends TileEntity {
                         mcPlayer.getGameProfile()
                             .getId())) {
                         playerFound = true;
+                        cardPlayer.bot = false;
                     }
                 } else if (cardPlayer.uuid.equals(entity.getUniqueID())) {
                     playerFound = true;
+                    if (entity instanceof EntityAutoPlayer) cardPlayer.bot = true;
                 }
                 if (playerFound) break;
             }

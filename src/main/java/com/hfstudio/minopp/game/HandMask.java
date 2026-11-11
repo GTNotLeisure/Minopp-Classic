@@ -67,6 +67,14 @@ public class HandMask {
             if (NbtUtil.hasUUID(entry, "player")) shown.put(NbtUtil.getUUID(entry, "player"), entry.getLong("until"));
         }
         if (revealed != null) shown.put(revealed, Long.MAX_VALUE);
+        NBTTagList peeks = game.getTagList("targetedPeeks", 10);
+        if (participant) for (int i = 0; i < peeks.tagCount(); i++) {
+            NBTTagCompound peek = peeks.getCompoundTagAt(i);
+            if (NbtUtil.hasUUID(peek, "viewer") && viewer.equals(NbtUtil.getUUID(peek, "viewer"))
+                && NbtUtil.hasUUID(peek, "target")) {
+                shown.merge(NbtUtil.getUUID(peek, "target"), peek.getLong("until"), Math::max);
+            }
+        }
         NBTTagList decisions = game.getTagList("decisions", 10);
         for (int i = 0; i < decisions.tagCount(); i++) {
             NBTTagCompound decision = decisions.getCompoundTagAt(i);
@@ -97,6 +105,7 @@ public class HandMask {
             maskCard(deck.getCompoundTagAt(i), darkSide, showBacks && i == deck.tagCount() - 1, true);
         game.removeTag("peekUntil");
         game.removeTag("shownUntil");
+        game.removeTag("targetedPeeks");
         if (viewer == null || !NbtUtil.hasUUID(game, "debugger") || !viewer.equals(NbtUtil.getUUID(game, "debugger"))) {
             game.removeTag("debugHand");
             game.removeTag("debugDrawn");

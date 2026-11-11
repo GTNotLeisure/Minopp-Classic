@@ -80,7 +80,13 @@ public class GameOverlayLayer {
             playableCache.clear();
             playableFor = game;
         }
-        if (!playableCache.containsKey(card.uid)) playableCache.put(card.uid, game.canPlay(player, card));
+        if (!playableCache.containsKey(card.uid)) {
+            boolean ownTurn = !game.awaitingCutIn && game.currentPlayer()
+                .equals(player);
+            boolean allowed = game.decisions.isEmpty()
+                && (ownTurn ? game.canPlay(player, card) : game.whyCannotPlay(player, card, false) == null);
+            playableCache.put(card.uid, allowed);
+        }
         return playableCache.get(card.uid);
     }
 
@@ -160,7 +166,7 @@ public class GameOverlayLayer {
                 tableEntity.getPlayersList()
                     .size(),
                 tableEntity.seatCount(),
-                tableEntity.config.countDeckSize())
+                tableEntity.config.effectiveDeckSize())
                 .getFormattedText(),
             x,
             y,
@@ -678,7 +684,8 @@ public class GameOverlayLayer {
                         corner,
                         0x222222 | ((int) (0xFF * shadowAlpha) << 24));
                 }
-                if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && game.isIdenticalToTop(card)) {
+                if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex
+                    && playable(game, realPlayer, card)) {
                     float pulse = (float) (0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 300.0));
                     int highlightAlpha = (int) (0x90 * pulse);
                     UiDraw.roundRect(
@@ -1173,7 +1180,7 @@ public class GameOverlayLayer {
                 }
                 GL11.glTranslatef(-cw / 2f, -ch / 2f, 0);
                 if (selected) UiDraw.roundRect(2, 3, cw + 2, ch + 3, corner, 0x60000000);
-                if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && game.isIdenticalToTop(card)) {
+                if (game.awaitingCutIn && game.currentPlayerIndex != myPlayerIndex && playable(game, me, card)) {
                     int glow = 0x60 + (int) (0x9F * slowPulse());
                     UiDraw.roundRect(-3, -3, cw + 3, ch + 3, corner + 3, (glow << 24) | 0xFFD700);
                 }

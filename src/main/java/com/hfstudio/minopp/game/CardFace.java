@@ -49,6 +49,13 @@ public class CardFace implements Comparable<CardFace> {
         return type().numbered ? "n" + number : type().matchKey;
     }
 
+    public boolean sharesSymbol(CardFace other) {
+        if (isHidden() || other.isHidden()) return false;
+        CardType first = type(), second = other.type();
+        if (first.numbered && second.numbered) return number == other.number;
+        return symbolKey().equals(other.symbolKey()) || first.sharesSymbol(second);
+    }
+
     public IChatComponent getDisplayName() {
         if (isWild()) {
             IChatComponent c = Chat.translatable("game.minopp.card.wild_prefix");

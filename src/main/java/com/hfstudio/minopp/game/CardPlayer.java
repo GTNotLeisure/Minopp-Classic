@@ -22,6 +22,7 @@ public class CardPlayer {
 
     public int seat = -1;
     public boolean eliminated = false;
+    public boolean bot;
     /**
      * Client snapshot deadline for viewing this hand; zero hides it and Long.MAX_VALUE permits an untimed view.
      */
@@ -55,6 +56,7 @@ public class CardPlayer {
         this.hasShoutedMino = tag.getBoolean("hasShoutedMino");
         this.seat = tag.hasKey("seat") ? tag.getInteger("seat") : -1;
         this.eliminated = tag.getBoolean("eliminated");
+        this.bot = tag.getBoolean("bot");
         long visibleFor = tag.getLong("handVisibleFor");
         this.handVisibleUntil = visibleFor == Long.MAX_VALUE ? Long.MAX_VALUE
             : visibleFor > 0 ? System.currentTimeMillis() + visibleFor : 0;
@@ -77,6 +79,7 @@ public class CardPlayer {
         tag.setBoolean("hasShoutedMino", hasShoutedMino);
         tag.setInteger("seat", seat);
         tag.setBoolean("eliminated", eliminated);
+        tag.setBoolean("bot", bot);
         tag.setBoolean("powerOn", powerOn);
         tag.setInteger("team", team);
         tag.setBoolean("coinNoMercy", coinNoMercy);
@@ -91,19 +94,18 @@ public class CardPlayer {
         CardPlayer p = new CardPlayer(uuid, name);
         p.seat = seat;
         p.team = team;
+        p.bot = bot;
         return p;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CardPlayer that = (CardPlayer) o;
-        return Objects.equals(uuid, that.uuid);
+        return o instanceof CardPlayer that && Objects.equals(uuid, that.uuid);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(uuid);
+        return Objects.hashCode(uuid);
     }
 }

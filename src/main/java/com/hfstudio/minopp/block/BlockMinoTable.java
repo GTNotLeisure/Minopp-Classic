@@ -146,7 +146,9 @@ public class BlockMinoTable extends Block {
             CardGame game = tableEntity.game;
             CardFace face = game.face(card);
             CardType type = face.type();
-            boolean useFlex = isFlexModifierHeld() && tableEntity.config.getBool(GameRules.FLEX_POWER)
+            boolean useFlex = game.currentPlayer()
+                .equals(realPlayer) && isFlexModifierHeld()
+                && tableEntity.config.getBool(GameRules.FLEX_POWER)
                 && realPlayer.powerOn
                 && (type.hasFlex() || face.flexColor != null);
             String reason = game.whyCannotPlay(realPlayer, card, useFlex);
@@ -165,15 +167,12 @@ public class BlockMinoTable extends Block {
             int targets = choice.targetCount();
             if (tableEntity.config.getBool(GameRules.SEVEN_ZERO) && face.isNumber()
                 && face.number == 7
-                && game.checkPlayable(realPlayer, card, useFlex) == null
                 && game.activePlayers()
                     .size() > 2) {
                 targets = Math.max(targets, 1);
             }
-            boolean answeringDraw = game.pendingDraw > 0;
             boolean moreChoices = choice.needsNumber() || type.pickCount(realPlayer.hand.size() - 1) > 0;
-            if ((needsColor || targets > 0 || moreChoices)
-                && (game.checkPlayable(realPlayer, card, useFlex) == null || answeringDraw)) {
+            if (needsColor || targets > 0 || moreChoices) {
                 Minecraft.getMinecraft()
                     .displayGuiScreen(
                         new PlayChoiceScreen(corePos, realPlayer, card, choices, needsColor, targets, game.darkSide));

@@ -31,8 +31,11 @@ import com.hfstudio.minopp.effect.PlayerGlowEffectEvent;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
+import it.unimi.dsi.fastutil.objects.Object2LongMap;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 
 public class CardGame {
 
@@ -100,7 +103,7 @@ public class CardGame {
         HOLD
     }
 
-    private record DrawProgress(UUID player, int count, int lastUid, boolean toMatch) {}
+    private record DrawProgress(UUID player, int count, int attempts, int lastUid, boolean toMatch) {}
 
     public final Map<UUID, UUID> links = new HashMap<>();
     public UUID danceOwner;
@@ -263,7 +266,7 @@ public class CardGame {
                 currentColor = colors.get((colors.indexOf(currentColor) + 1) % colors.size());
             }
             case "penalty" -> {
-                pendingDraw += 2;
+                pendingDraw = addCardCounts(pendingDraw, 2);
                 lastDrawValue = 2;
                 pendingDrawSource = null;
             }
@@ -424,24 +427,26 @@ public class CardGame {
             debugSide = darkSide;
         }
         if (debugSide != darkSide) {
-            for (Card c : me.hand) if (debugHand.stream()
-                .noneMatch(d -> d.uid == c.uid)) deck.add(0, c);
+            IntSet previous = new IntOpenHashSet(debugHand.size());
+            for (Card card : debugHand) previous.add(card.uid);
+            returnOtherCards(me.hand, previous);
             me.hand.clear();
             debugHand.clear();
             debugHand.addAll(debugCards(darkSide));
             debugSide = darkSide;
         }
-        Set<Integer> held = new HashSet<>();
+        IntSet held = new IntOpenHashSet(me.hand.size());
         for (Card c : me.hand) held.add(c.uid);
-        Set<Integer> own = new HashSet<>();
+        IntSet own = new IntOpenHashSet(debugHand.size());
         for (int i = 0; i < debugHand.size(); i++) {
             Card c = debugHand.get(i);
             if (!held.contains(c.uid)) debugHand.set(i, c = new Card(debugUid++, c.light, c.dark));
             own.add(c.uid);
         }
-        for (Card c : me.hand) if (!own.contains(c.uid)) deck.add(0, c);
+        returnOtherCards(me.hand, own);
         me.hand.clear();
         me.hand.addAll(debugHand);
+        for (Card card : me.hand) card.owner = me.uuid;
         me.eliminated = false;
         // Replace transferred debug cards with a normal hand of at most seven cards.
         for (CardPlayer p : players) {
@@ -464,6 +469,18 @@ public class CardGame {
     private ActionReport debugged(ActionReport report) {
         restoreDebugHand();
         return report;
+    }
+
+    private void returnOtherCards(List<Card> cards, IntSet retained) {
+        List<Card> returned = new ArrayList<>();
+        for (int i = cards.size() - 1; i >= 0; i--) {
+            Card card = cards.get(i);
+            if (!retained.contains(card.uid)) {
+                card.owner = null;
+                returned.add(card);
+            }
+        }
+        if (!returned.isEmpty()) deck.addAll(0, returned);
     }
 
     private void resetTurnWaits() {
@@ -504,7 +521,14 @@ public class CardGame {
      * Answers exactly one pending request. Expired or stale replies leave the current decision unchanged.
      */
     public ActionReport answerDecision(CardPlayer player, UUID decisionId, int answer, UUID target) {
-        return debugged(answerDecisionInner(player, decisionId, answer, target));
+        return answerDecision(player, decisionId, new int[] { answer }, target);
+    }
+
+    /**
+     * Submits an atomic batch of answers to one pending decision and resolves it at most once.
+     */
+    public ActionReport answerDecision(CardPlayer player, UUID decisionId, int[] answers, UUID target) {
+        return debugged(answerDecisionInner(player, decisionId, answers, target));
     }
 
     public ActionReport tickDecisions(long now, Predicate<UUID> isHuman) {
@@ -557,6 +581,12 @@ public class CardGame {
         return active;
     }
 
+    private int activePlayerCount() {
+        int count = 0;
+        for (CardPlayer player : players) if (!player.eliminated) count++;
+        return count;
+    }
+
     private int step() {
         return isAntiClockwise ? -1 : 1;
     }
@@ -576,7 +606,16 @@ public class CardGame {
     }
 
     public ActionReport initiate(CardPlayer cardPlayer, int initialCardCount) {
+        if (initialCardCount <= 0) throw new IllegalArgumentException("Initial hand size must be positive");
+        if (topCard != null) throw new IllegalStateException("Game is already initialized");
         if (players.size() < (debug ? 1 : 2)) return ActionReport.NO_GAME;
+        Set<UUID> participants = new HashSet<>();
+        for (CardPlayer player : players) {
+            if (player == null || player.uuid == null || !participants.add(player.uuid)) {
+                throw new IllegalArgumentException("Players must have distinct UUIDs");
+            }
+            if (!player.hand.isEmpty()) throw new IllegalStateException("Initial hands must be empty");
+        }
         TableConfig config = config();
         players.sort(Comparator.comparingInt(p -> p.seat));
         currentPlayerIndex = random.nextInt(players.size());
@@ -601,23 +640,15 @@ public class CardGame {
         for (int i = 0; i < initialCardCount; i++) {
             for (CardPlayer player : players) {
                 if (deck.isEmpty()) break;
-                player.hand.add(deck.remove(deck.size() - 1));
+                Card card = deck.remove(BotStrategy.openingCardIndex(this, player));
+                card.owner = player.uuid;
+                player.hand.add(card);
             }
         }
         boolean official = !separateDiscardPile && config.getBool(GameRules.OFFICIAL_START);
-        boolean hasNumber = deck.stream()
-            .anyMatch(c -> c.light.isNumber() && !c.light.isWild());
-        Card tobeTopCard = deck.remove(deck.size() - 1);
-        int guard = 0;
-        while (hasNumber && !acceptableOpening(tobeTopCard.light, official)
-            && guard++ < deck.size() + discardDeck.size()) {
-            if (separateDiscardPile) discardDeck.add(tobeTopCard);
-            else deck.add(0, tobeTopCard);
-            tobeTopCard = deck.remove(deck.size() - 1);
-        }
-        topCard = tobeTopCard;
+        topCard = takeOpeningCard(official);
         currentColor = topFace().color;
-        if (official) applyOpening(tobeTopCard.light);
+        if (official) applyOpening(topCard.light);
         if (debug) dealDebugHand();
         resetTurnTimer();
         ActionReport report = ActionReport.builder(this, cardPlayer);
@@ -626,10 +657,42 @@ public class CardGame {
         GameSounds.turn(report, players.get(currentPlayerIndex), false, report.soundTail() + 500);
         GameHooks.started(this, report);
         if (!report.shouldDestroyGame && !pauseForDecision(ResumePoint.INITIAL_TURN)) {
-            GameHooks.turnStarted(this, currentPlayer(), report);
-            pauseForDecision(ResumePoint.HOLD);
+            startInitialTurn(report);
         }
         return report.state == null ? report.gameStarted() : report;
+    }
+
+    private Card takeOpeningCard(boolean official) {
+        int selected = deck.size() - 1;
+        for (int i = selected; i >= 0; i--) {
+            if (acceptableOpening(deck.get(i).light, official)) {
+                selected = i;
+                break;
+            }
+        }
+        Card card = deck.remove(selected);
+        int rejected = deck.size() - selected;
+        if (separateDiscardPile) {
+            for (int i = deck.size() - 1; i >= selected; i--) discardDeck.add(deck.get(i));
+            deck.subList(selected, deck.size())
+                .clear();
+        } else if (rejected > 0) {
+            Collections.rotate(deck, rejected);
+        }
+        return card;
+    }
+
+    private void startInitialTurn(ActionReport report) {
+        if (checkEndConditions(currentPlayer(), report) != null || pauseForDecision(ResumePoint.INITIAL_TURN)) return;
+        if (currentPlayer().eliminated) {
+            advanceTurn(report);
+            return;
+        }
+        GameHooks.turnStarted(this, currentPlayer(), report);
+        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.HOLD)) return;
+        if (checkEndConditions(currentPlayer(), report) != null) return;
+        if (currentPlayer().eliminated) advanceTurn(report);
+        else pauseForDecision(ResumePoint.HOLD);
     }
 
     private static boolean acceptableOpening(CardFace face, boolean official) {
@@ -652,7 +715,7 @@ public class CardGame {
         if (type == CardTypes.SKIP) {
             currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         } else if (type == CardTypes.REVERSE) {
-            if (activePlayers().size() == 2) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+            if (activePlayerCount() == 2) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
             else isAntiClockwise = true;
         } else if (type == CardTypes.DRAW2) {
             drawCardsRaw(first, 2, null);
@@ -677,9 +740,6 @@ public class CardGame {
         }
         if (currentPlayerPhase == PlayerActionPhase.BRING) {
             return !face.isWild() && face.color == currentColor && !useFlex ? null : "game.minopp.play.bring_only";
-        }
-        if (rule(GameRules.NUMBER_FINISH) && player.hand.size() == 1 && !face.isNumber()) {
-            return "game.minopp.play.number_finish";
         }
         if (useFlex) {
             if (!rule(GameRules.FLEX_POWER) || !player.powerOn || (!type.hasFlex() && face.flexColor == null)) {
@@ -719,8 +779,8 @@ public class CardGame {
         if (currentColor == CardColor.WILD || matchColor == currentColor) return null;
         CardFace top = topFace();
         if (!top.isWild() || top.type().keepsColor || !top.type().matchAliases.isEmpty() || signNumber >= 0) {
-            if (face.symbolKey()
-                .equals(topSymbolKey()) || signNumber < 0 && type.sharesSymbol(top.type())) return null;
+            if (signNumber >= 0 ? face.symbolKey()
+                .equals(topSymbolKey()) : face.sharesSymbol(top)) return null;
         }
         return "game.minopp.play.invalid_card";
     }
@@ -730,8 +790,21 @@ public class CardGame {
         String reason = GameHooks.checkPlayable(this, player, card, useFlex);
         if (reason != null) return reason;
         CardFace face = face(card);
+        if (rule(GameRules.NUMBER_FINISH) && player.hand.size() == 1 && !face.isNumber()) {
+            return "game.minopp.play.number_finish";
+        }
         CardType.Condition condition = face.type().condition;
         return condition != null && !condition.test(this, player, face) ? "game.minopp.play.invalid_card" : null;
+    }
+
+    /**
+     * Checks ownership and common restrictions for a response card, independently of the current turn phase.
+     */
+    public String checkResponse(CardPlayer player, Card card) {
+        CardPlayer member = deAmputate(player);
+        if (member == null || member.eliminated) return "game.minopp.play.no_player";
+        Card held = heldCard(member, card.uid);
+        return held == null ? "game.minopp.play.not_your_card" : checkCardRestrictions(member, held, false);
     }
 
     /**
@@ -743,17 +816,27 @@ public class CardGame {
         int idx = players.indexOf(player);
         if (idx == -1 || players.get(idx).eliminated) return "game.minopp.play.no_player";
         CardPlayer real = players.get(idx);
-        if (real.hand.stream()
-            .noneMatch(c -> c.uid == card.uid)) return "game.minopp.play.not_your_card";
+        Card held = heldCard(real, card.uid);
+        if (held == null) return "game.minopp.play.not_your_card";
+        return checkPlayTurn(real, held, useFlex, idx);
+    }
+
+    private static Card heldCard(CardPlayer player, int uid) {
+        for (Card card : player.hand) if (card.uid == uid) return card;
+        return null;
+    }
+
+    private String checkPlayTurn(CardPlayer player, Card card, boolean useFlex, int playerIndex) {
         if (!decisions.isEmpty()) return "game.minopp.play.waiting_decision";
         boolean identical = isIdenticalToTop(card);
         if (awaitingCutIn && !(identical && rule(GameRules.JUMP_IN))) return "game.minopp.play.not_match_cut";
-        if (awaitingCutIn && idx != currentPlayerIndex) return checkCardRestrictions(real, card, false);
-        if (awaitingCutIn || idx != currentPlayerIndex) {
-            boolean jumpIn = rule(GameRules.JUMP_IN) && pendingDraw == 0 && identical && idx != currentPlayerIndex;
-            return jumpIn ? checkCardRestrictions(real, card, false) : "game.minopp.play.not_your_turn";
+        if (awaitingCutIn || playerIndex != currentPlayerIndex) {
+            boolean jumpIn = rule(GameRules.JUMP_IN) && pendingDraw == 0
+                && identical
+                && playerIndex != currentPlayerIndex;
+            return jumpIn ? checkCardRestrictions(player, card, false) : "game.minopp.play.not_your_turn";
         }
-        return checkPlayable(real, card, useFlex);
+        return checkPlayable(player, card, useFlex);
     }
 
     public boolean canPlay(CardPlayer player, Card card) {
@@ -766,7 +849,7 @@ public class CardGame {
     }
 
     public boolean anyOtherPlayerCanCutIn() {
-        if (!rule(GameRules.JUMP_IN)) return false;
+        if (!rule(GameRules.JUMP_IN) || pendingDraw > 0 || !decisions.isEmpty()) return false;
         for (int i = 0; i < players.size(); i++) {
             if (i == currentPlayerIndex || players.get(i).eliminated) continue;
             CardPlayer player = players.get(i);
@@ -777,38 +860,18 @@ public class CardGame {
         return false;
     }
 
-    private ActionReport playCardInner(CardPlayer cardPlayer, int cardUid, PlayContext.PlayChoices choices) {
-        ActionReport report = ActionReport.builder(this, cardPlayer);
-        int playerIndex = players.indexOf(cardPlayer);
-        if (playerIndex == -1 || cardPlayer.eliminated)
+    private ActionReport playCardInner(CardPlayer requestedPlayer, int cardUid, PlayContext.PlayChoices submitted) {
+        ActionReport report = ActionReport.builder(this, requestedPlayer);
+        int playerIndex = players.indexOf(requestedPlayer);
+        if (playerIndex == -1 || players.get(playerIndex).eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
-        Card card = cardPlayer.hand.stream()
-            .filter(c -> c.uid == cardUid)
-            .findFirst()
-            .orElse(null);
+        CardPlayer cardPlayer = players.get(playerIndex);
+        Card card = heldCard(cardPlayer, cardUid);
         if (card == null) return report.fail(Chat.translatable("game.minopp.play.not_your_card"));
-        if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
-
-        if (awaitingCutIn && !(isIdenticalToTop(card) && rule(GameRules.JUMP_IN))) {
-            return report.fail(Chat.translatable("game.minopp.play.not_match_cut"));
-        }
-        boolean isCut = false;
-        if (awaitingCutIn && playerIndex != currentPlayerIndex) {
-            isCut = true;
-        } else if (awaitingCutIn || playerIndex != currentPlayerIndex) {
-            // Jump-in outside the window: an identical card may always be slapped down (house rule)
-            if (rule(GameRules.JUMP_IN) && pendingDraw == 0
-                && decisions.isEmpty()
-                && isIdenticalToTop(card)
-                && playerIndex != currentPlayerIndex) {
-                isCut = true;
-            } else {
-                return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
-            }
-        }
-        String reason = isCut ? checkCardRestrictions(cardPlayer, card, false)
-            : checkPlayable(cardPlayer, card, choices.useFlex);
+        PlayContext.PlayChoices choices = submitted == null ? new PlayContext.PlayChoices() : submitted;
+        String reason = checkPlayTurn(cardPlayer, card, choices.useFlex, playerIndex);
         if (reason != null) return report.fail(Chat.translatable(reason));
+        boolean isCut = playerIndex != currentPlayerIndex;
         cardPlayer.coinLocked = true;
         if (isCut) {
             currentPlayerIndex = playerIndex;
@@ -820,6 +883,7 @@ public class CardGame {
         CardFace face = face(card);
         CardType type = face.type();
         boolean useFlex = choices.useFlex && !isCut;
+        choices.useFlex = useFlex;
         CardType.Choice choice = type.choiceFor(useFlex);
         if (choice.needsColor()) {
             if (choices.color == null || !colors().contains(choices.color)) {
@@ -869,7 +933,7 @@ public class CardGame {
 
         if (!type.keepsColor) {
             if (face.isWild()) {
-                if (choices.color != null) currentColor = choices.color;
+                if (choice.needsColor()) currentColor = choices.color;
             } else {
                 currentColor = useFlex && face.flexColor != null ? face.flexColor : face.color;
             }
@@ -878,14 +942,12 @@ public class CardGame {
             cardPlayer.powerOn = false;
             normalizePower();
         }
-        if (type.drawValue == 0 || useFlex) {
-            if (pendingDraw == 0) challengeable = null;
-        }
+        if (type.isDraw() || pendingDraw == 0) challengeable = null;
 
         if (cardPlayer.hand.isEmpty() && !relay(cardPlayer, report)) {
             if (type.isDraw() && !useFlex && config().getInt(GameRules.SCORE_TARGET) > 0) {
                 CardPlayer next = nextPlayer();
-                if (!next.equals(cardPlayer)) drawCards(next, pendingDraw + type.drawValue, report);
+                if (!next.equals(cardPlayer)) drawCards(next, addCardCounts(pendingDraw, type.drawValue), report);
             }
             GameHooks.played(new PlayContext(this, cardPlayer, card, face, choices, report));
             if (report.shouldDestroyGame) return report;
@@ -893,15 +955,15 @@ public class CardGame {
         }
 
         PlayContext ctx = new PlayContext(this, cardPlayer, card, face, choices, report);
-        CardType.Effect effect = useFlex ? type.flexEffect : type.effect;
+        CardType.Effect effect = useFlex && type.hasFlex() ? type.flexEffect : type.effect;
         if (effect != null) effect.apply(ctx);
         if (report.shouldDestroyGame) return report;
         GameHooks.played(ctx);
         if (report.shouldDestroyGame) return report;
         if (cardPlayer.coinArmed && type.isDraw() && !useFlex) {
             cardPlayer.coinArmed = false;
-            pendingDraw += type.drawValue;
-            lastDrawValue = Math.max(lastDrawValue, type.drawValue * 2);
+            pendingDraw = addCardCounts(pendingDraw, type.drawValue);
+            lastDrawValue = Math.max(lastDrawValue, addCardCounts(type.drawValue, type.drawValue));
             report.messageAll(Chat.translatable("game.minopp.coin.doubled", cardPlayer.name, pendingDraw));
         }
 
@@ -938,6 +1000,10 @@ public class CardGame {
 
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
+        if (currentPlayer().eliminated) {
+            advanceTurn(report);
+            return report.shouldDestroyGame ? report : report.played();
+        }
 
         if (!deferAdvance) {
             if (!isCut && speedLevel > 1 && pendingDraw == 0 && decisions.isEmpty()) {
@@ -947,7 +1013,7 @@ public class CardGame {
                     return report.speed(speedLevel - playedThisTurn, speedLevel);
                 }
                 advanceTurn(report);
-                return report.played();
+                return report.shouldDestroyGame ? report : report.played();
             }
             if (!isCut && type.fast
                 && !useFlex
@@ -980,7 +1046,7 @@ public class CardGame {
             }
             advanceTurn(report);
         }
-        return isCut ? report.cut() : report.played();
+        return report.shouldDestroyGame ? report : isCut ? report.cut() : report.played();
     }
 
     private ActionReport checkEndConditions(CardPlayer actor, ActionReport report) {
@@ -991,13 +1057,14 @@ public class CardGame {
         }
         applyMercy(report);
         if (report.shouldDestroyGame) return report;
-        List<CardPlayer> active = activePlayers();
-        if (active.size() == 1 && !debug) return win(active.get(0), report);
-        if (active.isEmpty()) return report.panic(Chat.translatable("game.minopp.play.deck_depleted"));
-        if (players.get(currentPlayerIndex).eliminated) {
-            currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
-            resetTurnTimer();
+        CardPlayer survivor = null;
+        int active = 0;
+        for (CardPlayer player : players) if (!player.eliminated) {
+            survivor = player;
+            active++;
         }
+        if (active == 1 && !debug) return win(survivor, report);
+        if (active == 0) return report.panic(Chat.translatable("game.minopp.play.deck_depleted"));
         return null;
     }
 
@@ -1018,11 +1085,12 @@ public class CardGame {
         return report;
     }
 
-    private ActionReport playNoCardInner(CardPlayer cardPlayer) {
-        ActionReport report = ActionReport.builder(this, cardPlayer);
-        int playerIndex = players.indexOf(cardPlayer);
-        if (playerIndex == -1 || cardPlayer.eliminated)
+    private ActionReport playNoCardInner(CardPlayer requestedPlayer) {
+        ActionReport report = ActionReport.builder(this, requestedPlayer);
+        int playerIndex = players.indexOf(requestedPlayer);
+        if (playerIndex == -1 || players.get(playerIndex).eliminated)
             return report.fail(Chat.translatable("game.minopp.play.no_player"));
+        CardPlayer cardPlayer = players.get(playerIndex);
         if (playerIndex != currentPlayerIndex || awaitingCutIn)
             return report.fail(Chat.translatable("game.minopp.play.not_your_turn"));
         if (!decisions.isEmpty()) return report.fail(Chat.translatable("game.minopp.play.waiting_decision"));
@@ -1037,43 +1105,45 @@ public class CardGame {
             ActionReport end = checkEndConditions(cardPlayer, report);
             if (end != null) return end;
             advanceTurn(report);
-            return report.state(Chat.translatable("game.minopp.play.crash", cardPlayer.name, amount));
+            return report.shouldDestroyGame ? report
+                : report.state(Chat.translatable("game.minopp.play.crash", cardPlayer.name, amount));
         }
         if (currentPlayerPhase == PlayerActionPhase.CHAIN || currentPlayerPhase == PlayerActionPhase.BRING
             || currentPlayerPhase == PlayerActionPhase.FAST) {
             report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
-            return report.state(Chat.translatable("game.minopp.play.chain_end", cardPlayer.name));
+            return report.shouldDestroyGame ? report
+                : report.state(Chat.translatable("game.minopp.play.chain_end", cardPlayer.name));
         }
         if (currentPlayerPhase == PlayerActionPhase.DISCARD_DRAWN) {
             report.sound(GameSounds.PASS, 0);
             advanceTurn(report);
-            return report.playedNoCard(true);
+            return report.shouldDestroyGame ? report : report.playedNoCard(true);
         }
 
         if (pendingDraw > 0) {
-            int amount = pendingDraw;
-            takePendingDraw(cardPlayer, report);
+            int amount = takePendingDraw(cardPlayer, report);
             ActionReport end = checkEndConditions(cardPlayer, report);
             if (end != null) return end;
             advanceTurn(report);
-            return report.drew(amount);
+            return report.shouldDestroyGame ? report : report.drew(amount);
         }
 
-        return continueDraw(cardPlayer, 0, null, rule(GameRules.DRAW_TO_MATCH), report);
+        return continueDraw(cardPlayer, 0, 0, null, rule(GameRules.DRAW_TO_MATCH), report);
     }
 
-    private ActionReport continueDraw(CardPlayer cardPlayer, int drawn, Card last, boolean toMatch,
+    private ActionReport continueDraw(CardPlayer cardPlayer, int drawn, int attempts, Card last, boolean toMatch,
         ActionReport report) {
         int limit = toMatch ? 40 : 1;
-        while (drawn < limit && (drawn == 0 || last != null && !canPlay(cardPlayer, last))) {
+        while (attempts < limit && (attempts == 0 || last != null && !canPlay(cardPlayer, last))) {
             List<Card> got = drawCards(cardPlayer, 1, report);
             if (report.shouldDestroyGame) return report;
             if (got.isEmpty()) break;
-            drawn += toMatch ? 1 : got.size();
+            attempts++;
+            drawn = addCardCounts(drawn, got.size());
             last = got.get(0);
             if (pauseForDecision(ResumePoint.DRAW)) {
-                suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, last.uid, toMatch);
+                suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, attempts, last.uid, toMatch);
                 return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
             }
         }
@@ -1083,13 +1153,18 @@ public class CardGame {
         ActionReport end = checkEndConditions(cardPlayer, report);
         if (end != null) return end;
 
+        if (cardPlayer.eliminated) {
+            advanceTurn(report);
+            return report.shouldDestroyGame ? report : report.drew(drawn);
+        }
         if (pauseForDecision(ResumePoint.DRAW)) {
-            suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, last == null ? -1 : last.uid, toMatch);
+            suspendedDraw = new DrawProgress(cardPlayer.uuid, drawn, attempts, last == null ? -1 : last.uid, toMatch);
             return report.state(Chat.translatable("game.minopp.play.waiting_decision"));
         }
         boolean playable = last != null && !isDebugger(cardPlayer) && canPlay(cardPlayer, last);
         if (playable && rule(GameRules.FORCED_PLAY)) {
-            PlayContext.PlayChoices choices = AutoPlayer.defaultChoices(this, cardPlayer, last);
+            PlayContext.PlayChoices choices = AutoPlayer
+                .defaultChoices(this, cardPlayer, last, checkPlayable(cardPlayer, last, false) != null);
             currentPlayerPhase = PlayerActionPhase.DISCARD_DRAWN;
             drawnCardUid = last.uid;
             ActionReport playReport = playCard(cardPlayer, last.uid, choices);
@@ -1105,11 +1180,14 @@ public class CardGame {
             return report.drew(drawn);
         }
         advanceTurn(report);
-        return report.drew(drawn);
+        return report.shouldDestroyGame ? report : report.drew(drawn);
     }
 
-    public ActionReport shoutMino(CardPlayer realPlayer) {
-        ActionReport report = ActionReport.builder(this, realPlayer);
+    public ActionReport shoutMino(CardPlayer player) {
+        ActionReport report = ActionReport.builder(this, player);
+        CardPlayer realPlayer = deAmputate(player);
+        if (realPlayer == null || realPlayer.eliminated)
+            return report.fail(Chat.translatable("game.minopp.play.no_player"));
         if (!realPlayer.hasShoutedMino) {
             int idx = players.indexOf(realPlayer);
             if (idx != currentPlayerIndex || awaitingCutIn) {
@@ -1125,10 +1203,12 @@ public class CardGame {
         return null;
     }
 
-    public ActionReport doubtMino(CardPlayer srcPlayer, UUID targetPlayerWithoutHand) {
-        ActionReport report = ActionReport.builder(this, srcPlayer);
+    public ActionReport doubtMino(CardPlayer player, UUID targetPlayerWithoutHand) {
+        ActionReport report = ActionReport.builder(this, player);
+        CardPlayer srcPlayer = deAmputate(player);
         CardPlayer targetPlayer = deAmputate(targetPlayerWithoutHand);
-        if (targetPlayer == null) return report.fail(Chat.translatable("game.minopp.play.no_player"));
+        if (srcPlayer == null || srcPlayer.eliminated || targetPlayer == null || targetPlayer.eliminated)
+            return report.fail(Chat.translatable("game.minopp.play.no_player"));
         if (players.get(currentPlayerIndex)
             .equals(targetPlayer)) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_playing"));
@@ -1136,7 +1216,7 @@ public class CardGame {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_self"));
         } else if (targetPlayer.hasShoutedMino) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_shouted"));
-        } else if (targetPlayer.hand.size() > 1) {
+        } else if (targetPlayer.hand.size() != 1) {
             return report.fail(Chat.translatable("game.minopp.play.doubt_target_hand"));
         } else {
             boolean hadDecisions = !decisions.isEmpty();
@@ -1150,7 +1230,7 @@ public class CardGame {
         }
     }
 
-    private ActionReport answerDecisionInner(CardPlayer player, UUID decisionId, int answer, UUID target) {
+    private ActionReport answerDecisionInner(CardPlayer player, UUID decisionId, int[] answers, UUID target) {
         ActionReport report = ActionReport.builder(this, player);
         PendingDecision d = decisionFor(player.uuid);
         CardPlayer participant = deAmputate(player.uuid);
@@ -1160,12 +1240,16 @@ public class CardGame {
             || System.currentTimeMillis() >= d.deadline) {
             return report.fail(Chat.translatable("game.minopp.play.no_decision"));
         }
+        if (answers == null || answers.length == 0 || d.type != PendingDecision.Type.CUSTOM && answers.length != 1) {
+            return report.fail(Chat.translatable("game.minopp.play.invalid_target"));
+        }
+        int answer = answers[0];
         if (d.type == PendingDecision.Type.CUSTOM) {
             int oldAnswer = d.answer;
             UUID oldTarget = d.answerTarget;
             boolean accepted = DecisionTypes.get(d.typeId)
                 .handler()
-                .answer(this, d, answer, target);
+                .answerAll(this, d, answers, target);
             if (!accepted) {
                 d.answer = oldAnswer;
                 d.answerTarget = oldTarget;
@@ -1213,7 +1297,9 @@ public class CardGame {
                 if (!d.isAnswered())
                     throw new IllegalStateException("Automatic answer did not complete decision: " + d.typeId);
             }
-            case CHALLENGE -> d.answer = p != null && p.hand.size() > 6 && random.nextFloat() < 0.35f ? 1 : 0;
+            case CHALLENGE -> d.answer = BotDifficulty.forPlayer(this, p) == BotDifficulty.HIGH
+                ? challengeableHadColor ? 1 : 0
+                : p != null && p.hand.size() > 6 && random.nextFloat() < 0.35f ? 1 : 0;
             case ROULETTE_COLOR -> d.answer = (p != null ? mostCommonColor(p) : colors().get(0)).ordinal();
             case POINT_TAKEN -> {
                 List<CardPlayer> others = activePlayers();
@@ -1305,11 +1391,12 @@ public class CardGame {
                 drawCards(source, amount, report);
                 ActionReport end = checkEndConditions(victim, report);
                 if (end != null) return end;
-                pauseForDecision(ResumePoint.HOLD);
+                if (currentPlayer().eliminated) advanceTurn(report);
+                else pauseForDecision(ResumePoint.HOLD);
                 return null;
             } else {
                 report.messageAll(Chat.translatable("game.minopp.play.challenge_fail", victim.name));
-                pendingDraw += 2;
+                pendingDraw = addCardCounts(pendingDraw, 2);
             }
         }
         takePendingDraw(victim, report);
@@ -1344,9 +1431,13 @@ public class CardGame {
             else currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         } else if (extraTurn) {
             extraTurn = false;
+            if (currentPlayer().eliminated) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         } else {
-            for (int i = 0; i <= skipCount; i++) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
+            int active = activePlayerCount();
+            int skips = active == 0 ? 0 : skipCount % active;
+            for (int i = 0; i <= skips; i++) currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
         }
+        extraTurn = false;
         skipCount = 0;
         debugNext = -1;
         if (debug && debugHold) {
@@ -1387,7 +1478,12 @@ public class CardGame {
     }
 
     private void startTurnHooks(ActionReport report, boolean again) {
-        if (report.shouldDestroyGame) return;
+        if (checkEndConditions(currentPlayer(), report) != null) return;
+        if (currentPlayer().eliminated) {
+            advanceTurn(report);
+            return;
+        }
+        if (pauseForDecision(ResumePoint.TURN_START)) return;
         CardPlayer current = currentPlayer();
         GameHooks.turnStarted(this, current, report);
         if (report.shouldDestroyGame || pauseForDecision(ResumePoint.TURN_READY)) return;
@@ -1403,11 +1499,13 @@ public class CardGame {
     private void resumeAfterDecision(ActionReport report, DecisionTypes.Continuation continuation, boolean again) {
         ResumePoint point = resumePoint;
         resumePoint = ResumePoint.NONE;
+        if (currentPlayer().eliminated) {
+            suspendedDraw = null;
+            advanceTurn(report);
+            return;
+        }
         switch (point) {
-            case INITIAL_TURN -> {
-                GameHooks.turnStarted(this, currentPlayer(), report);
-                pauseForDecision(ResumePoint.HOLD);
-            }
+            case INITIAL_TURN -> startInitialTurn(report);
             case TURN_START -> startTurnHooks(report, again);
             case TURN_READY -> resumeTurn(report, again);
             case PENALTY_NEXT -> finishPenaltyTurn(report);
@@ -1425,7 +1523,7 @@ public class CardGame {
                     last = held;
                     break;
                 }
-                continueDraw(player, progress.count, last, progress.toMatch, report);
+                continueDraw(player, progress.count, progress.attempts, last, progress.toMatch, report);
             }
             case ADVANCE -> advanceTurn(report);
             case HOLD -> {}
@@ -1437,7 +1535,12 @@ public class CardGame {
     }
 
     private void resumeTurn(ActionReport report, boolean again) {
-        if (report.shouldDestroyGame) return;
+        if (checkEndConditions(currentPlayer(), report) != null) return;
+        if (currentPlayer().eliminated) {
+            advanceTurn(report);
+            return;
+        }
+        if (pauseForDecision(ResumePoint.TURN_READY)) return;
         CardPlayer current = currentPlayer();
         if (anyOtherPlayerCanCutIn()) {
             awaitingCutIn = true;
@@ -1464,7 +1567,7 @@ public class CardGame {
     private void resolvePenaltyFor(CardPlayer current, ActionReport report) {
         if (pendingDraw <= 0) return;
         boolean canAnswer = current.hand.stream()
-            .anyMatch(c -> checkPlayable(current, c, false) == null);
+            .anyMatch(c -> canPlay(current, c));
         if (canAnswer) return;
         if (rule(GameRules.CHALLENGE) && challengeable != null && !challengeable.equals(current.uuid)) {
             decisions.add(
@@ -1475,23 +1578,14 @@ public class CardGame {
                     System.currentTimeMillis() + DECISION_TIMEOUT_MS));
             return;
         }
-        int penalty = pendingDraw;
-        takePendingDraw(current, report);
+        int penalty = takePendingDraw(current, report);
         if (checkEndConditions(current, report) != null) return;
         report.state(Chat.translatable("game.minopp.play.drew", current.name, penalty));
         finishPenaltyTurn(report);
     }
 
     private void finishPenaltyTurn(ActionReport report) {
-        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.PENALTY_NEXT)) return;
-        resetTurnTimer();
-        currentPlayerPhase = PlayerActionPhase.DISCARD_HAND;
-        currentPlayerIndex = nextActiveIndex(currentPlayerIndex);
-        hurryTicks = -1;
-        decisionRepeatsTurn = false;
-        GameHooks.turnStarted(this, currentPlayer(), report);
-        if (report.shouldDestroyGame || pauseForDecision(ResumePoint.TURN_NOTICE)) return;
-        announcePenaltyTurn(report);
+        advanceTurn(report);
     }
 
     private void announcePenaltyTurn(ActionReport report) {
@@ -1500,27 +1594,27 @@ public class CardGame {
         GameSounds.turn(report, current, false, Math.max(900, report.soundTail() + 300));
     }
 
-    private void takePendingDraw(CardPlayer victim, ActionReport report) {
+    private int takePendingDraw(CardPlayer victim, ActionReport report) {
         int amount = pendingDraw;
         UUID source = pendingDrawSource;
         if (source != null && victim.uuid.equals(nemesis.get(source))) {
-            amount += 2;
+            amount = addCardCounts(amount, 2);
             report.messageAll(Chat.translatable("game.minopp.play.nemesis_hit", victim.name));
         }
         pendingDraw = 0;
         lastDrawValue = 0;
         pendingDrawSource = null;
         challengeable = null;
-        drawCards(victim, amount, report);
+        return drawCards(victim, amount, report).size();
     }
 
     public void skipNext(int count) {
-        skipCount += count;
+        if (count > 0) skipCount = (int) Math.min(Integer.MAX_VALUE, (long) skipCount + count);
     }
 
     public void reverse() {
-        if (activePlayers().size() == 2) {
-            skipCount += 1;
+        if (activePlayerCount() == 2) {
+            skipNext(1);
         } else {
             isAntiClockwise = !isAntiClockwise;
         }
@@ -1529,6 +1623,8 @@ public class CardGame {
     // reveal the hand: the next player draws one card per action and wild card in it and loses the turn; seven or
     // more makes it 25 for them and 5 for everyone else
     public void finalAttack(CardPlayer player, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         int actions = (int) player.hand.stream()
             .filter(c -> !face(c).isNumber() || face(c).isWild())
             .count();
@@ -1561,7 +1657,7 @@ public class CardGame {
      */
     public ActionReport useCoin(CardPlayer player, boolean flip) {
         CardPlayer member = player == null ? null : deAmputate(player.uuid);
-        if (member == null) return ActionReport.builder(this, player)
+        if (member == null || member.eliminated) return ActionReport.builder(this, player)
             .fail(Chat.translatable("game.minopp.play.no_player"));
         try {
             return useCoinInner(member, flip);
@@ -1626,8 +1722,11 @@ public class CardGame {
     public final Set<UUID> hiddenCounts = new HashSet<>();
     private final Map<UUID, Long> peekUntil = new HashMap<>();
     private final Map<UUID, Long> shownUntil = new HashMap<>();
+    private final Object2LongMap<HandPeek> targetedPeeks = new Object2LongOpenHashMap<>();
     private long revealUntil;
     private static final long HAND_REVEAL_MS = 15_000;
+
+    private record HandPeek(UUID viewer, UUID target) {}
 
     public boolean isPeeking(UUID viewer) {
         if (revealTurns > 0 || revealUntil > System.currentTimeMillis()) return true;
@@ -1710,16 +1809,26 @@ public class CardGame {
     }
 
     public void evenOut(ActionReport report) {
+        List<CardPlayer> active = activePlayers();
         int min = Integer.MAX_VALUE;
-        for (CardPlayer p : activePlayers()) if (!p.hand.isEmpty()) min = Math.min(min, p.hand.size());
+        for (CardPlayer p : active) if (!p.hand.isEmpty()) min = Math.min(min, p.hand.size());
         if (min == Integer.MAX_VALUE) return;
-        for (CardPlayer p : activePlayers()) {
-            while (p.hand.size() > min) toDeckBottom(p.hand.remove(random.nextInt(p.hand.size())));
+        List<Card> returned = new ArrayList<>();
+        for (CardPlayer p : active) {
+            while (p.hand.size() > min) {
+                Card card = p.hand.remove(random.nextInt(p.hand.size()));
+                card.owner = null;
+                returned.add(card);
+            }
         }
+        Collections.reverse(returned);
+        deck.addAll(0, returned);
         report.messageAll(Chat.translatable("game.minopp.play.even_out", min));
     }
 
     public void surprise(CardPlayer player, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         String key;
         switch (random.nextInt(6)) {
             case 0 -> {
@@ -1787,8 +1896,11 @@ public class CardGame {
     }
 
     public void trickster(CardPlayer player, CardPlayer target, ActionReport report) {
-        if (target.equals(player)) return;
+        player = deAmputate(player);
+        target = deAmputate(target);
+        if (player == null || target == null || player.eliminated || target.eliminated || target.equals(player)) return;
         drawCards(target, 4, report);
+        if (report.shouldDestroyGame || target.eliminated) return;
         for (int i = 0; i < 2 && !target.hand.isEmpty(); i++) {
             toDeckBottom(target.hand.remove(random.nextInt(target.hand.size())));
         }
@@ -1796,6 +1908,8 @@ public class CardGame {
     }
 
     public void surge(CardPlayer player, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         player.hand.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
         int n = Math.min(2, player.hand.size());
         List<Card> discarded = player.hand.subList(0, n);
@@ -1872,11 +1986,13 @@ public class CardGame {
     }
 
     public void gift(CardPlayer player, ActionReport report) {
-        if (player.hand.isEmpty()) return;
+        player = deAmputate(player);
+        if (player == null || player.eliminated || player.hand.isEmpty()) return;
         CardPlayer receiver = nextPlayer();
         Card c = player.hand.remove(random.nextInt(player.hand.size()));
         c.owner = receiver.uuid;
         receiver.hand.add(c);
+        if (receiver.hand.size() > 1) receiver.hasShoutedMino = false;
         report.messageAll(Chat.translatable("game.minopp.play.gift", player.name, receiver.name));
     }
 
@@ -1901,10 +2017,17 @@ public class CardGame {
     }
 
     public void steal(CardPlayer player, CardPlayer target, ActionReport report) {
-        if (target.equals(player) || target.hand.isEmpty()) return;
+        player = deAmputate(player);
+        target = deAmputate(target);
+        if (player == null || target == null
+            || player.eliminated
+            || target.eliminated
+            || target.equals(player)
+            || target.hand.isEmpty()) return;
         Card c = target.hand.remove(random.nextInt(target.hand.size()));
         c.owner = player.uuid;
         player.hand.add(c);
+        if (player.hand.size() > 1) player.hasShoutedMino = false;
         target.hasShoutedMino = false;
         report.messageAll(Chat.translatable("game.minopp.play.thief", player.name, target.name));
     }
@@ -1920,22 +2043,32 @@ public class CardGame {
 
     public void stackNumber(CardPlayer player, ActionReport report) {
         int n = 0;
-        for (int guard = 0; guard < 60 && !deck.isEmpty(); guard++) {
-            Card c = deck.remove(deck.size() - 1);
+        int revealedCount = 0;
+        for (int guard = 0; guard < 60 && guard < deck.size(); guard++) {
+            Card c = deck.get(deck.size() - 1 - guard);
             c.owner = null;
-            discardDeck.add(0, c);
+            revealedCount++;
             CardFace f = face(c);
             if (f.isNumber() && !f.isWild()) {
                 n = Math.max(0, f.number);
                 break;
             }
         }
+        List<Card> revealed = deck.subList(deck.size() - revealedCount, deck.size());
+        discardDeck.addAll(0, revealed);
+        revealed.clear();
         if (n > 0) addPendingDraw(n, player);
         report.messageAll(Chat.translatable("game.minopp.play.stack_number", player.name, n));
     }
 
     public void swapOne(CardPlayer player, CardPlayer target, ActionReport report) {
-        if (target == null || target.equals(player) || target.hand.isEmpty()) return;
+        player = deAmputate(player);
+        target = deAmputate(target);
+        if (player == null || target == null
+            || player.eliminated
+            || target.eliminated
+            || target.equals(player)
+            || target.hand.isEmpty()) return;
         Card taken = target.hand.remove(random.nextInt(target.hand.size()));
         Card give = player.hand.stream()
             .max(Comparator.comparingInt(this::cardPoints))
@@ -1953,9 +2086,14 @@ public class CardGame {
     }
 
     public void refreshHand(CardPlayer player, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         int n = player.hand.size();
         if (n == 0) return;
-        for (Card c : new ArrayList<>(player.hand)) toDeckBottom(c);
+        List<Card> returned = new ArrayList<>(player.hand);
+        for (Card card : returned) card.owner = null;
+        Collections.reverse(returned);
+        deck.addAll(0, returned);
         player.hand.clear();
         player.hasShoutedMino = false;
         drawCards(player, n, report);
@@ -1963,10 +2101,10 @@ public class CardGame {
     }
 
     public void forceTrade(CardPlayer a, CardPlayer b, ActionReport report) {
-        if (a == null || b == null || a.equals(b)) return;
+        a = deAmputate(a);
+        b = deAmputate(b);
+        if (a == null || b == null || a.eliminated || b.eliminated || a.equals(b)) return;
         swapHands(a, b, report);
-        a.hasShoutedMino = false;
-        b.hasShoutedMino = false;
         report.messageAll(Chat.translatable("game.minopp.play.force_trade", a.name, b.name));
     }
 
@@ -1977,7 +2115,7 @@ public class CardGame {
     }
 
     private boolean turnReverses() {
-        if (activePlayers().size() <= 2) return false;
+        if (activePlayerCount() <= 2) return false;
         isAntiClockwise = !isAntiClockwise;
         return true;
     }
@@ -2036,7 +2174,7 @@ public class CardGame {
     public void blockRebound(CardPlayer player, ActionReport report) {
         CardPlayer source = drawSource(player);
         if (source == null) return;
-        int amount = pendingDraw + 1;
+        int amount = addCardCounts(pendingDraw, 1);
         pendingDraw = amount;
         takePendingDraw(source, report);
         report.messageAll(Chat.translatable("game.minopp.play.no_u", player.name, source.name, amount));
@@ -2055,20 +2193,19 @@ public class CardGame {
     }
 
     public void eliminator(CardPlayer player, ActionReport report) {
-        int total = 0;
+        List<Card> discarded = new ArrayList<>();
         for (CardPlayer p : activePlayers()) {
             if (p.equals(player)) continue;
-            List<Card> wilds = p.hand.stream()
-                .filter(c -> face(c).isWild())
-                .toList();
-            for (Card c : wilds) {
-                p.hand.remove(c);
-                c.owner = null;
-                discardDeck.add(0, c);
-            }
-            total += wilds.size();
+            p.hand.removeIf(card -> {
+                if (!face(card).isWild()) return false;
+                card.owner = null;
+                discarded.add(card);
+                return true;
+            });
         }
-        report.messageAll(Chat.translatable("game.minopp.play.eliminator", player.name, total));
+        Collections.reverse(discarded);
+        discardDeck.addAll(0, discarded);
+        report.messageAll(Chat.translatable("game.minopp.play.eliminator", player.name, discarded.size()));
     }
 
     public void markNemesis(CardPlayer player, CardPlayer target, ActionReport report) {
@@ -2084,7 +2221,8 @@ public class CardGame {
     }
 
     public void matchTheMax(CardPlayer target, ActionReport report) {
-        if (target == null) return;
+        target = deAmputate(target);
+        if (target == null || target.eliminated) return;
         int n = largestHand() - target.hand.size();
         if (n > 0) drawCards(target, n, report);
         report.messageAll(Chat.translatable("game.minopp.play.match_max", target.name, Math.max(0, n)));
@@ -2099,8 +2237,10 @@ public class CardGame {
     }
 
     public void pullForChat(CardPlayer player, CardPlayer target, ActionReport report) {
-        if (target == null || target.equals(player)) return;
-        peekUntil.put(player.uuid, System.currentTimeMillis() + 6000);
+        player = deAmputate(player);
+        target = deAmputate(target);
+        if (player == null || player.eliminated || target == null || target.eliminated || target.equals(player)) return;
+        targetedPeeks.put(new HandPeek(player.uuid, target.uuid), System.currentTimeMillis() + 6000);
         swapOne(player, target, report);
     }
 
@@ -2124,10 +2264,13 @@ public class CardGame {
         if (size < 2 || color == null) return;
         List<List<Card>> passed = new ArrayList<>();
         for (CardPlayer p : active) {
-            List<Card> out = p.hand.stream()
-                .filter(c -> !face(c).isWild() && face(c).color == color)
-                .toList();
-            p.hand.removeAll(out);
+            List<Card> out = new ArrayList<>();
+            p.hand.removeIf(card -> {
+                CardFace face = face(card);
+                if (face.isWild() || face.color != color) return false;
+                out.add(card);
+                return true;
+            });
             passed.add(out);
         }
         for (int i = 0; i < size; i++) {
@@ -2193,13 +2336,21 @@ public class CardGame {
     }
 
     public void addPendingDraw(int amount, CardPlayer source) {
-        pendingDraw += amount;
+        source = deAmputate(source);
+        if (amount <= 0 || source == null || source.eliminated) return;
+        pendingDraw = addCardCounts(pendingDraw, amount);
         lastDrawValue = amount;
         pendingDrawSource = source.uuid;
     }
 
+    private static int addCardCounts(int first, int second) {
+        return (int) Math.min(Integer.MAX_VALUE, (long) Math.max(0, first) + Math.max(0, second));
+    }
+
     public void markChallengeable(CardPlayer player) {
         if (!rule(GameRules.CHALLENGE)) return;
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         challengeable = player.uuid;
         CardColor before = colorBeforePlay;
         challengeableHadColor = before != null && before != CardColor.WILD
@@ -2219,21 +2370,23 @@ public class CardGame {
         }
     }
 
-    public void discardAllOfColor(CardPlayer player, CardColor color, ActionReport report) {
-        List<Card> toDiscard = player.hand.stream()
-            .filter(c -> face(c).color == color)
-            .toList();
-        if (toDiscard.isEmpty()) return;
-        player.hand.removeAll(toDiscard);
-        for (Card c : toDiscard) {
-            c.owner = player.uuid;
-            discardDeck.add(c);
-        }
+    public void discardAllOfColor(CardPlayer requestedPlayer, CardColor color, ActionReport report) {
+        CardPlayer player = deAmputate(requestedPlayer);
+        if (player == null || player.eliminated || color == null) return;
+        int before = player.hand.size();
+        player.hand.removeIf(card -> {
+            if (face(card).color != color) return false;
+            card.owner = player.uuid;
+            discardDeck.add(card);
+            return true;
+        });
+        int discarded = before - player.hand.size();
+        if (discarded == 0) return;
         report.messageAll(
             Chat.translatable(
                 "game.minopp.play.discard_all",
                 player.name,
-                toDiscard.size(),
+                discarded,
                 Chat.translatable(color.langKey())));
     }
 
@@ -2256,13 +2409,15 @@ public class CardGame {
     }
 
     public int drawUntilColor(CardPlayer victim, CardColor color, ActionReport report) {
+        victim = deAmputate(victim);
+        if (victim == null || victim.eliminated || color == null || color.isWild()) return 0;
         int count = 0;
         long available = (long) deck.size() + playedDeck.size() + discardDeck.size();
         while (count < available && !victim.eliminated) {
             List<Card> got = drawCards(victim, 1, report);
             if (got.isEmpty()) break;
-            count++;
-            if (report.shouldDestroyGame) break;
+            count = addCardCounts(count, got.size());
+            if (report != null && report.shouldDestroyGame) break;
             if (face(got.get(0)).color == color) break;
         }
         return count;
@@ -2340,7 +2495,7 @@ public class CardGame {
         if (pendingDrawSource == null || pendingDrawSource.equals(player.uuid)) return;
         CardPlayer source = deAmputate(pendingDrawSource);
         if (source == null || source.eliminated) return;
-        pendingDraw *= 2;
+        pendingDraw = addCardCounts(pendingDraw, pendingDraw);
         pendingDrawSource = player.uuid;
         forcedNext = source.uuid;
         report.messageAll(Chat.translatable("game.minopp.play.rebound", player.name, source.name, pendingDraw));
@@ -2363,7 +2518,9 @@ public class CardGame {
         Collections.shuffle(pool, random);
         int k = 0;
         for (int i = 0; i < active.size(); i++) {
-            for (int j = 0; j < sizes[i]; j++) active.get(i).hand.add(pool.get(k++));
+            CardPlayer recipient = active.get(i);
+            for (int j = 0; j < sizes[i]; j++) recipient.hand.add(pool.get(k++));
+            handTransferred(recipient);
         }
         handMoveKind = 1;
         handMoveCounter++;
@@ -2447,26 +2604,31 @@ public class CardGame {
      * Discards the cards the player picked; missing or invalid picks are made up with their highest-scoring cards.
      */
     public void discardPicked(CardPlayer player, CardType type, PlayContext.PlayChoices choices, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         int need = type.pickCount(player.hand.size());
         if (need == 0) return;
-        List<Card> chosen = new ArrayList<>();
+        Int2ObjectOpenHashMap<Card> held = new Int2ObjectOpenHashMap<>(player.hand.size());
+        for (Card card : player.hand) held.put(card.uid, card);
+        IntSet selected = new IntOpenHashSet(need);
+        List<Card> chosen = new ArrayList<>(need);
         for (int uid : choices.picks) {
             if (chosen.size() >= need) break;
-            for (Card c : player.hand) if (c.uid == uid && !chosen.contains(c)) chosen.add(c);
+            Card card = held.get(uid);
+            if (card != null && selected.add(uid)) chosen.add(card);
         }
         if (chosen.size() < need) {
-            List<Card> rest = new ArrayList<>(player.hand);
-            rest.removeAll(chosen);
+            List<Card> rest = new ArrayList<>(player.hand.size() - chosen.size());
+            for (Card card : player.hand) if (!selected.contains(card.uid)) rest.add(card);
             rest.sort((a, b) -> Integer.compare(cardPoints(b), cardPoints(a)));
             for (Card c : rest) {
                 if (chosen.size() >= need) break;
                 chosen.add(c);
+                selected.add(c.uid);
             }
         }
-        for (Card c : chosen) {
-            player.hand.remove(c);
-            discardDeck.add(c);
-        }
+        player.hand.removeIf(c -> selected.contains(c.uid));
+        discardDeck.addAll(chosen);
         if (player.hand.size() == 1) player.hasShoutedMino = true;
         report.messageAll(Chat.translatable("game.minopp.play.discarded", player.name, chosen.size()));
     }
@@ -2517,6 +2679,8 @@ public class CardGame {
      * Three sevens guarantee a discard choice; otherwise the coin decides between discarding and drawing seven.
      */
     public void luckySeven(CardPlayer player, ActionReport report) {
+        player = deAmputate(player);
+        if (player == null || player.eliminated) return;
         long sevens = player.hand.stream()
             .filter(c -> {
                 CardFace f = face(c);
@@ -2542,12 +2706,19 @@ public class CardGame {
     }
 
     public void swapHands(CardPlayer initiator, CardPlayer target, ActionReport report) {
-        if (initiator == null || target == null) return;
+        initiator = deAmputate(initiator);
+        target = deAmputate(target);
+        if (initiator == null || target == null
+            || initiator.eliminated
+            || target.eliminated
+            || initiator.equals(target)) return;
         List<Card> a = new ArrayList<>(initiator.hand);
         initiator.hand.clear();
         initiator.hand.addAll(target.hand);
         target.hand.clear();
         target.hand.addAll(a);
+        handTransferred(initiator);
+        handTransferred(target);
         lastSwapFromUuid = initiator.uuid;
         lastSwapToUuid = target.uuid;
         handMoveKind = 7;
@@ -2570,12 +2741,24 @@ public class CardGame {
         for (int i = 0; i < size; i++) {
             int to = isAntiClockwise ? (i - 1 + size) % size : (i + 1) % size;
             active.get(to).hand.addAll(oldHands.get(i));
+            handTransferred(active.get(to));
         }
         handMoveKind = 0;
         handMoveCounter++;
     }
 
-    public void doDiscardCard(CardPlayer player, Card card, ActionReport report) {
+    private static void handTransferred(CardPlayer player) {
+        for (Card card : player.hand) card.owner = player.uuid;
+        player.hasShoutedMino = false;
+    }
+
+    public void doDiscardCard(CardPlayer requestedPlayer, Card requestedCard, ActionReport report) {
+        Objects.requireNonNull(report, "report");
+        if (report.shouldDestroyGame || requestedCard == null) return;
+        CardPlayer player = deAmputate(requestedPlayer);
+        if (player == null || player.eliminated) return;
+        Card card = heldCard(player, requestedCard.uid);
+        if (card == null || topCard != null && card.uid == topCard.uid) return;
         if (debug && !separateDiscardPile) {
             for (String required : TableConfig.rulesForCard(face(card).typeId)) {
                 if (GameRules.DISCARD_PILE.equals(required)) {
@@ -2585,7 +2768,7 @@ public class CardGame {
             }
         }
         signNumber = -1;
-        playedCards().add(topCard);
+        if (topCard != null) playedCards().add(topCard);
         topCard = card;
         card.owner = player.uuid;
         player.hand.remove(card);
@@ -2657,6 +2840,8 @@ public class CardGame {
             .removeIf(until -> until <= now);
         expired |= shownUntil.values()
             .removeIf(until -> until <= now);
+        expired |= targetedPeeks.values()
+            .removeIf((long until) -> until <= now);
         ActionReport report = tickActionTimers();
         return report != null || !expired ? report : ActionReport.builder(this, currentPlayer());
     }
@@ -2698,10 +2883,12 @@ public class CardGame {
     public static final int HURRY_TICKS = 6 * 20;
 
     public List<Card> drawCards(CardPlayer cardPlayer, int count, ActionReport report) {
-        if (report != null && report.shouldDestroyGame) return List.of();
+        if (count <= 0 || report != null && report.shouldDestroyGame) return List.of();
+        cardPlayer = deAmputate(cardPlayer);
+        if (cardPlayer == null || cardPlayer.eliminated) return List.of();
         if (trapArmed && count > 0) {
             trapArmed = false;
-            count += 3;
+            count = addCardCounts(count, 3);
             if (report != null) {
                 report.messageAll(Chat.translatable("game.minopp.play.trap_sprung", cardPlayer.name));
                 report.sound(new ResourceLocation("minecraft", "random.explode"), 0, 0.4f, 1.3f);
@@ -2718,22 +2905,31 @@ public class CardGame {
     }
 
     private List<Card> drawCardsRaw(CardPlayer cardPlayer, int count, ActionReport report) {
-        List<Card> drawn = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            if (deck.isEmpty()) reshuffle();
-            if (deck.isEmpty()) break;
-            Card c = deck.remove(deck.size() - 1);
-            c.owner = cardPlayer.uuid;
-            drawn.add(c);
-            if (isDebugger(cardPlayer)) {
-                // Preview draws without changing the debug hand.
-                deck.add(0, c);
-                debugDrawn.add(c);
-                debugDrawSeq++;
-                while (debugDrawn.size() > 12) debugDrawn.remove(0);
-                continue;
+        if (count <= 0) return List.of();
+        if (deck.isEmpty()) reshuffle();
+        if (deck.isEmpty()) return List.of();
+        List<Card> drawn = new ArrayList<>(Math.min(count, deck.size()));
+        if (isDebugger(cardPlayer)) {
+            int shown = Math.min(count, deck.size());
+            for (int i = 0; i < shown; i++) {
+                Card card = deck.get(deck.size() - 1 - i);
+                card.owner = cardPlayer.uuid;
+                drawn.add(card);
             }
-            cardPlayer.hand.add(c);
+            if (shown > 0) Collections.rotate(deck, shown);
+            debugDrawn.addAll(drawn);
+            debugDrawSeq += shown;
+            if (debugDrawn.size() > 12) debugDrawn.subList(0, debugDrawn.size() - 12)
+                .clear();
+        } else {
+            for (int i = 0; i < count; i++) {
+                if (deck.isEmpty()) reshuffle();
+                if (deck.isEmpty()) break;
+                Card card = deck.remove(deck.size() - 1);
+                card.owner = cardPlayer.uuid;
+                drawn.add(card);
+                cardPlayer.hand.add(card);
+            }
         }
         GameSounds.draws(report, drawn.size(), 0);
         if (!drawn.isEmpty() && cardPlayer.hand.size() > 1) cardPlayer.hasShoutedMino = false;
@@ -2742,7 +2938,7 @@ public class CardGame {
     }
 
     public boolean doDrawCard(CardPlayer cardPlayer, int drawCount, ActionReport report) {
-        return drawCards(cardPlayer, drawCount, report).size() == drawCount;
+        return drawCount >= 0 && drawCards(cardPlayer, drawCount, report).size() >= drawCount;
     }
 
     private void applyMercy(ActionReport report) {
@@ -2760,6 +2956,7 @@ public class CardGame {
                 report.messageAll(Chat.translatable("game.minopp.coin.saved", p.name));
                 continue;
             }
+            removeEliminatedSkips(players.indexOf(p));
             p.eliminated = true;
             discardDeck.addAll(0, p.hand);
             p.hand.clear();
@@ -2768,6 +2965,19 @@ public class CardGame {
                 .removeIf(u -> u.equals(p.uuid));
             report.messageAll(Chat.translatable("game.minopp.play.mercy", p.name, limit));
             GameSounds.elimination(report);
+        }
+    }
+
+    private void removeEliminatedSkips(int eliminatedIndex) {
+        if (skipCount <= 0 || extraTurn || forcedNext != null) return;
+        int active = activePlayerCount();
+        int index = currentPlayerIndex;
+        for (int distance = 1; distance <= active && distance <= skipCount; distance++) {
+            index = nextActiveIndex(index);
+            if (index == eliminatedIndex) {
+                skipCount -= 1 + (skipCount - distance) / active;
+                return;
+            }
         }
     }
 
@@ -2877,16 +3087,27 @@ public class CardGame {
         revealUntil = tag.getLong("revealUntil");
         readDeadlines(tag.getTagList("peekUntil", 10), peekUntil);
         readDeadlines(tag.getTagList("shownUntil", 10), shownUntil);
+        NBTTagList peeks = tag.getTagList("targetedPeeks", 10);
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < peeks.tagCount(); i++) {
+            NBTTagCompound peek = peeks.getCompoundTagAt(i);
+            if (NbtUtil.hasUUID(peek, "viewer") && NbtUtil.hasUUID(peek, "target") && peek.getLong("until") > now) {
+                targetedPeeks.put(
+                    new HandPeek(NbtUtil.getUUID(peek, "viewer"), NbtUtil.getUUID(peek, "target")),
+                    peek.getLong("until"));
+            }
+        }
         if (tag.hasKey("resumePoint")) resumePoint = ResumePoint.valueOf(tag.getString("resumePoint"));
         if (tag.hasKey("suspendedDraw", 10)) {
             NBTTagCompound draw = tag.getCompoundTag("suspendedDraw");
             suspendedDraw = new DrawProgress(
                 NbtUtil.getUUID(draw, "player"),
-                draw.getInteger("count"),
+                Math.max(0, draw.getInteger("count")),
+                Math.max(0, draw.hasKey("attempts") ? draw.getInteger("attempts") : draw.getInteger("count")),
                 draw.getInteger("lastUid"),
                 draw.getBoolean("toMatch"));
         }
-        skipCount = tag.getInteger("skipCount");
+        skipCount = Math.max(0, tag.getInteger("skipCount"));
         extraTurn = tag.getBoolean("extraTurn");
         cutInTicks = tag.hasKey("cutInTicks") ? tag.getInteger("cutInTicks") : -1;
         hurryTicks = tag.hasKey("hurryTicks") ? tag.getInteger("hurryTicks") : -1;
@@ -2900,8 +3121,8 @@ public class CardGame {
             decisionContinuation = DecisionTypes.Continuation.valueOf(tag.getString("decisionContinuation"));
         }
         currentPlayerIndex = tag.getInteger("currentPlayer");
-        pendingDraw = tag.getInteger("pendingDraw");
-        lastDrawValue = tag.getInteger("lastDrawValue");
+        pendingDraw = Math.max(0, tag.getInteger("pendingDraw"));
+        lastDrawValue = Math.max(0, tag.getInteger("lastDrawValue"));
         pendingDrawSource = NbtUtil.hasUUID(tag, "pendingDrawSource") ? NbtUtil.getUUID(tag, "pendingDrawSource")
             : null;
         awaitingCutIn = tag.getBoolean("awaitingCutIn");
@@ -3001,6 +3222,7 @@ public class CardGame {
             NBTTagCompound draw = new NBTTagCompound();
             NbtUtil.putUUID(draw, "player", suspendedDraw.player);
             draw.setInteger("count", suspendedDraw.count);
+            draw.setInteger("attempts", suspendedDraw.attempts);
             draw.setInteger("lastUid", suspendedDraw.lastUid);
             draw.setBoolean("toMatch", suspendedDraw.toMatch);
             tag.setTag("suspendedDraw", draw);
@@ -3066,6 +3288,15 @@ public class CardGame {
         tag.setLong("revealUntil", revealUntil);
         tag.setTag("peekUntil", writeDeadlines(peekUntil));
         tag.setTag("shownUntil", writeDeadlines(shownUntil));
+        NBTTagList peeks = new NBTTagList();
+        for (Object2LongMap.Entry<HandPeek> entry : targetedPeeks.object2LongEntrySet()) {
+            NBTTagCompound peek = new NBTTagCompound();
+            NbtUtil.putUUID(peek, "viewer", entry.getKey().viewer);
+            NbtUtil.putUUID(peek, "target", entry.getKey().target);
+            peek.setLong("until", entry.getLongValue());
+            peeks.appendTag(peek);
+        }
+        tag.setTag("targetedPeeks", peeks);
         NBTTagList nemesisTag = new NBTTagList();
         for (Map.Entry<UUID, UUID> e : nemesis.entrySet()) {
             NBTTagCompound l = new NBTTagCompound();

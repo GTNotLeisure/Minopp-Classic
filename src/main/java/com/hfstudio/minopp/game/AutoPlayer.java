@@ -1,6 +1,7 @@
 package com.hfstudio.minopp.game;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -34,6 +35,18 @@ public class AutoPlayer {
     }
 
     public static PlayContext.PlayChoices defaultChoices(CardGame game, CardPlayer player, Card card, boolean useFlex) {
+        BotDifficulty difficulty = BotDifficulty.forPlayer(game, player);
+        return choices(
+            game,
+            player,
+            card,
+            useFlex,
+            difficulty,
+            difficulty == BotDifficulty.HIGH ? new BotStrategy(game, player) : null);
+    }
+
+    private static PlayContext.PlayChoices choices(CardGame game, CardPlayer player, Card card, boolean useFlex,
+        BotDifficulty difficulty, BotStrategy strategy) {
         PlayContext.PlayChoices choices = new PlayContext.PlayChoices();
         choices.useFlex = useFlex;
         choices.color = game.mostCommonColor(player);
@@ -51,6 +64,14 @@ public class AutoPlayer {
         }
         if (first != null) choices.targets.add(first.uuid);
         if (second != null) choices.targets.add(second.uuid);
+        if (difficulty == BotDifficulty.LOW) {
+            List<CardColor> colors = game.colors();
+            choices.color = colors.get(RANDOM.nextInt(colors.size()));
+            choices.number = 1 + RANDOM.nextInt(9);
+            Collections.shuffle(others, RANDOM);
+            choices.targets.clear();
+            for (int i = 0; i < Math.min(2, others.size()); i++) choices.targets.add(others.get(i).uuid);
+        } else if (strategy != null) strategy.choose(card, choices);
         CardType.Automation automation = game.face(card)
             .type().automation;
         if (automation != null) automation.choose(game, player, card, choices);
@@ -95,6 +116,9 @@ public class AutoPlayer {
         Card best = null;
         boolean bestFlex = false;
         int bestScore = Integer.MIN_VALUE;
+        int legalMoves = 0;
+        BotDifficulty difficulty = BotDifficulty.forPlayer(game, realPlayer);
+        BotStrategy strategy = difficulty == BotDifficulty.HIGH ? new BotStrategy(game, realPlayer) : null;
         int[] colorCounts = null;
         for (Card card : new ArrayList<>(realPlayer.hand)) {
             CardType type = game.face(card)
@@ -103,13 +127,21 @@ public class AutoPlayer {
             for (int f = 0; f < (flexAvailable ? 2 : 1); f++) {
                 boolean useFlex = f == 1;
                 if (game.checkPlayable(realPlayer, card, useFlex) != null) continue;
+                if (difficulty == BotDifficulty.LOW) {
+                    if (RANDOM.nextInt(++legalMoves) == 0) {
+                        best = card;
+                        bestFlex = useFlex;
+                    }
+                    continue;
+                }
                 if (colorCounts == null && (type == CardTypes.DISCARD_ALL || type == CardTypes.DOUBLE_DISCARD_ALL)) {
                     colorCounts = new int[CardColor.values().length];
                     for (Card held : realPlayer.hand) colorCounts[game.face(held).color.ordinal()]++;
                 }
                 int s = score(game, card, useFlex, colorCounts);
+                if (strategy != null) s = strategy.score(card, useFlex, s);
                 if (type.automation != null) s = type.automation.score(game, realPlayer, card, useFlex, s);
-                s += RANDOM.nextInt(6);
+                if (difficulty == BotDifficulty.MEDIUM) s += RANDOM.nextInt(6);
                 if (s > bestScore) {
                     bestScore = s;
                     best = card;
@@ -118,7 +150,7 @@ public class AutoPlayer {
             }
         }
         if (best != null) {
-            PlayContext.PlayChoices choices = defaultChoices(game, realPlayer, best, bestFlex);
+            PlayContext.PlayChoices choices = choices(game, realPlayer, best, bestFlex, difficulty, strategy);
             choices.useFlex = bestFlex;
             choices.shout = shoutsMino;
             ActionReport result = game.playCard(realPlayer, best.uid, choices);

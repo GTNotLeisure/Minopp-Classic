@@ -46,6 +46,8 @@ public class GameRules {
     }
 
     private static final Map<String, Rule> REGISTRY = new LinkedHashMap<>();
+    private static final Map<String, List<String>> VALUE_LABELS = new LinkedHashMap<>();
+    private static final Map<String, int[]> PRESETS = new LinkedHashMap<>();
     private static final Reference2IntMap<Rule> MINIMUM_ENABLED = new Reference2IntOpenHashMap<>();
     private static final List<String> BOOLEAN_IDS = new ArrayList<>();
     private static final List<String> BOOLEAN_ID_VIEW = Collections.unmodifiableList(BOOLEAN_IDS);
@@ -74,6 +76,27 @@ public class GameRules {
     public static String integer(String id, Category category, int def, int min, int max) {
         register(new Rule(id, category, def, min, max, false));
         return id;
+    }
+
+    public static String choice(String id, Category category, int def, String... valueLangKeys) {
+        List<String> labels = List.of(valueLangKeys);
+        if (labels.isEmpty() || labels.stream()
+            .anyMatch(String::isBlank)) throw new IllegalArgumentException("Choice labels cannot be empty");
+        integer(id, category, def, 0, labels.size() - 1);
+        VALUE_LABELS.put(id, labels);
+        int[] values = new int[labels.size()];
+        for (int i = 0; i < values.length; i++) values[i] = i;
+        registerPresets(id, values);
+        return id;
+    }
+
+    public static boolean isChoice(String id) {
+        return VALUE_LABELS.containsKey(id);
+    }
+
+    public static String valueLangKey(String id, int value) {
+        List<String> labels = VALUE_LABELS.get(id);
+        return labels == null ? null : labels.get(get(id).clamp(value));
     }
 
     /**
@@ -120,6 +143,13 @@ public class GameRules {
 
     public static final String MAX_PLAYERS = integer("maxPlayers", Category.TABLE, 4, 2, 20);
     public static final String INITIAL_HAND = integer("initialHand", Category.TABLE, 7, 1, 15);
+    public static final String BOT_DIFFICULTY = choice(
+        "botDifficulty",
+        Category.TABLE,
+        1,
+        "gui.minopp.rule.botDifficulty.low",
+        "gui.minopp.rule.botDifficulty.medium",
+        "gui.minopp.rule.botDifficulty.high");
     public static final String DECK_COPIES = integer("deckCopies", Category.TABLE, 0, 0, 8);
     public static final String JUMP_IN_SECONDS = integer("jumpInSeconds", Category.TABLE, 5, 1, 15);
     public static final String TURN_TIME_LIMIT = zeroOrInteger("turnTimeLimit", Category.TABLE, 0, 5, 99999);
@@ -128,8 +158,6 @@ public class GameRules {
     public static final String SCORE_TARGET = integer("scoreTarget", Category.TABLE, 0, 0, 10000);
     public static final String PEEK_HANDS = bool("peekHands", Category.TABLE, false);
     public static final String FLIP_BACKS = bool("flipBacks", Category.TABLE, true);
-
-    private static final Map<String, int[]> PRESETS = new LinkedHashMap<>();
 
     static {
         registerPresets(SCORE_TARGET, 0, 200, 300, 500, 750, 1000);

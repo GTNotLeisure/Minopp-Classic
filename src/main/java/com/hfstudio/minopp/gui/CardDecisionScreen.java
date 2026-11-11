@@ -27,6 +27,7 @@ import com.hfstudio.minopp.util.Chat;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import it.unimi.dsi.fastutil.ints.IntLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 
 @SideOnly(Side.CLIENT)
@@ -104,9 +105,11 @@ public class CardDecisionScreen extends GuiScreen {
             decision = current;
             shownGame = game;
             List<Card> cards = CardDecisions.cards(game, current);
-            selected.removeIf(
-                (int uid) -> cards.stream()
-                    .noneMatch(card -> card.uid == uid));
+            if (!selected.isEmpty()) {
+                IntSet available = new IntOpenHashSet(cards.size());
+                for (Card card : cards) available.add(card.uid);
+                selected.retainAll(available);
+            }
             int page = grid.page();
             grid.setCards(cards);
             grid.scroll(page);
@@ -221,7 +224,7 @@ public class CardDecisionScreen extends GuiScreen {
             UUID target = CardDecisions.RECYCLE.equals(decision.typeId) && !targets.isEmpty()
                 ? targets.get(targetIndex).uuid
                 : null;
-            for (int uid : selected) C2SPlayCardPacket.Client.sendDecisionC2S(tablePos, decision, uid, target);
+            C2SPlayCardPacket.Client.sendDecisionC2S(tablePos, decision, selected.toIntArray(), target);
         } else if (button.id == 4 && !waiting && CardDecisions.DISCARD.equals(decision.typeId)) {
             selection.selectRandom(needed);
         } else if (button.id == 3 && !targets.isEmpty()) targetIndex = (targetIndex + 1) % targets.size();

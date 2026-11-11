@@ -365,6 +365,20 @@ public class TableConfig {
         return total;
     }
 
+    /**
+     * Counts the light-side deck before copies, including the palette-aware Classic fallback.
+     */
+    public int effectiveDeckSize() {
+        int size = countDeckSize();
+        return size == 0 ? fallbackConfig().countDeckSize() : size;
+    }
+
+    private TableConfig fallbackConfig() {
+        TableConfig fallback = new TableConfig();
+        fallback.set(GameRules.EIGHT_COLORS, getInt(GameRules.EIGHT_COLORS));
+        return fallback;
+    }
+
     public int effectiveCopies(int playerCount, int deckSize) {
         int copies = getInt(GameRules.DECK_COPIES);
         if (copies > 0) return copies;
@@ -392,23 +406,24 @@ public class TableConfig {
 
     public List<Card> buildDeck(int playerCount, Random random) {
         List<CardFace> lightFaces = buildFaces(false);
-        if (lightFaces.isEmpty()) lightFaces = new TableConfig().buildFaces(false);
+        if (lightFaces.isEmpty()) lightFaces = fallbackConfig().buildFaces(false);
         int copies = effectiveCopies(playerCount, lightFaces.size());
-        List<CardFace> allLight = new ArrayList<>();
-        for (int i = 0; i < copies; i++) allLight.addAll(lightFaces);
+        int cardCount = Math.multiplyExact(copies, lightFaces.size());
 
         List<CardFace> darkFaces = null;
         if (getBool(GameRules.FLIP_MODE)) {
             List<CardFace> base = buildFaces(true);
             if (base.isEmpty()) base = buildDefaultDarkFaces();
-            darkFaces = new ArrayList<>();
-            while (darkFaces.size() < allLight.size()) darkFaces.addAll(base);
+            int repeats = (cardCount - 1) / base.size() + 1;
+            darkFaces = new ArrayList<>(Math.multiplyExact(repeats, base.size()));
+            for (int i = 0; i < repeats; i++) darkFaces.addAll(base);
             Collections.shuffle(darkFaces, random);
         }
 
-        List<Card> deck = new ArrayList<>();
-        for (int i = 0; i < allLight.size(); i++) {
-            deck.add(new Card(i + 1, allLight.get(i), darkFaces == null ? null : darkFaces.get(i)));
+        List<Card> deck = new ArrayList<>(cardCount);
+        for (int i = 0; i < cardCount; i++) {
+            deck.add(
+                new Card(i + 1, lightFaces.get(i % lightFaces.size()), darkFaces == null ? null : darkFaces.get(i)));
         }
         Collections.shuffle(deck, random);
         return deck;

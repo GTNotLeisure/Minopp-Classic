@@ -58,6 +58,13 @@ public class DecisionTypes {
         }
 
         /**
+         * Validates one batch for a single decision. Override to accept multiple values atomically.
+         */
+        default boolean answerAll(CardGame game, PendingDecision decision, int[] answers, UUID target) {
+            return answers.length == 1 && answer(game, decision, answers[0], target);
+        }
+
+        /**
          * Stores a valid answer for bots and expired decisions. Custom answer formats must override this too.
          */
         default void answerAutomatically(CardGame game, PendingDecision decision) {

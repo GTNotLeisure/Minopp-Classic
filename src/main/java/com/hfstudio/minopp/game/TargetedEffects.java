@@ -128,7 +128,9 @@ public class TargetedEffects {
 
     private static Card defense(CardGame game, CardPlayer player, int kind) {
         String type = kind == 1 ? "wild_shield" : "wild_infinity_no_u";
-        for (Card card : player.hand) if (game.face(card).typeId.equals(type)) return card;
+        for (Card card : player.hand) {
+            if (game.face(card).typeId.equals(type) && game.checkResponse(player, card) == null) return card;
+        }
         return null;
     }
 

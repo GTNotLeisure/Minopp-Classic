@@ -10,6 +10,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
@@ -63,7 +64,11 @@ public class CardDecisions {
     }
 
     public static void swap(CardGame game, CardPlayer player, CardPlayer target) {
-        if (target == null || target.equals(player)
+        player = game.deAmputate(player);
+        target = game.deAmputate(target);
+        if (player == null || player.eliminated
+            || target == null
+            || target.equals(player)
             || target.eliminated
             || target.hand.isEmpty()
             || player.hand.isEmpty()) return;
@@ -73,6 +78,8 @@ public class CardDecisions {
     }
 
     public static void discard(CardGame game, CardPlayer player, int count) {
+        player = game.deAmputate(player);
+        if (player == null || player.eliminated) return;
         count = Math.min(count, player.hand.size());
         if (count <= 0) return;
         NBTTagCompound data = new NBTTagCompound();
@@ -81,6 +88,8 @@ public class CardDecisions {
     }
 
     private static void open(CardGame game, CardPlayer player, String id, NBTTagCompound data) {
+        player = game.deAmputate(player);
+        if (player == null || player.eliminated) return;
         game.openDecisions(
             List.of(new PendingDecision(id, player.uuid, player.uuid, System.currentTimeMillis() + 45_000, data)));
     }
@@ -103,11 +112,18 @@ public class CardDecisions {
     }
 
     public static List<Card> cards(CardGame game, PendingDecision decision) {
+        List<Card> cards = unpickedCards(game, decision);
+        cards.sort((a, b) -> a.compareTo(b, game.darkSide));
+        return cards;
+    }
+
+    private static List<Card> unpickedCards(CardGame game, PendingDecision decision) {
         List<Card> source = sourceCards(game, decision);
-        IntSet picked = new IntOpenHashSet(decision.data.getIntArray("picked"));
+        int[] previous = decision.data.getIntArray("picked");
+        if (previous.length == 0) return new ArrayList<>(source);
+        IntSet picked = new IntOpenHashSet(previous);
         List<Card> cards = new ArrayList<>(source.size());
         for (Card card : source) if (!picked.contains(card.uid)) cards.add(card);
-        cards.sort((a, b) -> a.compareTo(b, game.darkSide));
         return cards;
     }
 
@@ -120,6 +136,7 @@ public class CardDecisions {
 
         @Override
         public boolean answer(CardGame game, PendingDecision decision, int answer, UUID target) {
+            if (DISCARD.equals(decision.typeId)) return answerAll(game, decision, new int[] { answer }, target);
             if (find(sourceCards(game, decision), answer) == null) return false;
             for (int picked : decision.data.getIntArray("picked")) if (picked == answer) return false;
             if (RECYCLE.equals(decision.typeId)) {
@@ -131,20 +148,46 @@ public class CardDecisions {
                 decision.data.setInteger("offered", answer);
                 return true;
             }
-            if (DISCARD.equals(decision.typeId)) {
-                IntList picked = new IntArrayList(decision.data.getIntArray("picked"));
-                picked.add(answer);
-                decision.data.setIntArray("picked", picked.toIntArray());
-                if (picked.size() < count(decision)) return true;
-            }
             decision.answer = answer;
             return true;
         }
 
         @Override
+        public boolean answerAll(CardGame game, PendingDecision decision, int[] answers, UUID target) {
+            if (!DISCARD.equals(decision.typeId))
+                return DecisionTypes.Handler.super.answerAll(game, decision, answers, target);
+            int[] previous = decision.data.getIntArray("picked");
+            if (target != null || answers.length == 0 || answers.length > count(decision) - previous.length)
+                return false;
+            IntSet available = new IntOpenHashSet();
+            for (Card card : sourceCards(game, decision)) available.add(card.uid);
+            for (int uid : previous) available.remove(uid);
+            for (int uid : answers) if (!available.remove(uid)) return false;
+            IntList picked = new IntArrayList(previous.length + answers.length);
+            picked.addElements(0, previous);
+            picked.addElements(picked.size(), answers);
+            decision.data.setIntArray("picked", picked.toIntArray());
+            if (picked.size() == count(decision)) decision.answer = answers[answers.length - 1];
+            return true;
+        }
+
+        @Override
         public void answerAutomatically(CardGame game, PendingDecision decision) {
+            if (DISCARD.equals(decision.typeId)) {
+                List<Card> available = unpickedCards(game, decision);
+                available.sort(
+                    Comparator.comparingInt(game::cardPoints)
+                        .reversed()
+                        .thenComparing((a, b) -> a.compareTo(b, game.darkSide)));
+                int remaining = count(decision) - decision.data.getIntArray("picked").length;
+                int[] answers = new int[Math.max(0, Math.min(remaining, available.size()))];
+                for (int i = 0; i < answers.length; i++) answers[i] = available.get(i).uid;
+                if (answers.length > 0) answerAll(game, decision, answers, null);
+                if (!decision.isAnswered()) decision.answer = 0;
+                return;
+            }
             while (!decision.isAnswered()) {
-                List<Card> available = cards(game, decision);
+                List<Card> available = unpickedCards(game, decision);
                 if (available.isEmpty()) {
                     decision.answer = 0;
                     break;
@@ -152,7 +195,8 @@ public class CardDecisions {
                 Comparator<Card> order = Comparator.comparingInt(game::cardPoints);
                 boolean take = RECYCLE.equals(decision.typeId)
                     || SWAP.equals(decision.typeId) && decision.data.hasKey("offered");
-                available.sort(take ? order : order.reversed());
+                available
+                    .sort((take ? order : order.reversed()).thenComparing((a, b) -> a.compareTo(b, game.darkSide)));
                 UUID target = RECYCLE.equals(decision.typeId) && NbtUtil.hasUUID(decision.data, "target")
                     ? NbtUtil.getUUID(decision.data, "target")
                     : null;
@@ -187,15 +231,24 @@ public class CardDecisions {
                     taken.owner = player.uuid;
                     player.hand.add(taken);
                     target.hand.add(offered);
+                    player.hasShoutedMino = false;
+                    target.hasShoutedMino = false;
                     game.handMoveKind = 1;
                     game.handMoveCounter++;
                     report.messageAll(Chat.translatable("game.minopp.play.swap_one", player.name, target.name));
                 } else {
                     int removed = 0;
-                    for (int uid : decision.data.getIntArray("picked")) {
-                        Card card = find(player.hand, uid);
+                    int[] picked = decision.data.getIntArray("picked");
+                    Int2ObjectOpenHashMap<Card> chosen = new Int2ObjectOpenHashMap<>(picked.length);
+                    for (int uid : picked) chosen.put(uid, null);
+                    player.hand.removeIf(card -> {
+                        if (!chosen.containsKey(card.uid)) return false;
+                        chosen.put(card.uid, card);
+                        return true;
+                    });
+                    for (int uid : picked) {
+                        Card card = chosen.remove(uid);
                         if (card == null) continue;
-                        player.hand.remove(card);
                         card.owner = player.uuid;
                         game.discardDeck.add(card);
                         removed++;

@@ -130,6 +130,7 @@ public class EntityAutoPlayer extends EntityLiving {
                                 String playerName = hasCustomNameTag() ? getCustomNameTag()
                                     : "MinoBot #" + (100 + rand.nextInt(900));
                                 cardPlayer = new CardPlayer(getUniqueID(), playerName);
+                                cardPlayer.bot = true;
                                 tableEntity.joinPlayerToTable(cardPlayer, new Vec3d(posX, posY, posZ));
                                 tablePos = corePos;
                                 tableFound = true;
@@ -157,6 +158,10 @@ public class EntityAutoPlayer extends EntityLiving {
                 heal(10);
                 CardGame game = tableEntity.game;
                 CardPlayer member = game.deAmputate(getUniqueID());
+                if (member != null && !member.bot) {
+                    member.bot = true;
+                    tableEntity.sync();
+                }
                 if (member != null && !member.eliminated
                     && !tableEntity.handCardAccess()
                         .matches(tableEntity, ItemDataUtils.getBinding(getHeldItem()))) {
@@ -317,6 +322,7 @@ public class EntityAutoPlayer extends EntityLiving {
         setCustomNameTag(name);
         setActive(true);
         cardPlayer = new CardPlayer(getUniqueID(), name);
+        cardPlayer.bot = true;
         table.joinPlayerToTable(cardPlayer, new Vec3d(posX, posY, posZ));
         tablePos = table.getBlockPos();
         ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
@@ -360,6 +366,7 @@ public class EntityAutoPlayer extends EntityLiving {
         }
         if (compound.hasKey("CardPlayer", 10)) {
             cardPlayer = new CardPlayer(compound.getCompoundTag("CardPlayer"));
+            cardPlayer.bot = true;
         } else {
             cardPlayer = null;
         }
