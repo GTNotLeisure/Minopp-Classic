@@ -61,7 +61,16 @@ public class GuiDraw {
 
     public static void drawPlayerHead(ResourceLocation skin, int x, int y, int size) {
         GL11.glColor4f(1, 1, 1, 1);
-        blit(skin, x, y, size, size, 8, 8, 8, 8, 64, 32);
-        blit(skin, x, y, size, size, 40, 8, 8, 8, 64, 32);
+        Minecraft.getMinecraft()
+            .getTextureManager()
+            .bindTexture(skin);
+        int texW = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+        int texH = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+        if (texW <= 0 || texH <= 0) {
+            texW = 64;
+            texH = 32;
+        }
+        blitBound(x, y, size, size, 8, 8, 8, 8, texW, texH);
+        blitBound(x, y, size, size, 40, 8, 8, 8, texW, texH);
     }
 }
