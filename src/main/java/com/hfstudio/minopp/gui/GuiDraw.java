@@ -70,7 +70,7 @@ public class GuiDraw {
             texW = 64;
             texH = 32;
         }
-        blitBound(x, y, size, size, 8, 8, 8, 8, texW, texH);
+        blitBound(x + 0.5f, y + 0.5f, size - 1, size - 1, 8, 8, 8, 8, texW, texH);
         blitBound(x, y, size, size, 40, 8, 8, 8, texW, texH);
     }
 }
