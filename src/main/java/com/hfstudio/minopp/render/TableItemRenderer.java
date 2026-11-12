@@ -53,12 +53,21 @@ public class TableItemRenderer implements IItemRenderer {
 
     @Override
     public void renderItem(ItemRenderType type, ItemStack item, Object... data) {
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_CURRENT_BIT | GL11.GL_LIGHTING_BIT | GL11.GL_TEXTURE_BIT);
         GL11.glPushMatrix();
+        try {
+            renderModel(type);
+        } finally {
+            GL11.glPopMatrix();
+            GL11.glPopAttrib();
+        }
+    }
+
+    private static void renderModel(ItemRenderType type) {
         if (type == ItemRenderType.EQUIPPED || type == ItemRenderType.EQUIPPED_FIRST_PERSON) {
             GL11.glTranslatef(0.5f, 0.5f, 0.5f);
         }
         if (type == ItemRenderType.INVENTORY) GL11.glScalef(1.15f, 1.15f, 1.15f);
-        boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glColor4f(1, 1, 1, 1);
         GL11.glEnable(GL12.GL_RESCALE_NORMAL);
@@ -77,6 +86,14 @@ public class TableItemRenderer implements IItemRenderer {
         t.draw();
 
         GL11.glPushMatrix();
+        try {
+            renderCards();
+        } finally {
+            GL11.glPopMatrix();
+        }
+    }
+
+    private static void renderCards() {
         GL11.glTranslatef(0, 0.26f, 0);
         GL11.glRotatef(-90, 1, 0, 0);
         String theme = ThemeManager.INSTANCE.selected();
@@ -87,11 +104,6 @@ public class TableItemRenderer implements IItemRenderer {
         BATCH.at(0.02f, 0.12f, 0.01f, 3);
         BATCH.face(WILD_DRAW_FOUR, theme, 0.13f, 0.2f, 0, 0xFFFFFF, false);
         BATCH.flush();
-        GL11.glPopMatrix();
-
-        GL11.glDisable(GL12.GL_RESCALE_NORMAL);
-        if (cull) GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glPopMatrix();
     }
 
     // Map textures at 16 pixels per block to preserve their aspect ratio.

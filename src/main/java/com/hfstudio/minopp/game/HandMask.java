@@ -91,7 +91,7 @@ public class HandMask {
             NBTTagCompound player = players.getCompoundTagAt(i);
             UUID holder = NbtUtil.hasUUID(player, "uuid") ? NbtUtil.getUUID(player, "uuid") : null;
             boolean own = holder != null && holder.equals(viewer);
-            long until = own ? Long.MAX_VALUE
+            long until = own || revealHands ? Long.MAX_VALUE
                 : participant && holder != null && !player.getBoolean("eliminated")
                     ? Math.max(allUntil, shown.getOrDefault(holder, 0L))
                     : 0;

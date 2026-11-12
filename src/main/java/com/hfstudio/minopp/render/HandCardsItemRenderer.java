@@ -30,6 +30,11 @@ public class HandCardsItemRenderer implements IItemRenderer {
     private static final float CARD_HALF_HEIGHT = 0.5f;
     private static final float CARD_THICKNESS = 0.008f;
     private static final float LAYER_STEP = 0.011f;
+    private static final float HAND_SCALE = 0.5625f;
+    private static final float HAND_TILT = 70;
+    private static final float HAND_YAW = -25;
+    private static final float GRIP_DROP = 3 / 16f;
+    private static final float GRIP_FORWARD = 3.5f / 16;
 
     @Override
     public boolean handleRenderType(ItemStack item, ItemRenderType type) {
@@ -38,7 +43,26 @@ public class HandCardsItemRenderer implements IItemRenderer {
 
     @Override
     public boolean shouldUseRenderHelper(ItemRenderType type, ItemStack item, ItemRendererHelper helper) {
-        return false;
+        // Use only the centering helper; BLOCK_3D would also change the arm's item pose.
+        return type == ItemRenderType.EQUIPPED && helper == ItemRendererHelper.EQUIPPED_BLOCK;
+    }
+
+    private static void applyHandPose() {
+        // Undo EQUIPPED_BLOCK centering and the flat-item pose shared by RenderPlayer and RenderBiped.
+        GL11.glTranslatef(0.5f, 0.5f, 0.5f);
+        GL11.glRotatef(-20, 0, 0, 1);
+        GL11.glRotatef(90, 1, 0, 0);
+        GL11.glRotatef(-60, 0, 0, 1);
+        GL11.glScalef(1 / 0.375f, 1 / 0.375f, 1 / 0.375f);
+        GL11.glTranslatef(-0.25f, -0.1875f, 0.1875f);
+
+        // Move the grip to the fingertips and beyond the arm's front surface before orienting the fan.
+        GL11.glTranslatef(0, GRIP_DROP, -GRIP_FORWARD);
+
+        // Model Y points down. Turn the fan upward and aim its readable -Z face up and inward.
+        GL11.glRotatef(180 + HAND_TILT, 1, 0, 0);
+        GL11.glRotatef(HAND_YAW, 0, 1, 0);
+        GL11.glScalef(HAND_SCALE, HAND_SCALE, HAND_SCALE);
     }
 
     @Override
@@ -72,23 +96,24 @@ public class HandCardsItemRenderer implements IItemRenderer {
             GL11.glEnable(GL12.GL_RESCALE_NORMAL);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDisable(GL11.GL_CULL_FACE);
-            GL11.glTranslated(0.5, 0.5, 0.18);
-            // Stand the fan upright within Minecraft's default equipped-item transform.
-            GL11.glRotatef(-80, 1, 0, 0);
+            applyHandPose();
             for (int k = 0; k < n; k++) {
                 Card card = realPlayer.hand.get(total - n + k);
                 float angle = n == 1 ? 0 : spread * (k / (float) (n - 1) - 0.5f);
-                double radians = Math.toRadians(angle);
                 // Rotate around the lower grip and separate each solid card along its thickness.
-                BATCH.at(
-                    -gripRadius * (float) Math.sin(radians),
-                    gripRadius * ((float) Math.cos(radians) - 1),
-                    (k - (n - 1) * 0.5f) * LAYER_STEP,
-                    angle);
-                BATCH.slab(CARD_HALF_WIDTH, CARD_HALF_HEIGHT, -CARD_THICKNESS, 0, 0xF2F0EA);
+                BATCH.atPivot(0, 0, (k - (n - 1) * 0.5f) * LAYER_STEP, angle, 0, -gripRadius);
                 CardFace face = card.face(dark);
-                if (visible && !bearerId.equals(viewer) && !face.isHidden())
-                    BATCH.face(face, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, 0.0003f, 0xFFFFFF, false);
+                boolean showFace = visible && !bearerId.equals(viewer) && !face.isHidden();
+                BATCH.extrude(
+                    showFace ? face : card.backFace(dark),
+                    theme,
+                    CARD_HALF_WIDTH,
+                    CARD_HALF_HEIGHT,
+                    -CARD_THICKNESS,
+                    0,
+                    0xFFFFFF,
+                    false);
+                if (showFace) BATCH.face(face, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, 0.0003f, 0xFFFFFF, false);
                 else BATCH.back(card, dark, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, 0.0003f, 0xFFFFFF, false);
                 if (!visible || face.isHidden()) BATCH.back(
                     card,

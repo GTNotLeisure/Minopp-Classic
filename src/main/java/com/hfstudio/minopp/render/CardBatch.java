@@ -1,10 +1,15 @@
 package com.hfstudio.minopp.render;
 
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Tessellator;
@@ -12,8 +17,10 @@ import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.opengl.GL11;
 
+import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardFace;
+import com.hfstudio.minopp.render.SpriteContour.Edge;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -22,10 +29,12 @@ import cpw.mods.fml.relauncher.SideOnly;
 public class CardBatch {
 
     private static final Map<String, Map<CardFace, ResourceLocation[]>> FACE_TEXTURES = new HashMap<>();
+    private static final Map<ResourceLocation, SpriteContour> SPRITE_CONTOURS = new HashMap<>();
     private static long cacheGeneration;
 
     public static void clearCache() {
         FACE_TEXTURES.clear();
+        SPRITE_CONTOURS.clear();
         cacheGeneration++;
     }
 
@@ -81,6 +90,16 @@ public class CardBatch {
         double a = Math.toRadians(angleDeg);
         cos = (float) Math.cos(a);
         sin = (float) Math.sin(a);
+        return this;
+    }
+
+    /**
+     * Places a local pivot at the target position and rotates the card around it.
+     */
+    public CardBatch atPivot(float x, float y, float z, float angleDeg, float pivotX, float pivotY) {
+        at(x, y, z, angleDeg);
+        ox -= pivotX * cos - pivotY * sin;
+        oy -= pivotX * sin + pivotY * cos;
         return this;
     }
 
@@ -152,6 +171,67 @@ public class CardBatch {
             face(backFace, theme, hw, hh, z, color, flipped);
         } else {
             quad(0, ThemeManager.INSTANCE.texture(theme, "back"), hw, hh, z, color, flipped);
+        }
+    }
+
+    private static SpriteContour contour(ResourceLocation texture) {
+        return SPRITE_CONTOURS.computeIfAbsent(texture, location -> {
+            try (InputStream stream = Minecraft.getMinecraft()
+                .getResourceManager()
+                .getResource(location)
+                .getInputStream()) {
+                BufferedImage image = ImageIO.read(stream);
+                if (image == null) throw new IOException("Unsupported sprite image");
+                return SpriteContour.fromImage(image);
+            } catch (IOException e) {
+                Mino.LOGGER.warn("Unable to read card sprite contour {}", location, e);
+                return SpriteContour.EMPTY;
+            }
+        });
+    }
+
+    /**
+     * Extrudes the base artwork along its opaque contour; a null face uses the standard card back.
+     */
+    public void extrude(CardFace face, String theme, float hw, float hh, float z0, float z1, int color,
+        boolean flipped) {
+        ResourceLocation texture = face == null ? ThemeManager.INSTANCE.texture(theme, "back") : null;
+        int tint = 0xFFFFFF;
+        if (face != null) {
+            ResourceLocation[] layers = textures(face, theme);
+            for (int i = 0; i < layers.length; i++) {
+                if (layers[i] == null) continue;
+                texture = layers[i];
+                tint = ThemeManager.INSTANCE.layerTint(theme, face, i, texture);
+                break;
+            }
+        }
+        if (texture == null) return;
+        int shaded = tint == 0xFFFFFF ? color
+            : ((color >> 16 & 255) * (tint >> 16 & 255) / 255) << 16
+                | ((color >> 8 & 255) * (tint >> 8 & 255) / 255) << 8
+                | (color & 255) * (tint & 255) / 255;
+        SpriteContour contour = contour(texture);
+        if (contour.edges()
+            .isEmpty()) return;
+        Quads q = quadsFor(0, texture);
+        float mirror = flipped ? -1 : 1;
+        for (Edge edge : contour.edges()) {
+            float x0 = (edge.x0() * 2 - 1) * hw * mirror, y0 = (edge.y0() * 2 - 1) * hh;
+            float x1 = (edge.x1() * 2 - 1) * hw * mirror, y1 = (edge.y1() * 2 - 1) * hh;
+            float nx = edge.nx() * mirror;
+            int normal = packNormal(nx * cos - edge.ny() * sin, nx * sin + edge.ny() * cos, 0);
+            if (flipped) {
+                vertex(q, x1, y1, z0, edge.u1(), edge.v1(), shaded, normal);
+                vertex(q, x0, y0, z0, edge.u0(), edge.v0(), shaded, normal);
+                vertex(q, x0, y0, z1, edge.u0(), edge.v0(), shaded, normal);
+                vertex(q, x1, y1, z1, edge.u1(), edge.v1(), shaded, normal);
+            } else {
+                vertex(q, x0, y0, z0, edge.u0(), edge.v0(), shaded, normal);
+                vertex(q, x1, y1, z0, edge.u1(), edge.v1(), shaded, normal);
+                vertex(q, x1, y1, z1, edge.u1(), edge.v1(), shaded, normal);
+                vertex(q, x0, y0, z1, edge.u0(), edge.v0(), shaded, normal);
+            }
         }
     }
 

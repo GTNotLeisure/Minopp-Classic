@@ -62,8 +62,16 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
         float layerH = BlockMinoTable.DECK_LAYER_H;
         float total = layers * layerH;
         BATCH.at(0, 0, total, 0);
-        BATCH.slab(0.32f, 0.5f, -total, 0, 0xECEAE2);
         Card shown = !game.deck.isEmpty() ? game.deck.get(game.deck.size() - 1) : game.topCard;
+        BATCH.extrude(
+            shown == null ? null : shown.backFace(game.darkSide),
+            viewerTheme,
+            0.32f,
+            0.5f,
+            -total,
+            0,
+            0xFFFFFF,
+            false);
         if (shown != null) BATCH.back(shown, game.darkSide, viewerTheme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
         BATCH.flush();
         GL11.glPopMatrix();
