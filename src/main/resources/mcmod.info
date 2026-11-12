@@ -4,7 +4,7 @@
     {
       "modid": "${modId}",
       "name": "${modName}",
-      "description": "Recreation of a classical card game in Minecraft, with some changes to better reflect the game with the same name. Backport of Mino++: Expanded to Minecraft 1.7.10.",
+      "description": "Make classic card games great again in Minecraft!",
       "version": "${modVersion}",
       "mcversion": "${minecraftVersion}",
       "url": "",
