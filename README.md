@@ -244,8 +244,8 @@ Names come from lang keys: `gui.mymod.sound.pack.arcade` (and `.desc`), `gui.mym
 
 | Project | Author | License |
 |:--------|:-------|:--------|
-| **Mino++** (original mod) | [Zbx1425](https://github.com/zbx1425/minopp) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
-| **Mino++: Expanded** | [VengeancePC](https://github.com/VengeancePC/Minopp-Expanded) | [MIT](./LICENSE-MIT-Zbx1425.txt) |
+| **Mino++** (original mod) | [Zbx1425](https://github.com/zbx1425/minopp) | [MIT](https://mit-license.org/) |
+| **Mino++: Expanded** | [VengeancePC](https://github.com/VengeancePC/Minopp-Expanded) | [MIT](https://mit-license.org/) |
 
 ---
 
