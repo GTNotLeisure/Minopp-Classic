@@ -3,16 +3,13 @@ package com.hfstudio.minopp.render;
 import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import net.minecraftforge.client.IItemRenderer;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
-import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.block.BlockEntityMinoTable;
 import com.hfstudio.minopp.game.Card;
 import com.hfstudio.minopp.game.CardFace;
@@ -27,9 +24,12 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class HandCardsItemRenderer implements IItemRenderer {
 
-    private static final CardBatch BATCH = new CardBatch();
-
-    private static final ResourceLocation ARROW = Mino.id("textures/gui/arrow_down.png");
+    private static final CardBatch BATCH = new CardBatch().layerDepth(0.0002f);
+    private static final int MAX_RENDERED_CARDS = 24;
+    private static final float CARD_HALF_WIDTH = 0.32f;
+    private static final float CARD_HALF_HEIGHT = 0.5f;
+    private static final float CARD_THICKNESS = 0.008f;
+    private static final float LAYER_STEP = 0.011f;
 
     @Override
     public boolean handleRenderType(ItemStack item, ItemRenderType type) {
@@ -57,55 +57,55 @@ public class HandCardsItemRenderer implements IItemRenderer {
         if (realPlayer == null) return;
         String theme = ThemeManager.INSTANCE.themeFor(bearerId);
 
-        GL11.glPushMatrix();
-        GL11.glEnable(GL12.GL_RESCALE_NORMAL);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glTranslated(0.5, 0.5, 0.18);
-        int total = realPlayer.hand.size(), n = Math.min(total, 24);
-        float step = (float) Math.min(0.08, 1.2 / Math.max(1, n));
+        int total = realPlayer.hand.size(), n = Math.min(total, MAX_RENDERED_CARDS);
+        if (n == 0) return;
         boolean dark = tableEntity.game.darkSide;
         UUID viewer = Minecraft.getMinecraft().thePlayer == null ? null
             : Minecraft.getMinecraft().thePlayer.getGameProfile()
                 .getId();
         boolean visible = bearerId.equals(viewer) || realPlayer.handVisibleUntil > System.currentTimeMillis();
-        for (int k = 0; k < n; k++) {
-            Card card = realPlayer.hand.get(total - n + k);
-            BATCH.at(0, 0.02f * k, step * k, 0);
-            BATCH.slab(0.32f, 0.5f, -0.035f, 0, k % 2 == 0 ? 0xF2F0EA : 0xDAD6CC);
-            CardFace face = card.face(dark);
-            if (visible && !bearerId.equals(viewer) && !face.isHidden())
-                BATCH.face(face, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
-            else BATCH.back(card, dark, theme, 0.32f, 0.5f, 0.001f, 0xFFFFFF, false);
-            if (!visible || face.isHidden()) BATCH.back(card, dark, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
-            else BATCH.face(face, theme, 0.32f, 0.5f, -0.036f, 0xFFFFFF, true);
-        }
-        BATCH.flush();
-        GL11.glTranslated(0, 0.02 * n, step * n);
-
-        if (tableEntity.game.currentPlayerIndex == tableEntity.game.players.indexOf(realPlayer)) {
-            Minecraft.getMinecraft()
-                .getTextureManager()
-                .bindTexture(ARROW);
-            float v0 = ((int) (System.currentTimeMillis() / 100L) % 5) * 0.2f;
-            float v1 = v0 + 0.2f;
-            GL11.glTranslated(0, 0.8, 0);
-            for (int i = 0; i < 2; i++) {
-                GL11.glPushMatrix();
-                GL11.glRotatef(i == 0 ? 45 : -45, 0, 1, 0);
-                GL11.glScalef(0.2f, 0.2f, 1);
-                Tessellator t = Tessellator.instance;
-                t.startDrawingQuads();
-                t.setNormal(0, 1, 0);
-                t.addVertexWithUV(-1, 1, 0, 0, v0);
-                t.addVertexWithUV(-1, -1, 0, 0, v1);
-                t.addVertexWithUV(1, -1, 0, 1, v1);
-                t.addVertexWithUV(1, 1, 0, 1, v0);
-                t.draw();
-                GL11.glPopMatrix();
+        float spread = Math.min(110, (n - 1) * 13f);
+        float gripRadius = CARD_HALF_HEIGHT * 0.85f;
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_CURRENT_BIT | GL11.GL_TEXTURE_BIT);
+        GL11.glPushMatrix();
+        try {
+            GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glTranslated(0.5, 0.5, 0.18);
+            // Stand the fan upright within Minecraft's default equipped-item transform.
+            GL11.glRotatef(-80, 1, 0, 0);
+            for (int k = 0; k < n; k++) {
+                Card card = realPlayer.hand.get(total - n + k);
+                float angle = n == 1 ? 0 : spread * (k / (float) (n - 1) - 0.5f);
+                double radians = Math.toRadians(angle);
+                // Rotate around the lower grip and separate each solid card along its thickness.
+                BATCH.at(
+                    -gripRadius * (float) Math.sin(radians),
+                    gripRadius * ((float) Math.cos(radians) - 1),
+                    (k - (n - 1) * 0.5f) * LAYER_STEP,
+                    angle);
+                BATCH.slab(CARD_HALF_WIDTH, CARD_HALF_HEIGHT, -CARD_THICKNESS, 0, 0xF2F0EA);
+                CardFace face = card.face(dark);
+                if (visible && !bearerId.equals(viewer) && !face.isHidden())
+                    BATCH.face(face, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, 0.0003f, 0xFFFFFF, false);
+                else BATCH.back(card, dark, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, 0.0003f, 0xFFFFFF, false);
+                if (!visible || face.isHidden()) BATCH.back(
+                    card,
+                    dark,
+                    theme,
+                    CARD_HALF_WIDTH,
+                    CARD_HALF_HEIGHT,
+                    -CARD_THICKNESS - 0.0003f,
+                    0xFFFFFF,
+                    true);
+                else BATCH
+                    .face(face, theme, CARD_HALF_WIDTH, CARD_HALF_HEIGHT, -CARD_THICKNESS - 0.0003f, 0xFFFFFF, true);
             }
+            BATCH.flush();
+        } finally {
+            GL11.glPopMatrix();
+            GL11.glPopAttrib();
         }
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL12.GL_RESCALE_NORMAL);
-        GL11.glPopMatrix();
     }
 }

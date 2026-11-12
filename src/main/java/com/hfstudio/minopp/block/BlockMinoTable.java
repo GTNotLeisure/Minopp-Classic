@@ -355,8 +355,10 @@ public class BlockMinoTable extends Block {
 
     @Override
     public void breakBlock(World world, int x, int y, int z, Block oldBlock, int meta) {
-        if (!world.isRemote && world.getTileEntity(x, y, z) instanceof BlockEntityMinoTable table && table.game != null)
-            table.destroyGame(null);
+        TablePartType part = TablePartType.values()[Math.max(0, Math.min(meta, 8))];
+        int coreX = x - part.xOff, coreZ = z - part.zOff;
+        if (!world.isRemote && world.blockExists(coreX, y, coreZ)
+            && world.getTileEntity(coreX, y, coreZ) instanceof BlockEntityMinoTable table) table.disposeTable();
         super.breakBlock(world, x, y, z, oldBlock, meta);
     }
 

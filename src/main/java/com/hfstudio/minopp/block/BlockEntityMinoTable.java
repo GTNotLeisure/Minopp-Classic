@@ -34,6 +34,7 @@ import com.hfstudio.minopp.effect.EffectEvent;
 import com.hfstudio.minopp.effect.EffectEvents;
 import com.hfstudio.minopp.effect.SeatActionTakenEffectEvent;
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
+import com.hfstudio.minopp.entity.TableBotLifecycle;
 import com.hfstudio.minopp.game.ActionMessage;
 import com.hfstudio.minopp.game.ActionMessageHistory;
 import com.hfstudio.minopp.game.ActionReport;
@@ -65,6 +66,11 @@ public class BlockEntityMinoTable extends TileEntity {
     public final CardPlayer[] seats = new CardPlayer[MAX_SEATS];
     public CardGame game = null;
     private final HandCardAccess handCardAccess = new HandCardAccess();
+    private final TableBotLifecycle botLifecycle = new TableBotLifecycle(this);
+
+    public TableBotLifecycle botLifecycle() {
+        return botLifecycle;
+    }
 
     public HandCardAccess handCardAccess() {
         return handCardAccess;
@@ -245,6 +251,7 @@ public class BlockEntityMinoTable extends TileEntity {
     public void writeToNBT(NBTTagCompound compoundTag) {
         super.writeToNBT(compoundTag);
         saveAdditional(compoundTag);
+        if (worldObj == null || !worldObj.isRemote) compoundTag.setTag("bots", botLifecycle.toTag());
     }
 
     protected void saveAdditional(NBTTagCompound compoundTag) {
@@ -295,6 +302,7 @@ public class BlockEntityMinoTable extends TileEntity {
     @Override
     public void readFromNBT(NBTTagCompound compoundTag) {
         super.readFromNBT(compoundTag);
+        if (worldObj == null || !worldObj.isRemote) botLifecycle.fromTag(compoundTag.getTagList("bots", 10));
         scores.clear();
         scoreNames.clear();
         NBTTagCompound scoresTag = compoundTag.getCompoundTag("scores");
@@ -526,7 +534,10 @@ public class BlockEntityMinoTable extends TileEntity {
             EntityAutoPlayer bot = new EntityAutoPlayer(worldObj);
             bot.setPosition(spot.x, spot.y, spot.z);
             bot.rotationYaw = (float) Math.toDegrees(Math.atan2(-ox, oz)) + 180;
-            worldObj.spawnEntityInWorld(bot);
+            if (!worldObj.spawnEntityInWorld(bot) || !bot.isEntityAlive()) {
+                worldObj.removeEntity(bot);
+                continue;
+            }
             bot.seatAt(this, freeBotName());
             added++;
         }
@@ -537,13 +548,10 @@ public class BlockEntityMinoTable extends TileEntity {
         if (game != null || worldObj == null || worldObj.isRemote) return 0;
         int removed = 0;
         for (int i = MAX_SEATS - 1; i >= 0 && removed < max; i--) {
-            if (seats[i] == null) continue;
-            Entity e = WorldUtil.getEntityByUUID(worldObj, seats[i].uuid);
-            if (e instanceof EntityAutoPlayer) {
-                e.setDead();
-                seats[i] = null;
-                removed++;
-            }
+            if (seats[i] == null || !seats[i].bot) continue;
+            botLifecycle.remove(seats[i].uuid);
+            seats[i] = null;
+            removed++;
         }
         if (removed > 0) sync();
         return removed;
@@ -553,6 +561,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (game != null) return false;
         for (int i = 0; i < MAX_SEATS; i++) {
             if (seats[i] != null && seats[i].uuid.equals(uuid)) {
+                if (seats[i].bot) botLifecycle.remove(uuid);
                 seats[i] = null;
                 sync();
                 return true;
@@ -563,7 +572,10 @@ public class BlockEntityMinoTable extends TileEntity {
 
     public void onSeatCountChanged() {
         int n = seatCount();
-        for (int i = n; i < MAX_SEATS; i++) seats[i] = null;
+        for (int i = n; i < MAX_SEATS; i++) {
+            if (seats[i] != null && seats[i].bot) botLifecycle.remove(seats[i].uuid);
+            seats[i] = null;
+        }
         Teams.normalize(getPlayersList(), Teams.count(config));
     }
 
@@ -716,7 +728,10 @@ public class BlockEntityMinoTable extends TileEntity {
         sendSeatActionTakenToAll();
         scores.clear();
         scoreNames.clear();
-        for (int i = 0; i < MAX_SEATS; i++) seats[i] = null;
+        for (int i = 0; i < MAX_SEATS; i++) {
+            if (seats[i] != null && seats[i].bot) botLifecycle.remove(seats[i].uuid);
+            seats[i] = null;
+        }
         setState(
             ActionReport.builder(initiator)
                 .panic(Chat.translatable("game.minopp.play.seats_reset", initiator.name)).state);
@@ -844,7 +859,9 @@ public class BlockEntityMinoTable extends TileEntity {
 
     @Override
     public void updateEntity() {
-        if (worldObj.isRemote || game == null) return;
+        if (worldObj.isRemote) return;
+        botLifecycle.tick();
+        if (game == null) return;
         if (game.refreshDebugCatalog()) sync();
         if (worldObj.getTotalWorldTime() % 20 == 0) recoverHandCards(false);
         ActionReport timed = game.tickTurnTimers();
@@ -865,6 +882,20 @@ public class BlockEntityMinoTable extends TileEntity {
             return;
         }
         if (time % 20 == 0) tickAbsent(server);
+    }
+
+    public void disposeTable() {
+        if (worldObj == null || worldObj.isRemote) return;
+        botLifecycle.dispose();
+        if (game != null) destroyGame(null);
+        for (int i = 0; i < MAX_SEATS; i++) seats[i] = null;
+        markDirty();
+    }
+
+    @Override
+    public void invalidate() {
+        disposeTable();
+        super.invalidate();
     }
 
     private static final long ABSENT_GRACE_MS = 15_000, STAND_IN_DELAY_MS = 2_000;

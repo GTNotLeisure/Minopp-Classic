@@ -38,7 +38,6 @@ public class EntityAutoPlayer extends EntityLiving {
     public BlockPos tablePos = null;
     private boolean noPush;
     private boolean summoned;
-    private int homelessSeconds;
 
     public EntityAutoPlayer(World level) {
         super(level);
@@ -84,6 +83,31 @@ public class EntityAutoPlayer extends EntityLiving {
     }
 
     @Override
+    public void onChunkLoad() {
+        super.onChunkLoad();
+        if (!worldObj.isRemote) reconcileLoadedSeat(true);
+    }
+
+    private boolean reconcileLoadedSeat(boolean register) {
+        if (tablePos == null || !ItemHandCards.isLoaded(worldObj, tablePos)) return true;
+        BlockEntityMinoTable table = ItemHandCards.getTable(worldObj, tablePos);
+        int seat = table == null || cardPlayer == null ? -1 : table.seatOf(cardPlayer.uuid);
+        CardPlayer member = seat < 0 ? null
+            : table.game == null ? table.seats[seat] : table.game.deAmputate(cardPlayer.uuid);
+        if (member == null) {
+            worldObj.removeEntity(this);
+            return false;
+        }
+        if (register || cardPlayer != member) {
+            boolean changed = synchronizeSeat(table, member);
+            table.botLifecycle()
+                .track(this);
+            if (changed) table.sync();
+        }
+        return true;
+    }
+
+    @Override
     public void onUpdate() {
         super.onUpdate();
 
@@ -100,6 +124,7 @@ public class EntityAutoPlayer extends EntityLiving {
             return;
         }
 
+        if (!reconcileLoadedSeat(false)) return;
         if (worldObj.getTotalWorldTime() % 20 == 0) leash();
         if (isDead) return;
         if (!getActive()) {
@@ -137,6 +162,8 @@ public class EntityAutoPlayer extends EntityLiving {
                                 ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
                                 ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);
                                 setHandStack(handStack);
+                                tableEntity.botLifecycle()
+                                    .track(this);
                                 break;
                             }
                         }
@@ -290,10 +317,9 @@ public class EntityAutoPlayer extends EntityLiving {
         if (tablePos != null && !ItemHandCards.isLoaded(worldObj, tablePos)) return;
         BlockEntityMinoTable table = tablePos == null ? null : ItemHandCards.getTable(worldObj, tablePos);
         if (table == null) {
-            if (summoned && ++homelessSeconds >= 10) setDead();
+            if (summoned) setDead();
             return;
         }
-        homelessSeconds = 0;
         int seat = cardPlayer == null ? -1 : table.seatOf(cardPlayer.uuid);
         if (seat < 0) {
             if (summoned) setDead();
@@ -319,6 +345,38 @@ public class EntityAutoPlayer extends EntityLiving {
         ItemStack handStack = new ItemStack(Mino.ITEM_HAND_CARDS);
         ItemDataUtils.setCardGameBinding(handStack, tablePos, cardPlayer.uuid);
         setHandStack(handStack);
+        table.botLifecycle()
+            .track(this);
+    }
+
+    public void restoreSeat(BlockEntityMinoTable table, CardPlayer player, NBTTagCompound config) {
+        if (config.hasKey("Active", 1)) readConfigFromTag(config);
+        else {
+            setActive(true);
+            setCustomNameTag(player.name);
+        }
+        summoned = true;
+        entityUniqueID = player.uuid;
+        Vec3d spot = table.botSpot(player.seat);
+        setPosition(spot.x, spot.y, spot.z);
+        lookAt(table.xCoord + 1.5, table.yCoord + 1, table.zCoord + 1.5);
+        synchronizeSeat(table, player);
+    }
+
+    public boolean synchronizeSeat(BlockEntityMinoTable table, CardPlayer player) {
+        cardPlayer = player;
+        tablePos = table.getBlockPos();
+        if (table.game == null || player.eliminated) {
+            if (getHeldItem() == null) return false;
+            setHandStack(null);
+            return true;
+        }
+        if (table.handCardAccess()
+            .matches(table, ItemDataUtils.getBinding(getHeldItem()))) return false;
+        setHandStack(
+            table.handCardAccess()
+                .create(table, player.uuid));
+        return true;
     }
 
     private void setHandStack(ItemStack stack) {

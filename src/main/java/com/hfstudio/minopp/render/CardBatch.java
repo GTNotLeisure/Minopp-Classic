@@ -65,6 +65,7 @@ public class CardBatch {
     private long generation = cacheGeneration;
 
     private float ox, oy, oz, cos = 1, sin = 0;
+    private float layerDepth = 0.002f;
 
     public CardBatch() {
         for (int i = 0; i < 5; i++) {
@@ -80,6 +81,12 @@ public class CardBatch {
         double a = Math.toRadians(angleDeg);
         cos = (float) Math.cos(a);
         sin = (float) Math.sin(a);
+        return this;
+    }
+
+    public CardBatch layerDepth(float depth) {
+        if (!Float.isFinite(depth) || depth <= 0) throw new IllegalArgumentException("Invalid texture layer depth");
+        layerDepth = depth;
         return this;
     }
 
@@ -134,7 +141,7 @@ public class CardBatch {
                 : ((color >> 16 & 255) * (tint >> 16 & 255) / 255) << 16
                     | ((color >> 8 & 255) * (tint >> 8 & 255) / 255) << 8
                     | (color & 255) * (tint & 255) / 255;
-            quad(i, tex[i], hw, hh, z + (flipped ? -0.002f : 0.002f) * i, c, flipped);
+            quad(i, tex[i], hw, hh, z + (flipped ? -layerDepth : layerDepth) * i, c, flipped);
         }
     }
 
@@ -150,8 +157,8 @@ public class CardBatch {
 
     public void slab(float hw, float hh, float z0, float z1, int color) {
         int darker = (color >> 16 & 0xFF) * 9 / 10 << 16 | (color >> 8 & 0xFF) * 9 / 10 << 8 | (color & 0xFF) * 9 / 10;
-        int down = packNormal(0, -1, 0), up = packNormal(0, 1, 0);
-        int left = packNormal(-1, 0, 0), right = packNormal(1, 0, 0);
+        int down = packNormal(sin, -cos, 0), up = packNormal(-sin, cos, 0);
+        int left = packNormal(-cos, -sin, 0), right = packNormal(cos, sin, 0);
         vertex(plain, -hw, -hh, z0, 0, 0, color, down);
         vertex(plain, hw, -hh, z0, 0, 0, color, down);
         vertex(plain, hw, -hh, z1, 0, 0, color, down);

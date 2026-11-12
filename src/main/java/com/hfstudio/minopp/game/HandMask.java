@@ -36,6 +36,7 @@ public class HandMask {
         boolean revealHands) {
         NBTTagCompound copy = (NBTTagCompound) tableTag.copy();
         copy.removeTag("handAccess");
+        copy.removeTag("bots");
         NBTTagCompound seats = copy.getCompoundTag("seats");
         for (String key : seats.func_150296_c()) seats.getCompoundTag(key)
             .removeTag("hand");
