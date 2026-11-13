@@ -56,6 +56,7 @@ import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
 import com.hfstudio.minopp.util.Pair;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 import com.hfstudio.minopp.util.WorldUtil;
 
@@ -117,9 +118,7 @@ public class BlockEntityMinoTable extends TileEntity {
         if (server == null) return hostUuid;
         Set<UUID> online = new HashSet<>();
         for (EntityPlayerMP o : server.getConfigurationManager().playerEntityList) {
-            online.add(
-                o.getGameProfile()
-                    .getId());
+            online.add(PlayerIdentity.of(o));
         }
         if (ownerUuid != null && online.contains(ownerUuid)) {
             hostName = ownerName;
@@ -146,9 +145,7 @@ public class BlockEntityMinoTable extends TileEntity {
                 .equals(server.getServerOwner()))
             return true;
         UUID host = currentHost();
-        return host == null || host.equals(
-            player.getGameProfile()
-                .getId());
+        return host == null || host.equals(PlayerIdentity.of(player));
     }
 
     /**
@@ -640,9 +637,7 @@ public class BlockEntityMinoTable extends TileEntity {
             for (Object o : entities) {
                 Entity entity = (Entity) o;
                 if (entity instanceof EntityPlayer mcPlayer) {
-                    if (cardPlayer.uuid.equals(
-                        mcPlayer.getGameProfile()
-                            .getId())) {
+                    if (cardPlayer.uuid.equals(PlayerIdentity.of(mcPlayer))) {
                         playerFound = true;
                         cardPlayer.bot = false;
                     }
@@ -846,8 +841,7 @@ public class BlockEntityMinoTable extends TileEntity {
                 double dy = serverPlayer.posY - (tableCenterPos.y + 0.5);
                 double dz = serverPlayer.posZ - (tableCenterPos.z + 0.5);
                 if (dx * dx + dy * dy + dz * dz <= EffectEvents.EFFECT_RADIUS * EffectEvents.EFFECT_RADIUS) {
-                    UUID id = serverPlayer.getGameProfile()
-                        .getId();
+                    UUID id = PlayerIdentity.of(serverPlayer);
                     boolean playerPartOfGame = getPlayersList().stream()
                         .anyMatch(p -> p.uuid.equals(id));
                     S2CEffectListPacket.sendS2C(serverPlayer, result.effects, tableCenterPos, playerPartOfGame);
@@ -1027,8 +1021,7 @@ public class BlockEntityMinoTable extends TileEntity {
     }
 
     private void sendTo(EntityPlayerMP player, NBTTagCompound fullTag) {
-        UUID viewer = player.getGameProfile()
-            .getId();
+        UUID viewer = PlayerIdentity.of(player);
         NBTTagCompound tag = HandMask.clientTableTag(fullTag, viewer, config.getBool(GameRules.FLIP_BACKS), peekAll());
         player.playerNetServerHandler.sendPacket(new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag));
     }

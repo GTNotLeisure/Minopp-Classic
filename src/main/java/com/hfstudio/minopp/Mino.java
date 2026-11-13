@@ -36,6 +36,7 @@ import com.hfstudio.minopp.item.ItemCoupon;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.network.MinoNetwork;
+import com.hfstudio.minopp.network.S2CPlayerIdentityPacket;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
 import com.hfstudio.minopp.util.BlockPos;
 
@@ -145,6 +146,9 @@ public class Mino {
         FMLCommonHandler.instance()
             .bus()
             .register(new ThemeSyncPackets.ServerEvents());
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new S2CPlayerIdentityPacket.ServerEvents());
         if (DevPreview.enabled()) FMLCommonHandler.instance()
             .bus()
             .register(new DevPreview());

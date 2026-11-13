@@ -27,6 +27,7 @@ import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -151,12 +152,10 @@ public class SeatControlScreen extends GuiScreen {
     }
 
     private boolean canChangeTeam(CardPlayer p) {
-        UUID me = mc.thePlayer.getGameProfile()
-            .getId();
+        UUID me = PlayerIdentity.of(mc.thePlayer);
         if (p.uuid.equals(me)) return true;
         for (EntityPlayer o : mc.theWorld.playerEntities) {
-            if (o.getGameProfile()
-                .getId()
+            if (PlayerIdentity.of(o)
                 .equals(p.uuid)) return false;
         }
         return true;
@@ -287,9 +286,7 @@ public class SeatControlScreen extends GuiScreen {
 
     private void drawSeat(BlockEntityMinoTable te, int seat, int x, int y, int mouseX, int mouseY) {
         CardPlayer p = te.seats[seat];
-        boolean me = p != null && p.uuid.equals(
-            mc.thePlayer.getGameProfile()
-                .getId());
+        boolean me = p != null && p.uuid.equals(PlayerIdentity.of(mc.thePlayer));
         int w = Math.max(34, Math.min(70, p == null ? 34 : fontRendererObj.getStringWidth(p.name) + 22));
         if (te.seatCount() > 10) w = Math.min(w, 52);
         int h = 16;

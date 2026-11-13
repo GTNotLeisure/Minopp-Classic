@@ -23,6 +23,7 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.ColorPicker3D;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.WorldUtil;
 
 import cpw.mods.fml.relauncher.Side;
@@ -60,8 +61,7 @@ public class RevealedHandTargets {
     private static boolean refresh(BlockEntityMinoTable table) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null || table.game == null) return false;
-        UUID viewer = mc.thePlayer.getGameProfile()
-            .getId();
+        UUID viewer = PlayerIdentity.of(mc.thePlayer);
         long now = System.currentTimeMillis();
         if (shownGame != table.game || now >= expires) {
             if (shownGame == null || shownGame.id != table.game.id) page = 0;
@@ -242,12 +242,7 @@ public class RevealedHandTargets {
         BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, tablePos);
         if (table == null || table.game == null
             || table.game.id != shownGame.id
-            || !RevealedHandsScreen.canView(
-                table.game,
-                mc.thePlayer.getGameProfile()
-                    .getId(),
-                target))
-            return false;
+            || !RevealedHandsScreen.canView(table.game, PlayerIdentity.of(mc.thePlayer), target)) return false;
         mc.displayGuiScreen(new RevealedHandsScreen(parent, tablePos, table.game.id, target));
         return true;
     }

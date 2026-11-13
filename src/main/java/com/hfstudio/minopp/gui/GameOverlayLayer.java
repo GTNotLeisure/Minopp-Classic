@@ -50,6 +50,7 @@ import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
 import com.hfstudio.minopp.util.Pair;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -703,9 +704,7 @@ public class GameOverlayLayer {
         if (tableEntity == null || tableEntity.game == null) return false;
         CardGame game = tableEntity.game;
 
-        CardPlayer realPlayer = game.deAmputate(
-            player.getGameProfile()
-                .getId());
+        CardPlayer realPlayer = game.deAmputate(PlayerIdentity.of(player));
         if (realPlayer == null || realPlayer.hand.isEmpty()) return false;
 
         int myPlayerIndex = game.players.indexOf(realPlayer);

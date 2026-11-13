@@ -19,6 +19,7 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import io.netty.buffer.ByteBuf;
 
@@ -132,8 +133,7 @@ public class C2SSeatControlPacket {
                 boolean bot = MinecraftServer.getServer()
                     .getConfigurationManager().playerEntityList.stream()
                         .noneMatch(
-                            o -> o.getGameProfile()
-                                .getId()
+                            o -> PlayerIdentity.of(o)
                                 .equals(target));
                 if (self || bot && manager) tableEntity.setTeam(target, value);
             }

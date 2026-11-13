@@ -28,6 +28,7 @@ import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.config.ClientConfig;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -148,10 +149,7 @@ public class ThemeManager implements IResourceManagerReloadListener {
     public String themeFor(UUID owner) {
         Minecraft mc = Minecraft.getMinecraft();
         if (owner == null || mc.thePlayer == null) return selected();
-        if (owner.equals(
-            mc.thePlayer.getGameProfile()
-                .getId()))
-            return selected();
+        if (owner.equals(PlayerIdentity.of(mc.thePlayer))) return selected();
         if (!ClientConfig.display.showOthersThemes) return selected();
         String theirs = playerThemes.get(owner);
         return isInstalled(theirs) ? theirs : selected();

@@ -36,6 +36,7 @@ import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.render.TurnIndicator;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Mth;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
 import cpw.mods.fml.client.registry.RenderingRegistry;
@@ -147,9 +148,7 @@ public class ClientProxy extends CommonProxy {
             BlockEntityMinoTable tableEntity = ItemHandCards.getTable(player.worldObj, handCardGamePos);
             if (tableEntity == null || tableEntity.game == null) return;
 
-            CardPlayer realPlayer = tableEntity.game.deAmputate(
-                player.getGameProfile()
-                    .getId());
+            CardPlayer realPlayer = tableEntity.game.deAmputate(PlayerIdentity.of(player));
             if (realPlayer == null) return;
 
             int handIndex = ItemDataUtils.getHandIndex(holding);

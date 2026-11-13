@@ -32,6 +32,7 @@ import com.hfstudio.minopp.game.TurnTransition;
 import com.hfstudio.minopp.gui.ui.UiDraw;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 import com.hfstudio.minopp.util.WorldUtil;
 
@@ -158,9 +159,7 @@ public class TurnIndicator {
 
     private static boolean ownTurn(CardPlayer player) {
         Minecraft mc = Minecraft.getMinecraft();
-        return mc.thePlayer != null && player.uuid.equals(
-            mc.thePlayer.getGameProfile()
-                .getId());
+        return mc.thePlayer != null && player.uuid.equals(PlayerIdentity.of(mc.thePlayer));
     }
 
     private static int turnColor(CardGame game) {

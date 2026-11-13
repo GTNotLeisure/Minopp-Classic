@@ -29,6 +29,7 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
@@ -129,8 +130,7 @@ public class BlockEntityMinoTableRenderer extends TileEntitySpecialRenderer {
                 blockEntity,
                 game,
                 Minecraft.getMinecraft().thePlayer == null ? null
-                    : Minecraft.getMinecraft().thePlayer.getGameProfile()
-                        .getId());
+                    : PlayerIdentity.of(Minecraft.getMinecraft().thePlayer));
             if (dir != null) ColorPicker3D.render(pos, pos.x + 1.5 + dir[0], pos.z + 1.5 + dir[1]);
             else if (viewer != null) ColorPicker3D.render(pos, viewer.posX, viewer.posZ);
         } else if (blockEntity.choosingUuid != null) {

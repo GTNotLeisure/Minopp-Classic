@@ -52,6 +52,7 @@ import com.hfstudio.minopp.render.CardRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -1111,13 +1112,8 @@ public class GameSettingsScreen extends GuiScreen {
                     .size(),
                 te.seatCount());
         fontRendererObj.drawStringWithShadow(sub, width - 10 - fontRendererObj.getStringWidth(sub), 14, 0xFFFFFFFF);
-        if (te.game != null && mc.thePlayer != null) TableScreenPanel.drawCountdown(
-            te.game,
-            mc.thePlayer.getGameProfile()
-                .getId(),
-            width * 3 / 4,
-            22,
-            width / 2 - 20);
+        if (te.game != null && mc.thePlayer != null)
+            TableScreenPanel.drawCountdown(te.game, PlayerIdentity.of(mc.thePlayer), width * 3 / 4, 22, width / 2 - 20);
 
         drawTabs(mouseX, mouseY, dt);
 

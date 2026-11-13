@@ -16,6 +16,7 @@ import com.hfstudio.minopp.game.PendingDecision;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
 import cpw.mods.fml.relauncher.Side;
@@ -120,7 +121,7 @@ public class GameControls {
         Minecraft mc = Minecraft.getMinecraft();
         MovingObjectPosition hit = mc.objectMouseOver;
         Entity aimed = hit == null ? null : hit.entityHit;
-        CardPlayer target = aimed == null ? null : context.game.deAmputate(aimed.getUniqueID());
+        CardPlayer target = aimed == null ? null : context.game.deAmputate(PlayerIdentity.of(aimed));
         if (!canDoubt(context, target)) target = context.game.deAmputate(context.table.lastPlayedByUuid);
         if (!canDoubt(context, target)) {
             target = null;

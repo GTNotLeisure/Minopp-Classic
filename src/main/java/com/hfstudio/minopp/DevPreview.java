@@ -23,6 +23,7 @@ import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.game.TableConfig;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -79,9 +80,7 @@ public class DevPreview {
             case 1 -> {
                 if (ticks < 30 || table == null) return;
                 table.joinPlayerToTable(new CardPlayer(player), new Vec3d(player.posX, player.posY, player.posZ));
-                int seat = table.seatOf(
-                    player.getGameProfile()
-                        .getId());
+                int seat = table.seatOf(PlayerIdentity.of(player));
                 String cam = System.getProperty("minopp.previewCam");
                 if (cam != null) {
                     String[] c = cam.split(",");
@@ -125,10 +124,7 @@ public class DevPreview {
                     configureMode(table.config);
                     if (System.getProperty("minopp.previewDebug") != null) {
                         table.config.set(GameRules.FLIP_MODE, 1);
-                        table.startGame(
-                            new CardPlayer(player),
-                            player.getGameProfile()
-                                .getId());
+                        table.startGame(new CardPlayer(player), PlayerIdentity.of(player));
                     } else {
                         table.startGame(new CardPlayer(player));
                     }
@@ -157,9 +153,7 @@ public class DevPreview {
                     }
                     return;
                 }
-                CardPlayer me = table.game.deAmputate(
-                    player.getGameProfile()
-                        .getId());
+                CardPlayer me = table.game.deAmputate(PlayerIdentity.of(player));
                 if (table.game.debug) {
                     if (ticks % 60 == 0 && me != null) playScripted(table, me, player);
                     return;

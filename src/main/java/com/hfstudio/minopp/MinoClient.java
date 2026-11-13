@@ -41,10 +41,12 @@ import com.hfstudio.minopp.network.S2CActionEphemeralPacket;
 import com.hfstudio.minopp.network.S2CAutoPlayerScreenPacket;
 import com.hfstudio.minopp.network.S2CChoosingPacket;
 import com.hfstudio.minopp.network.S2CEffectListPacket;
+import com.hfstudio.minopp.network.S2CPlayerIdentityPacket;
 import com.hfstudio.minopp.network.ThemeSyncPackets;
 import com.hfstudio.minopp.render.TableItemRenderer;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.WorldUtil;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
@@ -83,12 +85,14 @@ public class MinoClient {
         MinoNetwork.registerClientReceiver(S2CEffectListPacket.ID, S2CEffectListPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CAutoPlayerScreenPacket.ID, S2CAutoPlayerScreenPacket.Client::handleS2C);
         MinoNetwork.registerClientReceiver(S2CChoosingPacket.ID, S2CChoosingPacket::handle);
+        MinoNetwork.registerClientReceiver(S2CPlayerIdentityPacket.ID, S2CPlayerIdentityPacket::handle);
         MinoNetwork.registerClientReceiver(
             ThemeSyncPackets.S2C_ID,
             buf -> ThemeManager.INSTANCE.playerThemes.putAll(ThemeSyncPackets.decode(buf)));
     }
 
     public static void tick() {
+        PlayerIdentity.Client.clearDisconnected();
         MinoNetwork.runClientQueue();
         Minecraft mc = Minecraft.getMinecraft();
         if (!themeListenerRegistered) {

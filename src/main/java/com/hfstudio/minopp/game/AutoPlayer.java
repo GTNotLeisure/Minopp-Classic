@@ -10,6 +10,8 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 
+import com.hfstudio.minopp.util.PlayerIdentity;
+
 public class AutoPlayer {
 
     public static final int MIN_REACTION_TICKS = 5;
@@ -25,8 +27,7 @@ public class AutoPlayer {
     public static boolean isOnlinePlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return false;
         for (EntityPlayerMP o : server.getConfigurationManager().playerEntityList) {
-            if (o.getGameProfile()
-                .getId()
+            if (PlayerIdentity.of(o)
                 .equals(uuid)) return true;
         }
         return false;

@@ -30,6 +30,7 @@ import com.hfstudio.minopp.game.CardColor;
 import com.hfstudio.minopp.game.CardFace;
 import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
@@ -121,10 +122,7 @@ public class TableFx {
         if (w == null) return null;
         for (EntityPlayer o : w.playerEntities) {
             EntityPlayer p = o;
-            if (uuid.equals(
-                p.getGameProfile()
-                    .getId()))
-                e = p;
+            if (uuid.equals(PlayerIdentity.of(p))) e = p;
         }
         if (e == null) for (Object o : w.loadedEntityList) {
             if (o instanceof EntityAutoPlayer bot && uuid.equals(bot.getUniqueID())) e = bot;

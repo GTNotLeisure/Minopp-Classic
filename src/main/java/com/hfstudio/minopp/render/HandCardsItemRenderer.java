@@ -17,6 +17,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemDataUtils;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -85,8 +86,7 @@ public class HandCardsItemRenderer implements IItemRenderer {
         if (n == 0) return;
         boolean dark = tableEntity.game.darkSide;
         UUID viewer = Minecraft.getMinecraft().thePlayer == null ? null
-            : Minecraft.getMinecraft().thePlayer.getGameProfile()
-                .getId();
+            : PlayerIdentity.of(Minecraft.getMinecraft().thePlayer);
         boolean visible = bearerId.equals(viewer) || realPlayer.handVisibleUntil > System.currentTimeMillis();
         float spread = Math.min(110, (n - 1) * 13f);
         float gripRadius = CARD_HALF_HEIGHT * 0.85f;

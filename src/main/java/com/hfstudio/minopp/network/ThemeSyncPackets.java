@@ -9,6 +9,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 
 import com.hfstudio.minopp.util.Buf;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
@@ -34,18 +35,13 @@ public class ThemeSyncPackets {
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         String theme = Buf.readString(packet);
         if (!validThemeId(theme)) return;
-        UUID id = player.getGameProfile()
-            .getId();
+        UUID id = PlayerIdentity.of(player);
         // each change goes to every player: ignore repeats and changes faster than one a second
         long now = System.currentTimeMillis();
         if (theme.equals(SERVER_THEMES.get(id)) || now - LAST_CHANGE.getOrDefault(id, 0L) < 1000) return;
         LAST_CHANGE.put(id, now);
         SERVER_THEMES.put(id, theme);
-        broadcast(
-            Map.of(
-                player.getGameProfile()
-                    .getId(),
-                theme));
+        broadcast(Map.of(PlayerIdentity.of(player), theme));
     }
 
     private static ByteBuf encode(Map<UUID, String> themes) {
@@ -90,8 +86,7 @@ public class ThemeSyncPackets {
 
         @SubscribeEvent
         public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-            UUID id = event.player.getGameProfile()
-                .getId();
+            UUID id = PlayerIdentity.of(event.player);
             SERVER_THEMES.remove(id);
             LAST_CHANGE.remove(id);
         }

@@ -20,6 +20,7 @@ import com.hfstudio.minopp.game.CardGame;
 import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 public class ItemHandCards extends Item {
 
@@ -68,8 +69,7 @@ public class ItemHandCards extends Item {
     public static BlockPos getHandCardGamePos(EntityPlayer player) {
         ItemStack held = player.getHeldItem();
         if (held == null || held.getItem() != Mino.ITEM_HAND_CARDS) return null;
-        if (!player.getGameProfile()
-            .getId()
+        if (!PlayerIdentity.of(player)
             .equals(ItemDataUtils.getBearerId(held))) return null;
         return getGamePos(player.worldObj, held);
     }
@@ -115,10 +115,7 @@ public class ItemHandCards extends Item {
         if (tablePos != null) {
             tooltip.add("Table: " + tablePos.toShortString());
         }
-        if (bearerId != null && player != null
-            && !bearerId.equals(
-                player.getGameProfile()
-                    .getId())) {
+        if (bearerId != null && player != null && !bearerId.equals(PlayerIdentity.of(player))) {
             tooltip.add(EnumChatFormatting.RED + "NOT YOUR CARD!");
         }
         super.addInformation(stack, player, tooltip, advanced);

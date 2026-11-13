@@ -37,6 +37,7 @@ import com.hfstudio.minopp.render.BlockEntityMinoTableRenderer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -770,9 +771,7 @@ public class HandScreen extends GuiScreen {
             BlockPos pos = ItemHandCards.getHandCardGamePos(mc.thePlayer);
             BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, pos);
             if (table == null || table.game == null) return null;
-            CardPlayer me = table.game.deAmputate(
-                mc.thePlayer.getGameProfile()
-                    .getId());
+            CardPlayer me = table.game.deAmputate(PlayerIdentity.of(mc.thePlayer));
             if (me == null || me.eliminated || me.hand.isEmpty()) return null;
             return new Context(pos, table, me);
         }

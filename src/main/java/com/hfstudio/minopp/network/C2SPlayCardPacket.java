@@ -15,6 +15,7 @@ import com.hfstudio.minopp.game.PlayContext;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Buf;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -31,8 +32,7 @@ public class C2SPlayCardPacket {
     public static void handleC2S(EntityPlayerMP player, ByteBuf packet) {
         if (packet.readableBytes() < 16) return;
         BlockPos gamePos = Buf.readBlockPos(packet);
-        UUID playerUuid = player.getGameProfile()
-            .getId();
+        UUID playerUuid = PlayerIdentity.of(player);
         int actionType = packet.readInt();
 
         if (!C2SSeatControlPacket.inReach(player, gamePos)) return;
@@ -196,9 +196,7 @@ public class C2SPlayCardPacket {
             if (mc.thePlayer == null || mc.theWorld == null) return;
             BlockEntityMinoTable table = ItemHandCards.getTable(mc.theWorld, gamePos);
             if (table == null || table.game == null) return;
-            PendingDecision decision = table.game.decisionFor(
-                mc.thePlayer.getGameProfile()
-                    .getId());
+            PendingDecision decision = table.game.decisionFor(PlayerIdentity.of(mc.thePlayer));
             if (decision != null) sendDecisionC2S(gamePos, decision, answer, target);
         }
 

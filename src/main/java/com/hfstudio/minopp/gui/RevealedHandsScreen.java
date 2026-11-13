@@ -20,6 +20,7 @@ import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.render.ThemeManager;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -104,8 +105,7 @@ public class RevealedHandsScreen extends GuiScreen {
         if (shownGame == table.game && System.currentTimeMillis() < nextExpiry) return true;
         boolean first = shownGame == null;
         shownGame = table.game;
-        UUID viewer = mc.thePlayer.getGameProfile()
-            .getId();
+        UUID viewer = PlayerIdentity.of(mc.thePlayer);
         CardPlayer member = shownGame.deAmputate(viewer);
         if (member == null || member.eliminated) {
             clear();

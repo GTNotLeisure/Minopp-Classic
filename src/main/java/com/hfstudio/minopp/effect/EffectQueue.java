@@ -8,6 +8,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
 
 import com.hfstudio.minopp.util.BlockPos;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 public class EffectQueue {
 
@@ -49,9 +50,7 @@ public class EffectQueue {
                     .isEmpty()
                     || event.target()
                         .get()
-                        .equals(
-                            self.getGameProfile()
-                                .getId())) {
+                        .equals(PlayerIdentity.of(self))) {
                     queue.add(new TimedEvent(event, time, origin, selfIsPartOfSourceGame));
                 }
             }

@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.network.NetworkManager;
 
 import com.hfstudio.minopp.Mino;
 import com.hfstudio.minopp.util.Buf;
@@ -202,12 +203,15 @@ public class MinoNetwork {
         @Override
         public IMessage onMessage(S2CMessage message, MessageContext ctx) {
             Consumer<ByteBuf> handler = CLIENT_HANDLERS.get(message.id);
+            NetworkManager connection = ctx.getClientHandler()
+                .getNetworkManager();
             if (handler == null) {
                 message.data.release();
                 return null;
             }
             if (!enqueue(CLIENT_QUEUE, CLIENT_PENDING, () -> {
                 try {
+                    if (!connection.isChannelOpen()) return;
                     handler.accept(message.data);
                 } catch (Exception e) {
                     Mino.LOGGER.error("Error handling packet {}", message.id, e);

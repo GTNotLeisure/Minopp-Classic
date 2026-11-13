@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.hfstudio.minopp.entity.EntityAutoPlayer;
 import com.hfstudio.minopp.game.CardPlayer;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -163,10 +164,7 @@ public class PlayerPicker {
                     SKIN_ENTITIES.put(bot.getUniqueID(), new WeakReference<>(bot));
             }
             for (EntityPlayer player : world.playerEntities) {
-                SKIN_ENTITIES.put(
-                    player.getGameProfile()
-                        .getId(),
-                    new WeakReference<>(player));
+                SKIN_ENTITIES.put(PlayerIdentity.of(player), new WeakReference<>(player));
             }
         }
         WeakReference<Entity> reference = SKIN_ENTITIES.get(uuid);

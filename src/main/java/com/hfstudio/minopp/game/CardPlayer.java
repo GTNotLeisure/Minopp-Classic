@@ -10,6 +10,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
 import com.hfstudio.minopp.util.NbtUtil;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 public class CardPlayer {
 
@@ -36,8 +37,7 @@ public class CardPlayer {
     public int coinUseSeq;
 
     public CardPlayer(EntityPlayer mcPlayer) {
-        this.uuid = mcPlayer.getGameProfile()
-            .getId();
+        this.uuid = PlayerIdentity.of(mcPlayer);
         this.name = mcPlayer.getGameProfile()
             .getName();
     }

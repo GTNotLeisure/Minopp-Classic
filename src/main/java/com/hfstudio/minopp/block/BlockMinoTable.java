@@ -47,6 +47,7 @@ import com.hfstudio.minopp.network.C2SPlayCardPacket;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.Mth;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 
 import cpw.mods.fml.relauncher.Side;
@@ -276,8 +277,7 @@ public class BlockMinoTable extends Block {
             level.setBlockMetadataWithNotify(x, y, z, 0, 2);
             if (placer instanceof EntityPlayer owner
                 && level.getTileEntity(x, y, z) instanceof BlockEntityMinoTable te) {
-                te.ownerUuid = owner.getGameProfile()
-                    .getId();
+                te.ownerUuid = PlayerIdentity.of(owner);
                 te.ownerName = owner.getCommandSenderName();
             }
             // Place silently first so the integrity check in onNeighborBlockChange doesn't see a half-built table

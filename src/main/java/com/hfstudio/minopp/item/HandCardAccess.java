@@ -18,6 +18,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
 import com.hfstudio.minopp.util.NbtUtil;
+import com.hfstudio.minopp.util.PlayerIdentity;
 
 public class HandCardAccess {
 
@@ -92,8 +93,7 @@ public class HandCardAccess {
     }
 
     public boolean hasItem(BlockEntityMinoTable table, EntityPlayer player) {
-        UUID bearer = player.getGameProfile()
-            .getId();
+        UUID bearer = PlayerIdentity.of(player);
         for (ItemStack stack : player.inventory.mainInventory) {
             if (belongsTo(stack, table, bearer) && matches(table, ItemDataUtils.getBinding(stack))) return true;
         }
@@ -111,8 +111,7 @@ public class HandCardAccess {
             || !player.isEntityAlive()
             || !inReach(player, table.getBlockPos())
             || table.game == null) return false;
-        UUID bearer = player.getGameProfile()
-            .getId();
+        UUID bearer = PlayerIdentity.of(player);
         CardPlayer seated = table.game.deAmputate(bearer);
         if (seated == null || seated.eliminated) return false;
         InventoryPlayer inv = player.inventory;

@@ -23,6 +23,7 @@ import com.hfstudio.minopp.game.CardPlayer;
 import com.hfstudio.minopp.item.ItemHandCards;
 import com.hfstudio.minopp.util.BlockPos;
 import com.hfstudio.minopp.util.Chat;
+import com.hfstudio.minopp.util.PlayerIdentity;
 import com.hfstudio.minopp.util.Vec3d;
 
 public class MinoCommand extends CommandBase {
@@ -111,8 +112,7 @@ public class MinoCommand extends CommandBase {
     }
 
     private static BlockEntityMinoTable nearestTable(EntityPlayerMP player) {
-        UUID id = player.getGameProfile()
-            .getId();
+        UUID id = PlayerIdentity.of(player);
         BlockEntityMinoTable best = null;
         double bestDist = 12 * 12;
         for (Object o : player.worldObj.loadedTileEntityList) {
@@ -132,8 +132,7 @@ public class MinoCommand extends CommandBase {
     private static void debug(EntityPlayerMP player, String mode) {
         BlockEntityMinoTable table = nearestTable(player);
         if (table == null) throw new CommandException("game.minopp.debug.no_table");
-        UUID id = player.getGameProfile()
-            .getId();
+        UUID id = PlayerIdentity.of(player);
         switch (mode) {
             case "start" -> {
                 CardPlayer me = new CardPlayer(player);
